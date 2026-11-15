@@ -1,0 +1,51 @@
+/* Session Bar（ADR-0009）：内容区标题栏——session 标题 + branched 徽标 + 动作。
+   原 TopBar 的标题/徽标样式随职责迁入此处；统计展示已移除。 */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  block-size: var(--sessionbar-height);
+  padding-inline: var(--space-4) var(--space-3);
+  border-block-end: 0.5px solid var(--separator);
+  background: var(--bg-canvas);
+  /* 让位 padding 与侧栏宽度动画同步过渡（ADR-0009） */
+  transition: padding-inline-start var(--duration-slow) var(--ease-emphasized);
+}
+
+/* 侧栏收起时 Brand Float 落在本栏左端，让出按钮宽度（ADR-0009 让位约定） */
+.clearFloat {
+  padding-inline-start: calc(var(--space-1) + var(--brandfloat-width) + var(--space-2));
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.title {
+  font-size: var(--text-footnote);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-title);
+}
+
+.branchedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-05) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: var(--text-caption2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}

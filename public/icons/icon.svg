@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Pi Studio 应用图标：暖纸面 + 墨色 π + 赤陶光标（Code Stream 签名元素的回声） -->
+  <rect width="512" height="512" rx="116" fill="#faf9f5"/>
+  <rect x="7" y="7" width="498" height="498" rx="110" fill="none" stroke="#141413" stroke-opacity="0.1" stroke-width="5"/>
+  <g stroke="#141413" stroke-width="40" stroke-linecap="round" fill="none">
+    <path d="M136 172h240"/>
+    <path d="M178 174v208"/>
+    <path d="M336 174v208"/>
+  </g>
+  <rect x="366" y="330" width="46" height="56" rx="8" fill="#d97757"/>
+</svg>

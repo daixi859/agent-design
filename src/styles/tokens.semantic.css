@@ -1,0 +1,146 @@
+/* 设计令牌 · 语义层（ADR-0001 分层 / ADR-0005 视觉方向）
+   组件只允许引用本层与组件层变量，永远不直接引用原始值层。
+   主题切换：index.html 首帧脚本设置 <html data-theme>；
+   每个主题同步设置 color-scheme，让原生控件与滚动条跟随（modern-web-guidance）。
+   视觉语言：macOS 骨架 + Claude 式内容面（暖纸中性面、赤陶强调、常暗代码面）。 */
+
+:root {
+  color-scheme: light;
+
+  /* ---- 表面 ---- */
+  --bg-canvas: #faf9f5;
+  --bg-sidebar: #f0eee6;
+  --bg-elevated: #ffffff;
+  --bg-inset: #f0eee6;
+  --bg-hover: rgba(20, 20, 19, 0.05);
+  --bg-active: rgba(20, 20, 19, 0.08);
+  --bg-selected: rgba(20, 20, 19, 0.08);
+
+  /* ---- 文本 ---- */
+  --text-1: #141413;
+  --text-2: #6b6a63;
+  --text-3: #9b9a92;
+  --text-4: rgba(20, 20, 19, 0.28);
+
+  /* ---- 分隔 ---- */
+  --separator: rgba(20, 20, 19, 0.09);
+  --separator-strong: rgba(20, 20, 19, 0.16);
+
+  /* ---- 强调（赤陶） ---- */
+  --accent: #d97757;
+  --accent-hover: #c4633f;
+  --on-accent: #ffffff;
+  --accent-subtle: rgba(217, 119, 87, 0.1);
+
+  /* ---- Thinking（暖灰，ADR-0005） ---- */
+  --thinking: #79786f;
+  --thinking-subtle: rgba(121, 120, 111, 0.07);
+
+  /* ---- 状态（暖调） ---- */
+  --success: #4d9f4d;
+  --success-subtle: rgba(77, 159, 77, 0.12);
+  --warning: #c77d2e;
+  --warning-subtle: rgba(199, 125, 46, 0.14);
+  --danger: #cc4b40;
+  --danger-subtle: rgba(204, 75, 64, 0.12);
+
+  /* ---- 用户气泡（中性浅底深字，Claude 式） ---- */
+  --bubble-user-bg: #e8e6dc;
+  --on-bubble-user: var(--text-1);
+
+  /* ---- 代码：随主题回暖光（ADR-0007） ---- */
+  --code-bg: #eceae1;
+  --code-border: rgba(20, 20, 19, 0.1);
+  --code-text: #45443f;
+  --inline-code-bg: #e8e6dc;
+
+  /* ---- Diff（暖光面上的柔和水洗色） ---- */
+  --diff-add-bg: rgba(77, 159, 77, 0.14);
+  --diff-add-text: #337033;
+  --diff-del-bg: rgba(204, 75, 64, 0.12);
+  --diff-del-text: #a63e33;
+
+  /* ---- 主按钮（Claude 式墨色） ---- */
+  --primary-btn-bg: #141413;
+  --primary-btn-fg: #faf9f5;
+
+  /* ---- 滚动条（thumb 对背景 ≥ 3:1 对比） ---- */
+  --scroll-thumb: rgba(20, 20, 19, 0.26);
+  --scroll-track: transparent;
+
+  /* ---- 阴影与焦点 ---- */
+  --shadow-card: 0 1px 2px rgba(20, 20, 19, 0.05), 0 0 0 0.5px rgba(20, 20, 19, 0.05);
+  --shadow-popover: 0 12px 40px rgba(20, 20, 19, 0.16), 0 0 0 0.5px rgba(20, 20, 19, 0.08);
+  --focus-ring: 0 0 0 3px rgba(217, 119, 87, 0.3);
+
+  /* ---- 预留：第三栏扩展点（ADR-0003） ---- */
+  --bg-detail-pane: #f0eee6;
+  --detail-pane-width: 360px;
+
+  /* ---- 布局常量（ADR-0009：顶栏移除，头部职责由 Brand Float + Session Bar 分担） ---- */
+  --sessionbar-height: 52px;
+  /* Brand Float：单枚 32px 按钮（静止 π，hover 换动作图标），供各头部计算让位空间 */
+  --brandfloat-height: 32px;
+  --brandfloat-width: 32px;
+  --sidebar-width: 280px;
+  --content-measure: 760px;
+  /* 图标钮击打区（IconButton / SearchField / 发送钮共用） */
+  --control-size: 28px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-canvas: #262624;
+  --bg-sidebar: #1f1e1d;
+  --bg-elevated: #30302e;
+  --bg-inset: #1f1e1d;
+  --bg-hover: rgba(245, 244, 239, 0.06);
+  --bg-active: rgba(245, 244, 239, 0.1);
+  --bg-selected: rgba(245, 244, 239, 0.1);
+
+  --text-1: #f5f4ef;
+  --text-2: rgba(235, 233, 224, 0.62);
+  --text-3: rgba(235, 233, 224, 0.4);
+  --text-4: rgba(235, 233, 224, 0.26);
+
+  --separator: rgba(255, 255, 255, 0.08);
+  --separator-strong: rgba(255, 255, 255, 0.15);
+
+  --accent: #d97757;
+  --accent-hover: #e0876a;
+  --on-accent: #ffffff;
+  --accent-subtle: rgba(217, 119, 87, 0.16);
+
+  --thinking: #a3a29a;
+  --thinking-subtle: rgba(163, 162, 154, 0.09);
+
+  --success: #6fbf67;
+  --success-subtle: rgba(111, 191, 103, 0.16);
+  --warning: #e0a458;
+  --warning-subtle: rgba(224, 164, 88, 0.14);
+  --danger: #e07b6f;
+  --danger-subtle: rgba(224, 123, 111, 0.16);
+
+  --bubble-user-bg: #3a3937;
+  --on-bubble-user: var(--text-1);
+
+  /* ---- 代码：深色主题维持深面（ADR-0007） ---- */
+  --code-bg: #1a1918;
+  --code-border: rgba(255, 255, 255, 0.08);
+  --code-text: #d9d7cd;
+  --inline-code-bg: #3a3937;
+
+  --diff-add-bg: rgba(125, 197, 140, 0.18);
+  --diff-add-text: #86c592;
+  --diff-del-bg: rgba(224, 90, 87, 0.16);
+  --diff-del-text: #e78c84;
+
+  --scroll-thumb: rgba(245, 244, 239, 0.32);
+  --scroll-track: transparent;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+
+  --bg-detail-pane: #1f1e1d;
+}

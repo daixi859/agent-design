@@ -1,0 +1,61 @@
+/* Brand Float（ADR-0009）：固定视口左上角的品牌位。
+   无胶囊底、无边框阴影——与所在表面（侧栏顶 / 收起后的内容区）融为一体；
+   π 与动作图标（收起侧栏 / 设置壳返回）共用同一按钮，hover 交叉淡入淡出切换。 */
+
+.float {
+  position: fixed;
+  inset-block-start: var(--space-1);
+  inset-inline-start: var(--space-1);
+  z-index: var(--z-float);
+  display: flex;
+  align-items: center;
+}
+
+/* 单按钮双面：静止显示 π（品牌位），hover 换成动作图标 */
+.home {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--brandfloat-width);
+  block-size: var(--brandfloat-height);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.mark {
+  font-size: var(--text-title3);
+  line-height: 1;
+  font-weight: var(--weight-semibold);
+  color: var(--accent);
+  /* π 字形在行盒内略偏高，微调至视觉居中 */
+  transform: translateY(-1px);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.actionIcon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.home:hover .mark {
+  opacity: 0;
+}
+
+.home:hover .actionIcon {
+  opacity: 1;
+}

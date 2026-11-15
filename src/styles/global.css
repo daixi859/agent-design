@@ -1,0 +1,106 @@
+/* 全局基础：reset、排版底座、滚动条（标准属性 + WebKit 回退）、焦点环 */
+
+@import "./tokens.primitives.css";
+@import "./tokens.semantic.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-footnote);
+  line-height: 18px;
+  color: var(--text-1);
+  background: var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---- 滚动条：macOS 细轨道感 ----
+   标准属性优先；thumb 对背景保持 ≥3:1 对比（WCAG 1.4.11） */
+.scroller,
+.scroll-y {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+  overflow-y: auto;
+}
+
+@supports not (scrollbar-color: auto) {
+  .scroller,
+  .scroll-y {
+    &::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--scroll-thumb);
+      border-radius: 5px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+    &::-webkit-scrollbar-track {
+      background: var(--scroll-track);
+    }
+  }
+}
+
+/* ---- 焦点环 ---- */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- 选区 ---- */
+::selection {
+  background: color-mix(in srgb, var(--blue-500) 24%, transparent);
+}
+
+/* ---- 单行截断：全文保留在 DOM（ Sidebar 标题等） ---- */
+.ellipsis {
+  min-inline-size: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,272 @@
+/**
+ * Pi Studio 只读数据 API（ADR-0002）。
+ * 仅做文件访问：扫描 ~/.pi/agent/sessions、解析 JSONL、按字节偏移增量 tail。
+ * 领域逻辑（活动分支回溯、usage 汇总）在 src/lib，不在本层。
+ */
+import { homedir } from "node:os";
+import { join, basename } from "node:path";
+import { stat, readdir, readFile, open } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type {
+  SessionEntry,
+  SessionHeaderEntry,
+  SessionInfoEntry,
+  SessionSummary,
+} from "../shared/pi-types";
+
+const SESSIONS_ROOT =
+  process.env.PI_STUDIO_SESSIONS_DIR ?? join(homedir(), ".pi", "agent", "sessions");
+
+/** 列表标题扫描读取的前缀大小：覆盖 header + 前若干条消息，避免整文件读取 */
+const TITLE_SCAN_BYTES = 64 * 1024;
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+// ---------- 文件扫描 ----------
+
+interface FileRef {
+  file: string;
+  mtimeMs: number;
+  sizeBytes: number;
+}
+
+async function scanSessionFiles(): Promise<FileRef[]> {
+  const refs: FileRef[] = [];
+  let dirs: Dirent[];
+  try {
+    dirs = await readdir(SESSIONS_ROOT, { withFileTypes: true });
+  } catch {
+    return refs; // 根目录不存在时返回空，由 /sessions 响应里的 rootExists 标记
+  }
+  for (const dir of dirs) {
+    if (!dir.isDirectory()) continue;
+    const dirPath = join(SESSIONS_ROOT, dir.name);
+    let names: string[];
+    try {
+      names = await readdir(dirPath);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (!name.endsWith(".jsonl")) continue;
+      const file = join(dirPath, name);
+      try {
+        const st = await stat(file);
+        if (st.isFile()) refs.push({ file, mtimeMs: st.mtimeMs, sizeBytes: st.size });
+      } catch {
+        // 文件可能刚被删除，跳过
+      }
+    }
+  }
+  return refs;
+}
+
+async function findFileById(id: string): Promise<FileRef> {
+  const refs = await scanSessionFiles();
+  const ref = refs.find((r) => basename(r.file).endsWith(`_${id}.jsonl`));
+  if (!ref) throw new HttpError(404, `session not found: ${id}`);
+  return ref;
+}
+
+// ---------- JSONL 解析 ----------
+
+function parseEntries(text: string): SessionEntry[] {
+  const entries: SessionEntry[] = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed) as SessionEntry);
+    } catch {
+      // 半行或坏行跳过（前缀扫描的末行可能不完整）
+    }
+  }
+  return entries;
+}
+
+async function readPrefix(file: string, bytes: number): Promise<string> {
+  const handle = await open(file, "r");
+  try {
+    const buffer = Buffer.alloc(bytes);
+    const { bytesRead } = await handle.read(buffer, 0, bytes, 0);
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+function firstUserText(entries: SessionEntry[]): string | undefined {
+  for (const entry of entries) {
+    if (entry.type !== "message") continue;
+    const message = (entry as { message?: { role?: string; content?: unknown } }).message;
+    if (message?.role !== "user") continue;
+    const content = message.content;
+    const text =
+      typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .filter((b) => b?.type === "text")
+              .map((b) => (b as { text?: string }).text ?? "")
+              .join(" ")
+          : "";
+    const clean = text.replace(/\s+/g, " ").trim();
+    if (clean) return clean.slice(0, 80);
+  }
+  return undefined;
+}
+
+// ---------- 列表（带 mtime+size 缓存） ----------
+
+interface ListMeta {
+  header?: SessionHeaderEntry;
+  title?: string;
+  name?: string;
+  model?: string;
+  provider?: string;
+}
+
+const metaCache = new Map<string, { key: string; meta: ListMeta }>();
+
+async function listMeta(ref: FileRef): Promise<ListMeta> {
+  const key = `${ref.mtimeMs}:${ref.sizeBytes}`;
+  const cached = metaCache.get(ref.file);
+  if (cached?.key === key) return cached.meta;
+
+  const entries = parseEntries(await readPrefix(ref.file, TITLE_SCAN_BYTES));
+  const modelChange = entries.find((e) => e.type === "model_change") as
+    | { provider?: string; modelId?: string }
+    | undefined;
+  // session_info 可能落在前缀之外，缺失可接受，detail 端会有全量
+  const sessionInfo = entries.find((e) => e.type === "session_info") as
+    | SessionInfoEntry
+    | undefined;
+  const meta: ListMeta = {
+    header: entries.find((e) => e.type === "session") as SessionHeaderEntry | undefined,
+    title: firstUserText(entries),
+    name: sessionInfo?.name,
+    model: modelChange?.modelId,
+    provider: modelChange?.provider,
+  };
+  metaCache.set(ref.file, { key, meta });
+  return meta;
+}
+
+async function listSessions(): Promise<{ rootExists: boolean; sessions: SessionSummary[] }> {
+  let rootExists = true;
+  try {
+    await stat(SESSIONS_ROOT);
+  } catch {
+    rootExists = false;
+  }
+  const refs = await scanSessionFiles();
+  const sessions: SessionSummary[] = [];
+  for (const ref of refs) {
+    const meta = await listMeta(ref);
+    const header = meta.header;
+    if (!header?.cwd) continue;
+    sessions.push({
+      id: header.id,
+      file: ref.file,
+      projectPath: header.cwd,
+      projectName: basename(header.cwd) || header.cwd,
+      name: meta.name,
+      title: meta.title,
+      startedAt: header.timestamp,
+      lastActiveAt: new Date(ref.mtimeMs).toISOString(),
+      sizeBytes: ref.sizeBytes,
+      model: meta.model,
+      provider: meta.provider,
+    });
+  }
+  sessions.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
+  return { rootExists, sessions };
+}
+
+// ---------- 详情与增量 tail ----------
+
+async function readSession(id: string) {
+  const ref = await findFileById(id);
+  const text = await readFile(ref.file, "utf8");
+  const entries = parseEntries(text);
+  const header = entries.find((e) => e.type === "session") as SessionHeaderEntry | undefined;
+  if (!header) throw new HttpError(500, `invalid session file: ${ref.file}`);
+  // 完整行字节偏移：末尾半行不计入，tail 从这里续读
+  const lastNewline = text.lastIndexOf("\n");
+  return {
+    file: ref.file,
+    header,
+    entries,
+    sizeBytes: ref.sizeBytes,
+    mtimeMs: ref.mtimeMs,
+    offset: lastNewline === -1 ? 0 : lastNewline + 1,
+  };
+}
+
+async function tailSession(id: string, offset: number) {
+  const ref = await findFileById(id);
+  const safeOffset = Math.max(0, Math.min(offset, ref.sizeBytes));
+  const empty = { sizeBytes: ref.sizeBytes, mtimeMs: ref.mtimeMs, offset: safeOffset, entries: [] as SessionEntry[] };
+  if (safeOffset >= ref.sizeBytes) return empty;
+
+  const handle = await open(ref.file, "r");
+  try {
+    const length = ref.sizeBytes - safeOffset;
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, safeOffset);
+    let text = buffer.toString("utf8");
+    // 只消费完整行：最后一个 \n 之后的内容留给下一次轮询
+    const lastNewline = text.lastIndexOf("\n");
+    if (lastNewline === -1) return empty;
+    text = text.slice(0, lastNewline + 1);
+    return {
+      sizeBytes: ref.sizeBytes,
+      mtimeMs: ref.mtimeMs,
+      offset: safeOffset + Buffer.byteLength(text),
+      entries: parseEntries(text),
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+// ---------- connect 中间件 ----------
+
+function json(res: ServerResponse, status: number, data: unknown) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(data));
+}
+
+export function createPiDataApi() {
+  return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const url = new URL(req.url ?? "/", "http://local");
+    const path = url.pathname;
+    try {
+      if (req.method === "GET" && path === "/sessions") {
+        return json(res, 200, await listSessions());
+      }
+      let m = path.match(/^\/session\/([^/]+)\/tail$/);
+      if (req.method === "GET" && m) {
+        return json(res, 200, await tailSession(decodeURIComponent(m[1]), Number(url.searchParams.get("offset") ?? "0")));
+      }
+      m = path.match(/^\/session\/([^/]+)$/);
+      if (req.method === "GET" && m) {
+        return json(res, 200, await readSession(decodeURIComponent(m[1])));
+      }
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500;
+      const message = error instanceof Error ? error.message : String(error);
+      return json(res, status, { error: message });
+    }
+    next();
+  };
+}

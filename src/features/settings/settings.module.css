@@ -1,0 +1,181 @@
+/* Settings 壳（ADR-0009）：独立整页双栏——自有导航侧栏 + 内容区。
+   侧栏复用主侧栏的宽度与背景（--sidebar-width / --bg-sidebar），进设置时左缘像素级不动；
+   顶部给全局常驻的 Brand Float 让位。 */
+
+.shell {
+  display: flex;
+  block-size: 100%;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-05);
+  inline-size: var(--sidebar-width);
+  min-inline-size: var(--sidebar-width);
+  /* 顶部让位：Brand Float（space-1 缩进 + 32px 按钮 + space-1 呼吸），与主侧栏同几何 */
+  padding: calc(var(--space-1) + var(--brandfloat-height) + var(--space-1)) var(--space-2)
+    var(--space-3);
+  background: var(--bg-sidebar);
+  border-right: 0.5px solid var(--separator);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hairline);
+}
+
+.divider {
+  block-size: 0.5px;
+  margin: var(--space-2) var(--space-1);
+  background: var(--separator);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--text-footnote);
+  line-height: var(--leading-footnote);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.itemActive {
+  background: var(--bg-selected);
+
+  &:hover {
+    background: var(--bg-selected);
+  }
+}
+
+.content {
+  position: relative;
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 与主壳 Session Bar 同高同分隔线，两壳头部节奏一致 */
+.contentBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  block-size: var(--sessionbar-height);
+  padding-inline: var(--space-3) var(--space-4);
+  border-block-end: 0.5px solid var(--separator);
+  background: var(--bg-canvas);
+}
+
+.contentTitle {
+  font-size: var(--text-footnote);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-title);
+}
+
+.contentBody {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 设置分区页（Appearance / About） ---- */
+
+.section {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-6) var(--space-9);
+}
+
+.sectionTitle {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-title2);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.hint {
+  margin-top: var(--space-3);
+  color: var(--text-3);
+  font-size: var(--text-caption);
+}
+
+/* 分段控件：Light / Dark */
+.segmented {
+  display: inline-flex;
+  gap: var(--space-05);
+  padding: var(--space-05);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+}
+
+.segment {
+  padding: var(--space-1) var(--space-5);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--text-footnote);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    color: var(--text-1);
+  }
+}
+
+.segmentActive {
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  box-shadow: var(--shadow-card);
+
+  &:hover {
+    color: var(--text-1);
+  }
+}
+
+/* About */
+.aboutLine {
+  max-inline-size: 52ch;
+  color: var(--text-2);
+  line-height: var(--leading-body-tight);
+}
+
+.aboutList {
+  margin-top: var(--space-5);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-6);
+  max-inline-size: 52ch;
+
+  & dt {
+    color: var(--text-3);
+    font-size: var(--text-caption);
+  }
+
+  & dd {
+    margin: 0;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+  }
+}

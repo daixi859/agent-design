@@ -1,0 +1,215 @@
+/* Sidebar（Q9/Q16）：按 Project 分组的 Session 列表，macOS 源列表质感 */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  inline-size: var(--sidebar-width);
+  min-inline-size: var(--sidebar-width);
+  block-size: 100%;
+  background: var(--bg-sidebar);
+  border-right: 0.5px solid var(--separator);
+  visibility: visible;
+  /* 收起/展开双向动画（ADR-0009）：min-inline-size 必须同列表过渡，
+     否则展开时它瞬跳满宽、压过还在动画中的 inline-size；
+     右边框同步淡出避免 0 宽时残留竖线；visibility 离散过渡见 .collapsed */
+  transition:
+    inline-size var(--duration-slow) var(--ease-emphasized),
+    min-inline-size var(--duration-slow) var(--ease-emphasized),
+    border-color var(--duration-slow) var(--ease-standard),
+    visibility 0s linear;
+}
+
+/* 收起：宽度到 0；visibility 延迟到动画结束后才隐藏（后态延迟规则），
+   内容随之离开可访问性树；展开时后态回到本规则，立即可见、宽度继续动画。
+   内容由 .inner 固定宽避免回流抖动 */
+.collapsed {
+  inline-size: 0;
+  min-inline-size: 0;
+  border-right-color: transparent;
+  visibility: hidden;
+  transition:
+    inline-size var(--duration-slow) var(--ease-emphasized),
+    min-inline-size var(--duration-slow) var(--ease-emphasized),
+    border-color var(--duration-slow) var(--ease-standard),
+    visibility 0s linear var(--duration-slow);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  inline-size: var(--sidebar-width);
+  block-size: 100%;
+}
+
+/* 减少动态效果：尺寸过渡直接关停（visibility 逻辑随之瞬时完成） */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .collapsed {
+    transition: none;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  /* 顶部让位：Brand Float（space-1 缩进 + 32px 按钮 + space-1 呼吸，ADR-0009） */
+  padding: calc(var(--space-1) + var(--brandfloat-height) + var(--space-1)) var(--space-2)
+    var(--space-1h) var(--space-3);
+}
+
+.list {
+  flex: 1;
+  padding: 0 var(--space-2) var(--space-3);
+}
+
+/* ---- 项目分组 ---- */
+
+.group + .group {
+  margin-top: var(--space-2);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  inline-size: 100%;
+  padding: var(--space-1) var(--space-1);
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--text-1);
+  }
+
+  & svg {
+    color: var(--text-3);
+  }
+}
+
+.groupChevron {
+  display: inline-flex;
+  transition: transform var(--duration-fast) var(--ease-standard);
+
+  &[data-collapsed="true"] {
+    transform: rotate(-90deg);
+  }
+}
+
+.groupName {
+  flex: 1;
+  text-align: left;
+}
+
+.groupCount {
+  font-weight: var(--weight-regular);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Session 条目 ---- */
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hairline);
+  margin-top: var(--space-hairline);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  text-decoration: none;
+  transition: background var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.itemActive {
+  background: var(--bg-selected);
+
+  &:hover {
+    background: var(--bg-selected);
+  }
+}
+
+.itemTitle {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--text-footnote);
+  line-height: var(--leading-footnote);
+  font-weight: var(--weight-medium);
+}
+
+.itemTime {
+  flex: none;
+  font-size: var(--text-caption2);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Live Tail 呼吸圆点（Q17）——设计签名单上的一件 */
+.liveDot {
+  inline-size: var(--size-dot);
+  block-size: var(--size-dot);
+  min-inline-size: var(--size-dot);
+  border-radius: 50%;
+  background: var(--separator-strong);
+}
+
+.liveDotOn {
+  background: var(--success);
+  animation: breathe 2s var(--ease-standard) infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 0%, transparent);
+  }
+}
+
+/* ---- 空态 / 页脚 ---- */
+
+.empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--text-2);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+
+  & strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text-1);
+    font-weight: var(--weight-semibold);
+  }
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-top: 0.5px solid var(--separator);
+  color: var(--text-3);
+  font-size: var(--text-caption2);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,30 @@
+/* App shell（ADR-0009）：Brand Float 浮动常驻 + (Sidebar | Main) 两栏骨架
+   （ADR-0003，第三栏为扩展点）；顶栏已移除，头部职责分区分担 */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  block-size: 100%;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-block-size: 0;
+}
+
+.main {
+  position: relative;
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Session Bar 下方的路由内容区：吃掉剩余高度，滚动交给各视图自身 */
+.mainContent {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+}

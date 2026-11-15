@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# TypeScript 增量构建缓存
+*.tsbuildinfo
+
+# 本地环境与临时文件
+*.local
+.env*
+*.log
+
+# 系统杂项
+.DS_Store
+Thumbs.db
+.playwright-mcp

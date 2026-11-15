@@ -1,0 +1,114 @@
+/* 设计令牌 · 原始值层（ADR-0001）
+   只放与主题无关的原始刻度：灰阶、色相、字号、间距、圆角、动效。
+   语义引用见 tokens.semantic.css；组件层变量随组件定义。 */
+
+:root {
+  /* ---- 中性灰阶（Apple 系灰） ---- */
+  --gray-50: #f6f6f8;
+  --gray-100: #f2f2f6;
+  --gray-150: #e9e9ec;
+  --gray-200: #d8d8dd;
+  --gray-300: #c7c7cc;
+  --gray-400: #aeaeb2;
+  --gray-500: #8e8e93;
+  --gray-600: #6e6e73;
+  --gray-700: #55555a;
+  --gray-800: #3a3a3e;
+  --gray-850: #2c2c2f;
+  --gray-900: #1d1d1f;
+  --gray-950: #121214;
+
+  /* ---- 色相 ---- */
+  --blue-500: #007aff;
+  --blue-600: #0066d6;
+  --purple-500: #af52de;
+  --purple-600: #9d3fd0;
+  --green-500: #34c759;
+  --orange-500: #ff9f0a;
+  --red-500: #ff3b30;
+
+  /* ---- 字体族 ---- */
+  /* macOS 原生骨架（Q12）：系统字体栈优先，Windows 回退 Segoe UI */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
+    "Microsoft YaHei", monospace;
+
+  /* ---- 字号（纯 size；行高用 --leading-*，font-size 引用才合法） ---- */
+  --text-micro: 10px;
+  --text-caption2: 11px;
+  --text-caption: 12px;
+  --text-footnote: 13px;
+  --text-body: 14px;
+  --text-callout: 15px;
+  --text-title3: 17px;
+  --text-title2: 20px;
+  --text-title1: 24px;
+
+  /* ---- 行高 ---- */
+  --leading-micro: 14px;
+  --leading-caption2: 14px;
+  --leading-caption: 16px;
+  --leading-footnote: 18px;
+  --leading-body-tight: 20px;
+  --leading-body: 22px;
+  --leading-callout: 24px;
+  --leading-title3: 24px;
+  --leading-title2: 26px;
+  --leading-title1: 30px;
+
+  /* ---- 字重 ---- */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- 字距 ---- */
+  --tracking-tight: -0.02em;
+  --tracking-title: -0.014em;
+  --tracking-caption: 0;
+  --tracking-eyebrow: 0.04em;
+
+  /* ---- 间距（4px 网格） ---- */
+  --space-hairline: 1px;
+  --space-05: 2px;
+  --space-1: 4px;
+  --space-1h: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+
+  /* ---- 小件尺寸 ---- */
+  /* Live Tail 呼吸圆点等状态点 */
+  --size-dot: 6px;
+
+  /* ---- 圆角 ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-bubble: 14px;
+  --radius-pill: 999px;
+
+  /* ---- 动效 ---- */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  /* 浮层毛玻瑰（代码展开钮、跳转钮） */
+  --blur-floating: 6px;
+
+  /* ---- 层级 ---- */
+  --z-float: 20;
+  --z-composer: 10;
+  --z-popover: 100;
+}
