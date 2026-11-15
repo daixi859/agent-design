@@ -8,7 +8,7 @@
   min-inline-size: var(--sidebar-width);
   block-size: 100%;
   background: var(--bg-sidebar);
-  border-right: 0.5px solid var(--separator);
+  border-inline-end: var(--border-hairline) solid var(--separator);
   visibility: visible;
   /* 收起/展开双向动画（ADR-0009）：min-inline-size 必须同列表过渡，
      否则展开时它瞬跳满宽、压过还在动画中的 inline-size；
@@ -26,7 +26,7 @@
 .collapsed {
   inline-size: 0;
   min-inline-size: 0;
-  border-right-color: transparent;
+  border-inline-end-color: transparent;
   visibility: hidden;
   transition:
     inline-size var(--duration-slow) var(--ease-emphasized),
@@ -68,7 +68,7 @@
 /* ---- 项目分组 ---- */
 
 .group + .group {
-  margin-top: var(--space-2);
+  margin-block-start: var(--space-2);
 }
 
 .groupHeader {
@@ -77,13 +77,25 @@
   gap: var(--space-1h);
   inline-size: 100%;
   padding: var(--space-1) var(--space-1);
-  border: none;
   border-radius: var(--radius-xs);
+}
+
+/* 折叠热区：真正承担交互的按钮，继承行内排版 */
+.groupToggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1h);
+  min-inline-size: 0;
+  padding: 0;
+  border: none;
   background: transparent;
   color: var(--text-2);
+  font: inherit;
   font-size: var(--text-footnote);
   line-height: var(--leading-footnote);
   font-weight: var(--weight-semibold);
+  text-align: left;
   cursor: pointer;
   user-select: none;
 
@@ -100,7 +112,6 @@
   flex: 1;
   text-align: left;
 }
-
 /* 添加按钮：hover 分组行显现，替换原计数徽标 */
 .groupAdd {
   /* 与 IconButton 原语同比例（图标 16 / 按钮 28 = 4:7）：图标 14px → 按钮 24.5px */
@@ -130,31 +141,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-hairline);
-  margin-top: var(--space-hairline);
+  margin-block-start: var(--space-hairline);
 }
 
-.item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 5px var(--space-2);
-  border-radius: var(--radius-sm);
-  color: var(--text-1);
-  text-decoration: none;
-  transition: background var(--duration-fast) var(--ease-standard);
-
-  &:hover {
-    background: var(--bg-hover);
-  }
-}
-
-.itemActive {
-  background: var(--bg-selected);
-
-  &:hover {
-    background: var(--bg-selected);
-  }
-}
+/* 条目视觉走 ui/nav 原语（与设置页导航共享）；此处只留侧栏私有部分 */
 
 .itemTitle {
   flex: 1;
@@ -169,6 +159,8 @@
   font-size: var(--text-caption2);
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
+  /* nav 原语的 medium 不下探到时间戳：保持常规字重 */
+  font-weight: var(--weight-regular);
 }
 
 /* Live Tail 呼吸圆点（Q17）——设计签名单上的一件 */
@@ -217,7 +209,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
-  border-top: 0.5px solid var(--separator);
+  border-block-start: var(--border-hairline) solid var(--separator);
   color: var(--text-3);
   font-size: var(--text-caption2);
   font-variant-numeric: tabular-nums;

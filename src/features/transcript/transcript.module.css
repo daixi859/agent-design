@@ -7,6 +7,12 @@
   flex-direction: column;
   block-size: 100%;
   background: var(--bg-canvas);
+
+  /* Composer 联动几何：四处一个系统，改 Composer 时一起动（组件层变量随组件定义） */
+  --composer-clearance: 96px;    /* 滚动内容底部让位 */
+  --jump-rest-height: 92px;      /* 跳最新钮悬停位 = 让位 − 一格节奏 */
+  --code-collapse-height: 210px; /* 折叠态代码可见高度 */
+  --code-fade-height: 56px;      /* 折叠渐隐梯度高度 */
 }
 
 .scroll {
@@ -17,7 +23,7 @@
   max-inline-size: var(--content-measure);
   margin-inline: auto;
   /* 底部留白大于 Composer 高度，滚动内容不被遮挡 */
-  padding: var(--space-5) var(--space-6) 96px;
+  padding: var(--space-5) var(--space-6) var(--composer-clearance);
 }
 
 .projectEyebrow {
@@ -89,11 +95,14 @@
     }
   }
   & a {
-    color: var(--accent);
-    text-decoration: none;
+    color: var(--accent-text);
+    /* 常驻下划线（WCAG 1.4.1：不单靠颜色区分链接），hover 加深到实色 */
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent-text) 45%, transparent);
+    text-underline-offset: 2px;
 
     &:hover {
-      text-decoration: underline;
+      text-decoration-color: var(--accent-text);
     }
   }
   & blockquote {
@@ -103,14 +112,14 @@
   }
   & hr {
     border: none;
-    border-block-start: 0.5px solid var(--separator);
+    border-block-start: var(--border-hairline) solid var(--separator);
   }
   & table {
     border-collapse: collapse;
     font-size: var(--text-caption);
   }
   & :is(th, td) {
-    border: 0.5px solid var(--separator-strong);
+    border: var(--border-hairline) solid var(--separator-strong);
     padding: var(--space-1) var(--space-2);
     text-align: left;
   }
@@ -138,7 +147,7 @@
 .codeShellWrap {
   position: relative;
   background: var(--code-bg);
-  border: 0.5px solid var(--code-border);
+  border: var(--border-hairline) solid var(--code-border);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -148,7 +157,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
-  border-bottom: 0.5px solid var(--code-border);
+  border-block-end: var(--border-hairline) solid var(--code-border);
   background: color-mix(in srgb, var(--text-1) 3%, transparent);
 }
 
@@ -166,7 +175,7 @@
   margin-inline-start: auto;
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--space-1h);
+  padding: var(--space-05) var(--space-1h);
   border: none;
   border-radius: var(--radius-xs);
   background: transparent;
@@ -188,10 +197,8 @@
 .codeShell pre,
 .codeFallback {
   margin: 0;
-  font-family: var(--font-mono);
   font-size: var(--text-caption);
   line-height: var(--leading-footnote);
-  color: var(--code-text);
   background: transparent !important;
   border: none;
   border-radius: 0;
@@ -208,7 +215,7 @@
 
 /* 代码折叠（用户反馈）：只收 <pre>，头部栏在折叠态保持可见 */
 .codeShellWrap:not(.codeExpanded) :is(.codeShell pre, .codeFallback) {
-  max-block-size: 210px;
+  max-block-size: var(--code-collapse-height);
   overflow: hidden;
 }
 
@@ -222,7 +229,7 @@
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  block-size: 56px;
+  block-size: var(--code-fade-height);
   background: linear-gradient(to bottom, transparent, var(--code-bg) 85%);
   pointer-events: none;
 }
@@ -240,6 +247,7 @@
   border: none;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  -webkit-backdrop-filter: blur(var(--blur-floating));
   backdrop-filter: blur(var(--blur-floating));
   color: var(--text-2);
   font-size: var(--text-caption2);
@@ -247,7 +255,7 @@
   font-weight: var(--weight-medium);
   cursor: pointer;
   box-shadow:
-    inset 0 0 0 0.5px var(--separator-strong),
+    inset 0 0 0 var(--border-hairline) var(--separator-strong),
     var(--shadow-card);
 
   &:hover {
@@ -255,10 +263,23 @@
   }
 }
 
+/* ---- 折叠箭头基座：thinking / tool / group 三处共用，只差颜色与触发方式 ---- */
+
+.thinkingChevron,
+.toolChevron,
+.groupChevron {
+  display: inline-flex;
+  transition: transform var(--duration-fast) var(--ease-standard);
+
+  &[data-open="true"] {
+    transform: rotate(90deg);
+  }
+}
+
 /* ---- Thinking（暖灰折叠卡，ADR-0005） ---- */
 
 .thinking {
-  box-shadow: inset 0 0 0 0.5px var(--separator);
+  box-shadow: var(--shadow-hairline);
   background: var(--thinking-subtle);
   border-radius: var(--radius-md);
 }
@@ -282,9 +303,7 @@
 }
 
 .thinkingChevron {
-  display: inline-flex;
   color: color-mix(in srgb, var(--thinking) 65%, var(--text-3));
-  transition: transform var(--duration-fast) var(--ease-standard);
 }
 
 .thinking[open] .thinkingChevron {
@@ -305,11 +324,11 @@
 .toolCard {
   background: var(--bg-inset);
   border-radius: var(--radius-lg);
-  box-shadow: inset 0 0 0 0.5px var(--separator);
+  box-shadow: var(--shadow-hairline);
 }
 
 .toolCard[data-error="true"] {
-  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--danger) 35%, transparent);
+  box-shadow: inset 0 0 0 var(--border-hairline) color-mix(in srgb, var(--danger) 35%, transparent);
 }
 
 .toolHeader {
@@ -353,13 +372,7 @@
 }
 
 .toolChevron {
-  display: inline-flex;
   color: var(--text-3);
-  transition: transform var(--duration-fast) var(--ease-standard);
-
-  &[data-open="true"] {
-    transform: rotate(90deg);
-  }
 }
 
 .toolBody {
@@ -369,19 +382,33 @@
   padding: 0 var(--space-2) var(--space-2);
 }
 
+/* 代码面文字基座：等宽 + 代码文字色（表面由各载体自定，ADR-0007 统一表面语言） */
 .toolArgs,
-.toolOutput {
+.toolOutput,
+.diff,
+.codeShell pre,
+.codeFallback {
   font-family: var(--font-mono);
+  color: var(--code-text);
+}
+
+/* 内嵌代码表面：暖光底 + 发丝边 + 圆角（toolArgs / toolOutput / diff 共用） */
+.toolArgs,
+.toolOutput,
+.diff {
   font-size: var(--text-caption2);
   line-height: var(--leading-caption);
-  color: var(--code-text);
   background: var(--code-bg);
-  border: 0.5px solid var(--code-border);
+  border: var(--border-hairline) solid var(--code-border);
   border-radius: var(--radius-md);
+  white-space: pre;
+  overflow: auto;
+}
+
+.toolArgs,
+.toolOutput {
   padding: var(--space-2);
   max-block-size: 220px;
-  overflow: auto;
-  white-space: pre;
 }
 
 /* 代码/输出类滚动容器：细滚动条，避免 Windows 箭头样式 */
@@ -402,16 +429,8 @@
 /* ---- Diff ---- */
 
 .diff {
-  font-family: var(--font-mono);
-  font-size: var(--text-caption2);
-  line-height: var(--leading-caption);
-  background: var(--code-bg);
-  border: 0.5px solid var(--code-border);
-  border-radius: var(--radius-md);
   padding: var(--space-1) 0;
   max-block-size: 320px;
-  overflow: auto;
-  white-space: pre;
 }
 
 .diffFile {
@@ -468,7 +487,7 @@
   &::after {
     content: "";
     flex: 1;
-    block-size: 0.5px;
+    block-size: var(--border-hairline);
     background: var(--separator);
   }
 }
@@ -478,6 +497,10 @@
 .turn {
   display: flex;
   flex-direction: column;
+  /* 长会话性能：视口外 Turn 跳过布局与绘制；
+     auto 关键词记住已渲染高度，滚动条比例首次渲染后趋于真实 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
 }
 
 .answerBlock {
@@ -521,6 +544,7 @@
   align-self: flex-start;
   gap: var(--space-1h);
   white-space: nowrap;
+  /* 3px：视觉修正值，让 mono 小字在 bar 里垂直居中 */
   padding: 3px var(--space-2);
   border: none;
   border-radius: var(--radius-sm);
@@ -542,19 +566,16 @@
 }
 
 .groupChevron {
-  display: inline-flex;
-  transition: transform var(--duration-fast) var(--ease-standard);
-
-  &[data-open="true"] {
-    transform: rotate(90deg);
-  }
+  /* 结构（display/transition/rotate）在折叠箭头基座统一声明；
+     颜色随 groupBar 文字色（含 hover）联动，currentcolor 显式表达 */
+  color: currentcolor;
 }
 
 .groupItems {
   margin-block: var(--space-2);
   margin-inline-start: var(--space-3);
   padding-inline-start: var(--space-3);
-  border-inline-start: 0.5px solid var(--separator-strong);
+  border-inline-start: var(--border-hairline) solid var(--separator-strong);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -592,7 +613,7 @@
 .jumpLatest {
   position: absolute;
   inset-inline-start: 50%;
-  bottom: 92px;
+  bottom: var(--jump-rest-height);
   translate: -50% 0;
   display: inline-flex;
   align-items: center;
@@ -601,7 +622,7 @@
   border: none;
   border-radius: var(--radius-pill);
   background: var(--bg-elevated);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-caption);
   font-weight: var(--weight-medium);
   box-shadow: var(--shadow-popover);
@@ -642,7 +663,8 @@
   border: none;
   background: transparent;
   resize: none;
-  /* 只读阶段保持单行视觉；接入 pi 后如需多行滚动改回 overflow: auto */
+  /* 只读阶段保持单行视觉；接入 pi 后如需多行滚动改回 overflow: auto。
+     field-sizing: content 仅 Chromium；不支持的引擎回退 rows={1}（Composer.tsx） */
   overflow: hidden;
   field-sizing: content;
   max-block-size: 160px;

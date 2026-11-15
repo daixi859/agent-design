@@ -9,6 +9,7 @@ import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
 import { Icon } from "../../ui/Icon";
 import { IconButton } from "../../ui/IconButton";
+import nav from "../../ui/nav.module.css";
 import styles from "./session-bar.module.css";
 
 export function SessionBar({
@@ -48,7 +49,7 @@ export function SessionBar({
   return (
     <header className={cx(styles.bar, collapsed && styles.clearFloat)}>
       <div className={styles.titleGroup}>
-        <span className={`ellipsis ${styles.title}`}>{title}</span>
+        <span className={`ellipsis ${nav.barTitle}`}>{title}</span>
         {badge.branched && (
           <span className={styles.branchedBadge} title={t("branchedTitle")}>
             <Icon name="branch" size={11} />

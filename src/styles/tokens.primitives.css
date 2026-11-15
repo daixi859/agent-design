@@ -1,32 +1,9 @@
 /* 设计令牌 · 原始值层（ADR-0001）
-   只放与主题无关的原始刻度：灰阶、色相、字号、间距、圆角、动效。
+   只放与主题无关的原始刻度：字号、间距、圆角、动效。
+   颜色刻度不预留：语义层需要新颜色时再回本层补刻度（免维护死色板）。
    语义引用见 tokens.semantic.css；组件层变量随组件定义。 */
 
 :root {
-  /* ---- 中性灰阶（Apple 系灰） ---- */
-  --gray-50: #f6f6f8;
-  --gray-100: #f2f2f6;
-  --gray-150: #e9e9ec;
-  --gray-200: #d8d8dd;
-  --gray-300: #c7c7cc;
-  --gray-400: #aeaeb2;
-  --gray-500: #8e8e93;
-  --gray-600: #6e6e73;
-  --gray-700: #55555a;
-  --gray-800: #3a3a3e;
-  --gray-850: #2c2c2f;
-  --gray-900: #1d1d1f;
-  --gray-950: #121214;
-
-  /* ---- 色相 ---- */
-  --blue-500: #007aff;
-  --blue-600: #0066d6;
-  --purple-500: #af52de;
-  --purple-600: #9d3fd0;
-  --green-500: #34c759;
-  --orange-500: #ff9f0a;
-  --red-500: #ff3b30;
-
   /* ---- 字体族 ---- */
   /* macOS 原生骨架（Q12）：系统字体栈优先，Windows 回退 Segoe UI */
   --font-sans:
@@ -72,6 +49,8 @@
   --tracking-eyebrow: 0.04em;
 
   /* ---- 间距（4px 网格） ---- */
+  /* 发丝线宽：边框与分隔线共用的 0.5px 刻度（阴影版见语义层 --shadow-hairline） */
+  --border-hairline: 0.5px;
   --space-hairline: 1px;
   --space-05: 2px;
   --space-1: 4px;
@@ -104,7 +83,7 @@
   --duration-slow: 240ms;
   --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  /* 浮层毛玻瑰（代码展开钮、跳转钮） */
+  /* 浮层毛玻璃（代码展开钮、跳转钮） */
   --blur-floating: 6px;
 
   /* ---- 层级 ---- */

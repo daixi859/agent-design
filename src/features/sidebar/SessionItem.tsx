@@ -4,6 +4,7 @@ import type { SessionSummary } from "../../../shared/pi-types";
 import { formatRelativeCompact } from "../../lib/format";
 import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
+import nav from "../../ui/nav.module.css";
 import styles from "./sidebar.module.css";
 
 export function SessionItem({
@@ -19,7 +20,7 @@ export function SessionItem({
   return (
     <NavLink
       to={`/session/${session.id}`}
-      className={({ isActive }) => cx(styles.item, isActive && styles.itemActive)}
+      className={({ isActive }) => cx(nav.item, isActive && nav.itemActive)}
       title={title}
     >
       <span className={cx(styles.liveDot, live && styles.liveDotOn)} aria-hidden="true" />

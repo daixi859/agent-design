@@ -19,7 +19,6 @@ export function ProjectGroupView({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const { t } = useLocale();
-
   const needle = filter.trim().toLowerCase();
   const sessions = needle
     ? group.sessions.filter((session) => {
@@ -31,26 +30,28 @@ export function ProjectGroupView({
 
   return (
     <section className={styles.group}>
-      <button
-        type="button"
-        className={styles.groupHeader}
-        onClick={() => setCollapsed((value) => !value)}
-        aria-expanded={!collapsed}
-      >
-        {/* 文件夹本身表达状态：闭=收起，开口=展开 */}
-        <Icon name={collapsed ? "folder" : "folder-open"} size={13} />
-        <span className={cx("ellipsis", styles.groupName)} title={group.projectPath}>
-          {group.projectName}
-        </span>
-        {/* 视觉件（ADR-0002）：下一阶段接入 pi 后触发 new_session；hover 显现，点击不折叠 */}
+      {/* 折叠热区与「+」为兄弟节点：按钮不得嵌套按钮（HTML 合法性 + hydration） */}
+      <div className={styles.groupHeader}>
+        <button
+          type="button"
+          className={styles.groupToggle}
+          onClick={() => setCollapsed((value) => !value)}
+          aria-expanded={!collapsed}
+        >
+          {/* 文件夹本身表达状态：闭=收起，开口=展开 */}
+          <Icon name={collapsed ? "folder" : "folder-open"} size={13} />
+          <span className={cx("ellipsis", styles.groupName)} title={group.projectPath}>
+            {group.projectName}
+          </span>
+        </button>
+        {/* 视觉件（ADR-0002）：下一阶段接入 pi 后触发 new_session；hover 显现 */}
         <IconButton
           icon="plus"
           title={t("newSessionHint")}
           aria-label={t("newSessionHint")}
           className={styles.groupAdd}
-          onClick={(e) => e.stopPropagation()}
         />
-      </button>
+      </div>
       {!collapsed && (
         <div className={styles.items}>
           {sessions.map((session) => (

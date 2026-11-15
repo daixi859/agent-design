@@ -5,6 +5,7 @@ import { cx } from "../../lib/cx";
 import type { MessageKey } from "../../lib/i18n";
 import { useLocale } from "../../state/useLocale";
 import { Icon } from "../../ui/Icon";
+import nav from "../../ui/nav.module.css";
 import styles from "./settings.module.css";
 
 /** 导航条目定义：分组渲染——上部预览路由，分隔线下是偏好与关于 */
@@ -41,7 +42,7 @@ export function SettingsShell() {
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  cx(styles.item, isActive && styles.itemActive)
+                  cx(nav.item, isActive && nav.itemActive)
                 }
               >
                 <Icon name={item.icon} size={15} />
@@ -55,7 +56,7 @@ export function SettingsShell() {
       <div className={styles.content}>
         <header className={styles.contentBar}>
           {/* 返回动线在 Brand Float：hover π 显示回退钮（Q12），此处只承担分区标题 */}
-          <span className={styles.contentTitle}>{t(title)}</span>
+          <span className={nav.barTitle}>{t(title)}</span>
         </header>
         <div className={styles.contentBody}>
           <Outlet />

@@ -1,0 +1,41 @@
+/* UI 原语：NavItem + 栏标题（壳层导航元件）。
+   条目两处消费（主侧栏 Session 列表 / 设置页导航）即真实接缝；
+   <a> 与 <button> 皆可挂，本原语只管视觉。 */
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* 5px：视觉修正值，略紧于 4px 网格（侧栏密度节奏） */
+  padding: 5px var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--text-footnote);
+  line-height: var(--leading-footnote);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.itemActive {
+  background: var(--bg-selected);
+
+  &:hover {
+    background: var(--bg-selected);
+  }
+}
+
+/* 栏标题：Session Bar 与设置页内容栏共用同一定义 */
+.barTitle {
+  font-size: var(--text-footnote);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-title);
+}

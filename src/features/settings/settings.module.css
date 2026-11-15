@@ -16,7 +16,7 @@
   /* 顶部让位 = 标题栏高度：与主侧栏头部带同几何（ADR-0009） */
   padding: var(--sessionbar-height) var(--space-2) var(--space-3);
   background: var(--bg-sidebar);
-  border-right: 0.5px solid var(--separator);
+  border-inline-end: var(--border-hairline) solid var(--separator);
 }
 
 .group {
@@ -26,40 +26,14 @@
 }
 
 .divider {
-  block-size: 0.5px;
+  block-size: var(--border-hairline);
   margin: var(--space-2) var(--space-1);
   background: var(--separator);
 }
 
-.item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 5px var(--space-2);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-1);
-  font-size: var(--text-footnote);
-  line-height: var(--leading-footnote);
-  font-weight: var(--weight-medium);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard);
+/* 导航条目视觉走 ui/nav 原语（与主侧栏 Session 条目共享） */
 
-  &:hover {
-    background: var(--bg-hover);
-  }
-}
-
-.itemActive {
-  background: var(--bg-selected);
-
-  &:hover {
-    background: var(--bg-selected);
-  }
-}
+/* 导航条目视觉走 ui/nav 原语（与主侧栏 Session 条目共享） */
 
 .content {
   position: relative;
@@ -77,15 +51,11 @@
   gap: var(--space-2);
   block-size: var(--sessionbar-height);
   padding-inline: var(--space-3) var(--space-4);
-  border-block-end: 0.5px solid var(--separator);
+  border-block-end: var(--border-hairline) solid var(--separator);
   background: var(--bg-canvas);
 }
 
-.contentTitle {
-  font-size: var(--text-footnote);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-title);
-}
+/* 栏标题定义在 ui/nav 原语（与 Session Bar 共用） */
 
 .contentBody {
   flex: 1;
@@ -122,7 +92,7 @@
   padding: var(--space-05);
   border-radius: var(--radius-md);
   background: var(--bg-inset);
-  box-shadow: inset 0 0 0 0.5px var(--separator);
+  box-shadow: var(--shadow-hairline);
 }
 
 .segment {

@@ -8,7 +8,7 @@
   flex: none;
   block-size: var(--sessionbar-height);
   padding-inline: var(--space-4) var(--space-3);
-  border-block-end: 0.5px solid var(--separator);
+  border-block-end: var(--border-hairline) solid var(--separator);
   background: var(--bg-canvas);
   /* 让位 padding 与侧栏宽度动画同步过渡（ADR-0009） */
   transition: padding-inline-start var(--duration-slow) var(--ease-emphasized);
@@ -27,11 +27,7 @@
   min-inline-size: 0;
 }
 
-.title {
-  font-size: var(--text-footnote);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-title);
-}
+/* 栏标题定义在 ui/nav 原语（与设置页内容栏共用） */
 
 .branchedBadge {
   display: inline-flex;
@@ -40,7 +36,7 @@
   padding: var(--space-05) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-caption2);
 }
 

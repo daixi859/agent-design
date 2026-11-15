@@ -124,7 +124,7 @@ export function ComponentGallery() {
             {ICON_NAMES.map((name) => (
               <figure key={name} className={styles.iconCell}>
                 <Icon name={name} size={20} />
-                <figcaption>{name}</figcaption>
+                <figcaption className="ellipsis">{name}</figcaption>
               </figure>
             ))}
           </div>

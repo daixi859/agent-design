@@ -1,5 +1,6 @@
 /* 设计令牌 · 语义层（ADR-0001 分层 / ADR-0005 视觉方向）
-   组件只允许引用本层与组件层变量，永远不直接引用原始值层。
+   颜色一律引用本层与组件层变量；与主题无关的尺度（字排/间距/圆角/动效）
+   直接引用原始值层（ADR-0001 后果段，2026-11 修订）。
    主题切换：index.html 首帧脚本设置 <html data-theme>；
    每个主题同步设置 color-scheme，让原生控件与滚动条跟随（modern-web-guidance）。
    视觉语言：macOS 骨架 + Claude 式内容面（暖纸中性面、赤陶强调、常暗代码面）。 */
@@ -16,33 +17,39 @@
   --bg-active: rgba(20, 20, 19, 0.08);
   --bg-selected: rgba(20, 20, 19, 0.08);
 
-  /* ---- 文本 ---- */
+  /* ---- 文本 ----
+     text-3 是信息性元数据（时间、语言标签）的下限：#73716a 对画布 4.6:1（WCAG 1.4.3）。
+     text-4 只作装饰性淡字（行号、注解侧线），约 2.9:1，不承载必读信息。 */
   --text-1: #141413;
   --text-2: #6b6a63;
-  --text-3: #9b9a92;
-  --text-4: rgba(20, 20, 19, 0.28);
+  --text-3: #73716a;
+  --text-4: rgba(20, 20, 19, 0.44);
 
   /* ---- 分隔 ---- */
   --separator: rgba(20, 20, 19, 0.09);
   --separator-strong: rgba(20, 20, 19, 0.16);
 
-  /* ---- 强调（赤陶） ---- */
+  /* ---- 强调（赤陶） ----
+     --accent 供填充与图形；文字场合一律用 --accent-text（对画布 5.3:1）。
+     --selection-bg 延续 accent，替代旧 Apple 蓝选区（ADR-0005）。 */
   --accent: #d97757;
+  --accent-text: #a84e30;
   --accent-hover: #c4633f;
   --on-accent: #ffffff;
   --accent-subtle: rgba(217, 119, 87, 0.1);
+  --selection-bg: color-mix(in srgb, var(--accent) 26%, transparent);
 
-  /* ---- Thinking（暖灰，ADR-0005） ---- */
-  --thinking: #79786f;
+  /* ---- Thinking（暖灰，ADR-0005；#6e6d65 对 subtle 底 4.6:1） ---- */
+  --thinking: #6e6d65;
   --thinking-subtle: rgba(121, 120, 111, 0.07);
 
-  /* ---- 状态（暖调） ---- */
+  /* ---- 状态（暖调；文字场合对画布均 ≥ 4.5:1） ---- */
   --success: #4d9f4d;
   --success-subtle: rgba(77, 159, 77, 0.12);
-  --warning: #c77d2e;
-  --warning-subtle: rgba(199, 125, 46, 0.14);
-  --danger: #cc4b40;
-  --danger-subtle: rgba(204, 75, 64, 0.12);
+  --warning: #9c6023;
+  --warning-subtle: rgba(156, 96, 35, 0.14);
+  --danger: #b04429;
+  --danger-subtle: rgba(176, 68, 41, 0.12);
 
   /* ---- 用户气泡（中性浅底深字，Claude 式） ---- */
   --bubble-user-bg: #e8e6dc;
@@ -54,24 +61,30 @@
   --code-text: #45443f;
   --inline-code-bg: #e8e6dc;
 
-  /* ---- Diff（暖光面上的柔和水洗色） ---- */
+  /* ---- Diff（暖光面上的柔和水洗色；文字对洗色底 ≥ 4.9:1） ---- */
   --diff-add-bg: rgba(77, 159, 77, 0.14);
-  --diff-add-text: #337033;
+  --diff-add-text: #2d642d;
   --diff-del-bg: rgba(204, 75, 64, 0.12);
-  --diff-del-text: #a63e33;
+  --diff-del-text: #9c382e;
 
   /* ---- 主按钮（Claude 式墨色） ---- */
   --primary-btn-bg: #141413;
   --primary-btn-fg: #faf9f5;
 
-  /* ---- 滚动条（thumb 对背景 ≥ 3:1 对比） ---- */
+  /* ---- 滚动条 ----
+     thumb 刻意保持 macOS 细滑质感（约 1.8:1）：滚动条不属于 WCAG 1.4.11 的
+     「理解内容所必需的图形」，此处的取舍是观感优先，勿再标注对比度声明。 */
   --scroll-thumb: rgba(20, 20, 19, 0.26);
   --scroll-track: transparent;
 
-  /* ---- 阴影与焦点 ---- */
+  /* ---- 阴影与焦点 ----
+     焦点指示用 outline 承载（global.css），只存颜色不存 shadow：
+     outline 与装饰 box-shadow 天然可叠加，不再互相覆盖。 */
   --shadow-card: 0 1px 2px rgba(20, 20, 19, 0.05), 0 0 0 0.5px rgba(20, 20, 19, 0.05);
   --shadow-popover: 0 12px 40px rgba(20, 20, 19, 0.16), 0 0 0 0.5px rgba(20, 20, 19, 0.08);
-  --focus-ring: 0 0 0 3px rgba(217, 119, 87, 0.3);
+  /* 发丝内描边：浅浮面的标准内框（ Thinking 卡、工具卡、分段控件等共用） */
+  --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
+  --focus-color: #b85a38;
 
   /* ---- 预留：第三栏扩展点（ADR-0003） ---- */
   --bg-detail-pane: #f0eee6;
@@ -101,16 +114,18 @@
 
   --text-1: #f5f4ef;
   --text-2: rgba(235, 233, 224, 0.62);
-  --text-3: rgba(235, 233, 224, 0.4);
-  --text-4: rgba(235, 233, 224, 0.26);
+  --text-3: rgba(235, 233, 224, 0.54);
+  --text-4: rgba(235, 233, 224, 0.4);
 
   --separator: rgba(255, 255, 255, 0.08);
   --separator-strong: rgba(255, 255, 255, 0.15);
 
   --accent: #d97757;
+  --accent-text: #e0876a;
   --accent-hover: #e0876a;
   --on-accent: #ffffff;
   --accent-subtle: rgba(217, 119, 87, 0.16);
+  --selection-bg: color-mix(in srgb, var(--accent) 40%, transparent);
 
   --thinking: #a3a29a;
   --thinking-subtle: rgba(163, 162, 154, 0.09);
@@ -141,6 +156,14 @@
 
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.07);
   --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+
+  /* 主按钮反转墨色：暗画布上 #141413 仅 1.2:1，形同隐形 */
+  --primary-btn-bg: #f5f4ef;
+  --primary-btn-fg: #1f1e1d;
+
+  --focus-color: #e0876a;
+  /* 发丝内描边：值随主题 separator 变化，结构同亮色 */
+  --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
 
   --bg-detail-pane: #1f1e1d;
 }

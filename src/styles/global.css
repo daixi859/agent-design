@@ -26,7 +26,7 @@ html {
 body {
   font-family: var(--font-sans);
   font-size: var(--text-footnote);
-  line-height: 18px;
+  line-height: var(--leading-footnote);
   color: var(--text-1);
   background: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
@@ -49,7 +49,7 @@ select {
 }
 
 /* ---- 滚动条：macOS 细轨道感 ----
-   标准属性优先；thumb 对背景保持 ≥3:1 对比（WCAG 1.4.11） */
+   标准属性优先；thumb 刻意保持细滑质感（对比度取舍声明见 tokens.semantic.css） */
 .scroller,
 .scroll-y {
   scrollbar-width: thin;
@@ -76,15 +76,18 @@ select {
   }
 }
 
-/* ---- 焦点环 ---- */
+/* ---- 焦点环 ----
+   用 outline 而非 box-shadow：装饰性阴影（卡片、浮层按钮）与焦点环
+   互不覆盖，键盘焦点永远不会被元素自身的 box-shadow 吃掉。
+   颜色对两主题画布均 ≥ 3:1（WCAG 2.4.11 非文本对比）。 */
 :focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  outline: 2px solid var(--focus-color);
+  outline-offset: 1px;
 }
 
-/* ---- 选区 ---- */
+/* ---- 选区（accent 派生，ADR-0005 赤陶方向） ---- */
 ::selection {
-  background: color-mix(in srgb, var(--blue-500) 24%, transparent);
+  background: var(--selection-bg);
 }
 
 /* ---- 单行截断：全文保留在 DOM（ Sidebar 标题等） ---- */
