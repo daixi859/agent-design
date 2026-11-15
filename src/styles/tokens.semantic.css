@@ -78,7 +78,7 @@
   --detail-pane-width: 360px;
 
   /* ---- 布局常量（ADR-0009：顶栏移除，头部职责由 Brand Float + Session Bar 分担） ---- */
-  --sessionbar-height: 52px;
+  --sessionbar-height: 44px;
   /* Brand Float：单枚 32px 按钮（静止 π，hover 换动作图标），供各头部计算让位空间 */
   --brandfloat-height: 32px;
   --brandfloat-width: 32px;

@@ -12,6 +12,7 @@ import { IconButton } from "../ui/IconButton";
 import { SearchField } from "../ui/SearchField";
 import { Icon, ICON_NAMES } from "../ui/Icon";
 import { cx } from "../lib/cx";
+import { useLocale } from "../state/useLocale";
 import sessionBar from "../features/sessionbar/session-bar.module.css";
 import settings from "../features/settings/settings.module.css";
 import styles from "./gallery.module.css";
@@ -111,15 +112,14 @@ const SAMPLE_TURN: Turn = {
 
 export function ComponentGallery() {
   const [search, setSearch] = useState("");
+  const { t } = useLocale();
 
   return (
     <div className={`scroll-y ${styles.gallery}`}>
       <div className={styles.inner}>
         <section>
-          <h2 className={styles.sectionTitle}>Iconography</h2>
-          <p className={styles.sectionNote}>
-            SF Symbols 风格描边图标（20×20 · 1.6 描边 · currentColor），见 ui/Icon.tsx
-          </p>
+          <h2 className={styles.sectionTitle}>{t("iconography")}</h2>
+          <p className={styles.sectionNote}>{t("iconographyNote")}</p>
           <div className={styles.iconGrid}>
             {ICON_NAMES.map((name) => (
               <figure key={name} className={styles.iconCell}>
@@ -131,28 +131,25 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>Controls & badge</h2>
-          <p className={styles.sectionNote}>
-            IconButton / SearchField（ui/controls.module.css）· branched 徽标（Session Bar）·
-            分段控件（Appearance）
-          </p>
+          <h2 className={styles.sectionTitle}>{t("controlsBadge")}</h2>
+          <p className={styles.sectionNote}>{t("controlsNote")}</p>
           <div className={styles.row}>
-            <IconButton icon="panel-left" title="Toggle sidebar" />
-            <IconButton icon="plus" title="New session" />
-            <IconButton icon="gear" title="Settings" />
-            <IconButton icon="sun" title="Toggle theme" />
-            <SearchField value={search} onChange={setSearch} placeholder="Search" />
+            <IconButton icon="panel-left" title={t("toggleSidebar")} />
+            <IconButton icon="plus" title={t("newSession")} />
+            <IconButton icon="gear" title={t("settings")} />
+            <IconButton icon="sun" title={t("toggleTheme")} />
+            <SearchField value={search} onChange={setSearch} placeholder={t("search")} />
             <span
               className={sessionBar.branchedBadge}
-              title="This session has abandoned branches"
+              title={t("branchedTitle")}
             >
               <Icon name="branch" size={11} />
-              branched
+              {t("branched")}
             </span>
           </div>
           <div className={styles.row} role="group" aria-label="Segmented sample">
             <div className={settings.segmented}>
-              {["Light", "Dark"].map((label, index) => (
+              {[t("light"), t("dark")].map((label, index) => (
                 <button
                   key={label}
                   type="button"
@@ -166,8 +163,8 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>Surfaces & accents</h2>
-          <p className={styles.sectionNote}>语义层表面与强调色（ADR-0001：主题只在语义层切换）</p>
+          <h2 className={styles.sectionTitle}>{t("surfaces")}</h2>
+          <p className={styles.sectionNote}>{t("surfacesNote")}</p>
           <div className={styles.swatches}>
             {SURFACES.map(([name, variable]) => (
               <figure key={name} className={styles.swatch}>
@@ -179,8 +176,8 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>Type ramp</h2>
-          <p className={styles.sectionNote}>字号刻度 --text-*，行高配对 --leading-*</p>
+          <h2 className={styles.sectionTitle}>{t("typeRamp")}</h2>
+          <p className={styles.sectionNote}>{t("typeRampNote")}</p>
           <div className={styles.typeRamp}>
             {TYPE_SAMPLES.map(([token, size, text]) => (
               <div key={token}>
@@ -194,10 +191,8 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>Transcript samples</h2>
-          <p className={styles.sectionNote}>
-            Turn 三层结构（ADR-0006）· 注解行 · Composer dock 变体
-          </p>
+          <h2 className={styles.sectionTitle}>{t("transcriptSamples")}</h2>
+          <p className={styles.sectionNote}>{t("transcriptNote")}</p>
           <div className={styles.sampleFrame}>
             <TurnView turn={SAMPLE_TURN} />
             <AnnotationRow
@@ -219,8 +214,8 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>Diff</h2>
-          <p className={styles.sectionNote}>edit/bash 工具结果的内嵌 diff 表面（ADR-0007）</p>
+          <h2 className={styles.sectionTitle}>{t("diff")}</h2>
+          <p className={styles.sectionNote}>{t("diffNote")}</p>
           <DiffView diff={SAMPLE_DIFF} />
         </section>
       </div>

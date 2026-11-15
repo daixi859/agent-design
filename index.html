@@ -8,7 +8,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Pi Studio</title>
     <script>
-      // 主题在首帧前确定，避免闪烁（Q4：浅色验收、深色同套 token）
+      // 主题与语言在首帧前确定，避免闪烁（Q4：浅色验收、深色同套 token；ADR-0011：默认跟随浏览器语言）
       (function () {
         var stored = localStorage.getItem("pi-studio-theme");
         var theme =
@@ -18,6 +18,14 @@
               ? "dark"
               : "light";
         document.documentElement.dataset.theme = theme;
+        var storedLocale = localStorage.getItem("pi-studio-locale");
+        var locale =
+          storedLocale === "zh" || storedLocale === "en"
+            ? storedLocale
+            : (navigator.language || "").toLowerCase().indexOf("zh") === 0
+              ? "zh"
+              : "en";
+        document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
       })();
     </script>
   </head>

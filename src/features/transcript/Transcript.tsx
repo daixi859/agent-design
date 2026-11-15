@@ -6,6 +6,7 @@ import { Icon } from "../../ui/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
 import { TurnView } from "./TurnView";
+import { useLocale } from "../../state/useLocale";
 import styles from "./transcript.module.css";
 
 export function Transcript({
@@ -24,6 +25,7 @@ export function Transcript({
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
+  const { t } = useLocale();
 
   const { turns, orphanAnnotations } = useMemo(() => buildTurns(branch), [branch]);
 
@@ -59,8 +61,8 @@ export function Transcript({
           {turns.length === 0 ? (
             <div className={styles.emptyState}>
               <Icon name="sparkles" size={28} />
-              <strong>Nothing on the active branch</strong>
-              <span>This session has no renderable entries yet.</span>
+              <strong>{t("emptyBranchTitle")}</strong>
+              <span>{t("emptyBranchHint")}</span>
             </div>
           ) : (
             turns.map((turn) => <TurnView key={turn.id} turn={turn} />)
@@ -71,7 +73,7 @@ export function Transcript({
       {showJump && (
         <button type="button" className={styles.jumpLatest} onClick={jumpToLatest}>
           <Icon name="arrow-down" size={13} />
-          Jump to latest
+          {t("jumpLatest")}
         </button>
       )}
 

@@ -4,7 +4,7 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 
 ## 术语
 
-代码、注释、UI 文案用到 Session、Turn、Tool Group 这类领域词时，以 [GLOSSARY.md](GLOSSARY.md) 为准；术语在讨论中定案就当场收录，发现两种说法打架，先改词汇表再改代码。UI 文案一律英文，代码注释一律中文。
+代码、注释、UI 文案用到 Session、Turn、Tool Group 这类领域词时，以 [GLOSSARY.md](GLOSSARY.md) 为准；术语在讨论中定案就当场收录，发现两种说法打架，先改词汇表再改代码。界面文案经 i18n 双语（ADR-0011）：英文是源语言，词条在 `src/lib/i18n.ts`，新增文案 en/zh 两侧同步；代码注释一律中文。
 
 ## 决定记录
 

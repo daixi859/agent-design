@@ -3,6 +3,7 @@ import { useContext, useEffect } from "react";
 import { useParams } from "react-router";
 import { SessionBadgeSetter } from "../../state/session-badge";
 import { useSessionDetail } from "../../state/useSessionDetail";
+import { useLocale } from "../../state/useLocale";
 import { Icon } from "../../ui/Icon";
 import { Transcript } from "../transcript/Transcript";
 import styles from "../transcript/transcript.module.css";
@@ -10,6 +11,7 @@ import styles from "../transcript/transcript.module.css";
 export function SessionView() {
   const { id } = useParams<{ id: string }>();
   const setSessionBadge = useContext(SessionBadgeSetter);
+  const { t } = useLocale();
   const data = useSessionDetail(id);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function SessionView() {
     return (
       <div className={styles.emptyState}>
         <Icon name="warning" size={28} />
-        <strong>Couldn't load this session</strong>
+        <strong>{t("loadFailedTitle")}</strong>
         <span>{data.error}</span>
       </div>
     );
@@ -32,7 +34,7 @@ export function SessionView() {
     return (
       <div className={styles.emptyState}>
         <Icon name="sparkles" size={28} />
-        <span>Loading session…</span>
+        <span>{t("loadingSession")}</span>
       </div>
     );
   }

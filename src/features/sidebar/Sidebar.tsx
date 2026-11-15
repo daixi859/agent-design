@@ -5,34 +5,36 @@ import type { SessionsState } from "../../state/sessions";
 import { cx } from "../../lib/cx";
 import { IconButton } from "../../ui/IconButton";
 import { SearchField } from "../../ui/SearchField";
+import { useLocale } from "../../state/useLocale";
 import { ProjectGroupView } from "./ProjectGroup";
 import styles from "./sidebar.module.css";
 
 export function Sidebar({ collapsed, ...state }: SessionsState & { collapsed: boolean }) {
   const [filter, setFilter] = useState("");
   const navigate = useNavigate();
+  const { t } = useLocale();
 
   return (
     /* 收起 = 宽度动画到 0（ADR-0009）；inner 固定宽，动画过程中内容不回流 */
     <aside className={cx(styles.sidebar, collapsed && styles.collapsed)}>
       <div className={styles.inner}>
         <div className={styles.header}>
-        <SearchField value={filter} onChange={setFilter} placeholder="Search" />
+        <SearchField value={filter} onChange={setFilter} placeholder={t("search")} />
         {/* 视觉件（ADR-0002）：下一阶段接入 pi 后触发 new_session */}
-        <IconButton icon="plus" title="New session (下一阶段接入)" />
+        <IconButton icon="plus" title={t("newSessionHint")} />
       </div>
 
         <nav className={`scroll-y ${styles.list}`}>
         {!state.rootExists && (
           <p className={styles.empty}>
-            <strong>No pi sessions found</strong>
-            Expected <code>~/.pi/agent/sessions</code> on this machine.
+            <strong>{t("emptyNoPiTitle")}</strong>
+            {t("emptyNoPiBefore")} <code>~/.pi/agent/sessions</code> {t("emptyNoPiAfter")}
           </p>
         )}
         {state.rootExists && !state.loading && state.groups.length === 0 && (
           <p className={styles.empty}>
-            <strong>Nothing here yet</strong>
-            Run <code>pi</code> in a project to start a session.
+            <strong>{t("emptyNothingTitle")}</strong>
+            {t("emptyNothingBefore")} <code>pi</code> {t("emptyNothingAfter")}
           </p>
         )}
         {state.groups.map((group) => (
@@ -46,11 +48,11 @@ export function Sidebar({ collapsed, ...state }: SessionsState & { collapsed: bo
         </nav>
 
         <footer className={styles.footer}>
-          <span>{state.sessions.length} sessions · local</span>
+          <span>{state.sessions.length} {t("sessionsSuffix")}</span>
           {/* 设置入口（ADR-0009）：右下角固定位置，进独立设置壳 */}
           <IconButton
             icon="gear"
-            title="Settings"
+            title={t("settings")}
             onClick={() => navigate("/settings")}
           />
         </footer>

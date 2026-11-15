@@ -5,6 +5,7 @@ import { useLocation } from "react-router";
 import type { SessionsState } from "../../state/sessions";
 import { useSessionBadge } from "../../state/session-badge";
 import { useTheme } from "../../state/useTheme";
+import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
 import { Icon } from "../../ui/Icon";
 import { IconButton } from "../../ui/IconButton";
@@ -21,6 +22,7 @@ export function SessionBar({
   const { pathname } = useLocation();
   const badge = useSessionBadge();
   const [theme, setTheme] = useTheme();
+  const { t } = useLocale();
   const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement));
 
   useEffect(() => {
@@ -41,16 +43,16 @@ export function SessionBar({
 
   const id = /^\/session\/([^/]+)/.exec(pathname)?.[1];
   const session = sessions.sessions.find((candidate) => candidate.id === id);
-  const title = session ? (session.name ?? session.title ?? "Untitled session") : "Pi Studio";
+  const title = session ? (session.name ?? session.title ?? t("untitledSession")) : "Pi Studio";
 
   return (
     <header className={cx(styles.bar, collapsed && styles.clearFloat)}>
       <div className={styles.titleGroup}>
         <span className={`ellipsis ${styles.title}`}>{title}</span>
         {badge.branched && (
-          <span className={styles.branchedBadge} title="This session has abandoned branches">
+          <span className={styles.branchedBadge} title={t("branchedTitle")}>
             <Icon name="branch" size={11} />
-            branched
+            {t("branched")}
           </span>
         )}
       </div>
@@ -58,12 +60,12 @@ export function SessionBar({
       <div className={styles.actions}>
         <IconButton
           icon={fullscreen ? "contract" : "expand"}
-          title={fullscreen ? "Exit full screen" : "Full screen"}
+          title={fullscreen ? t("exitFullScreen") : t("fullScreen")}
           onClick={toggleFullscreen}
         />
         <IconButton
           icon={theme === "dark" ? "sun" : "moon"}
-          title="Toggle theme"
+          title={t("toggleTheme")}
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         />
       </div>

@@ -13,9 +13,8 @@
   gap: var(--space-05);
   inline-size: var(--sidebar-width);
   min-inline-size: var(--sidebar-width);
-  /* 顶部让位：Brand Float（space-1 缩进 + 32px 按钮 + space-1 呼吸），与主侧栏同几何 */
-  padding: calc(var(--space-1) + var(--brandfloat-height) + var(--space-1)) var(--space-2)
-    var(--space-3);
+  /* 顶部让位 = 标题栏高度：与主侧栏头部带同几何（ADR-0009） */
+  padding: var(--sessionbar-height) var(--space-2) var(--space-3);
   background: var(--bg-sidebar);
   border-right: 0.5px solid var(--separator);
 }
@@ -91,6 +90,7 @@
 .contentBody {
   flex: 1;
   min-block-size: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
@@ -98,8 +98,7 @@
 /* ---- 设置分区页（Appearance / About） ---- */
 
 .section {
-  flex: 1;
-  overflow-y: auto;
+  flex: 0 0 auto;
   padding: var(--space-6) var(--space-6) var(--space-9);
 }
 

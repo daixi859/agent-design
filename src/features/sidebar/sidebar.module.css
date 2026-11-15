@@ -55,14 +55,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-1h);
-  /* 顶部让位：Brand Float（space-1 缩进 + 32px 按钮 + space-1 呼吸，ADR-0009） */
-  padding: calc(var(--space-1) + var(--brandfloat-height) + var(--space-1)) var(--space-2)
-    var(--space-1h) var(--space-3);
+  /* 顶部让位 = 标题栏高度：logo 垂直居中其中（与 Session Bar 同轴，ADR-0009） */
+  padding: var(--sessionbar-height) var(--space-2) var(--space-1h) var(--space-3);
 }
 
 .list {
   flex: 1;
   padding: 0 var(--space-2) var(--space-3);
+  padding-inline-end: var(--space-1);
 }
 
 /* ---- 项目分组 ---- */
@@ -81,7 +81,8 @@
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-2);
-  font-size: var(--text-caption);
+  font-size: var(--text-footnote);
+  line-height: var(--leading-footnote);
   font-weight: var(--weight-semibold);
   cursor: pointer;
   user-select: none;
@@ -95,24 +96,32 @@
   }
 }
 
-.groupChevron {
-  display: inline-flex;
-  transition: transform var(--duration-fast) var(--ease-standard);
-
-  &[data-collapsed="true"] {
-    transform: rotate(-90deg);
-  }
-}
-
 .groupName {
   flex: 1;
   text-align: left;
 }
 
-.groupCount {
-  font-weight: var(--weight-regular);
-  color: var(--text-3);
-  font-variant-numeric: tabular-nums;
+/* 添加按钮：hover 分组行显现，替换原计数徽标 */
+.groupAdd {
+  /* 与 IconButton 原语同比例（图标 16 / 按钮 28 = 4:7）：图标 14px → 按钮 24.5px */
+  inline-size: calc(14px * 7 / 4);
+  block-size: calc(14px * 7 / 4);
+  border-radius: var(--radius-xs);
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+
+  & svg {
+    inline-size: 14px;
+    block-size: 14px;
+  }
+}
+
+.groupHeader:hover .groupAdd,
+.groupHeader:focus-within .groupAdd {
+  opacity: 1;
 }
 
 /* ---- Session 条目 ---- */

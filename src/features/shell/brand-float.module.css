@@ -4,7 +4,8 @@
 
 .float {
   position: fixed;
-  inset-block-start: var(--space-1);
+  /* 垂直居中于两壳共用的头部栏（--sessionbar-height），与标题同轴 */
+  inset-block-start: calc((var(--sessionbar-height) - var(--brandfloat-height)) / 2);
   inset-inline-start: var(--space-1);
   z-index: var(--z-float);
   display: flex;

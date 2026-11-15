@@ -2,6 +2,7 @@
 import { NavLink } from "react-router";
 import type { SessionSummary } from "../../../shared/pi-types";
 import { formatRelativeCompact } from "../../lib/format";
+import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
 import styles from "./sidebar.module.css";
 
@@ -13,7 +14,8 @@ export function SessionItem({
   /** 该 session 是否为全库最近活跃（Live Tail 呼吸点，Q17） */
   live: boolean;
 }) {
-  const title = session.name ?? session.title ?? "Untitled session";
+  const { locale, t } = useLocale();
+  const title = session.name ?? session.title ?? t("untitledSession");
   return (
     <NavLink
       to={`/session/${session.id}`}
@@ -22,7 +24,7 @@ export function SessionItem({
     >
       <span className={cx(styles.liveDot, live && styles.liveDotOn)} aria-hidden="true" />
       <span className={cx("ellipsis", styles.itemTitle)}>{title}</span>
-      <span className={styles.itemTime}>{formatRelativeCompact(session.lastActiveAt)}</span>
+      <span className={styles.itemTime}>{formatRelativeCompact(session.lastActiveAt, locale)}</span>
     </NavLink>
   );
 }

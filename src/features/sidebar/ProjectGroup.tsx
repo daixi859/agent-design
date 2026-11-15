@@ -2,9 +2,11 @@
 import { useState } from "react";
 import type { ProjectGroup } from "../../state/sessions";
 import { Icon } from "../../ui/Icon";
+import { IconButton } from "../../ui/IconButton";
 import { SessionItem } from "./SessionItem";
 import styles from "./sidebar.module.css";
 import { cx } from "../../lib/cx";
+import { useLocale } from "../../state/useLocale";
 
 export function ProjectGroupView({
   group,
@@ -16,6 +18,7 @@ export function ProjectGroupView({
   filter: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const { t } = useLocale();
 
   const needle = filter.trim().toLowerCase();
   const sessions = needle
@@ -34,14 +37,19 @@ export function ProjectGroupView({
         onClick={() => setCollapsed((value) => !value)}
         aria-expanded={!collapsed}
       >
-        <span className={styles.groupChevron} data-collapsed={collapsed}>
-          <Icon name="chevron-down" size={12} />
-        </span>
-        <Icon name="folder" size={13} />
+        {/* 文件夹本身表达状态：闭=收起，开口=展开 */}
+        <Icon name={collapsed ? "folder" : "folder-open"} size={13} />
         <span className={cx("ellipsis", styles.groupName)} title={group.projectPath}>
           {group.projectName}
         </span>
-        <span className={styles.groupCount}>{sessions.length}</span>
+        {/* 视觉件（ADR-0002）：下一阶段接入 pi 后触发 new_session；hover 显现，点击不折叠 */}
+        <IconButton
+          icon="plus"
+          title={t("newSessionHint")}
+          aria-label={t("newSessionHint")}
+          className={styles.groupAdd}
+          onClick={(e) => e.stopPropagation()}
+        />
       </button>
       {!collapsed && (
         <div className={styles.items}>

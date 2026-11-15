@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { useSessions, type SessionsState } from "./state/sessions";
+import { useLocale } from "./state/useLocale";
 import { BrandFloat } from "./features/shell/BrandFloat";
 import { Sidebar } from "./features/sidebar/Sidebar";
 import { SessionBar } from "./features/sessionbar/SessionBar";
@@ -16,11 +17,12 @@ import styles from "./app.module.css";
 import transcriptStyles from "./features/transcript/transcript.module.css";
 
 function Home({ sessions }: { sessions: SessionsState }) {
+  const { t } = useLocale();
   if (sessions.loading) {
     return (
       <div className={transcriptStyles.emptyState}>
         <Icon name="sparkles" size={28} />
-        <span>Loading sessions…</span>
+        <span>{t("loadingSessions")}</span>
       </div>
     );
   }
@@ -29,8 +31,8 @@ function Home({ sessions }: { sessions: SessionsState }) {
   return (
     <div className={transcriptStyles.emptyState}>
       <Icon name="sparkles" size={28} />
-      <strong>Welcome to Pi Studio</strong>
-      <span>Run pi in any project, then pick a session from the sidebar.</span>
+      <strong>{t("welcomeTitle")}</strong>
+      <span>{t("welcomeHint")}</span>
     </div>
   );
 }
