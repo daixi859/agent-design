@@ -44,7 +44,9 @@ async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
   const body = command.body;
   switch (body.type) {
     case "prompt":
-      void host.prompt(body.text);
+      // streamingBehavior 透传：客户端与内核的运行状态间存在事件广播窗口，
+      // 窗口内到达的 prompt 由内核排队（steer）而非 throw（ADR-0012 补记六）
+      void host.prompt(body.text, body.streamingBehavior ? { streamingBehavior: body.streamingBehavior } : undefined);
       return { ok: true };
     case "abort":
       void host.abort();

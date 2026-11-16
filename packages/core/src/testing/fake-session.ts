@@ -3,7 +3,7 @@ import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionSnapshot } from "@pi-studio/shared/pi-types";
 import type { DriveEvent } from "@pi-studio/shared/protocol";
 import { SessionHost } from "../session-host.ts";
-import type { InputDisposition, PiSessionLike } from "../types.ts";
+import type { InputDisposition, PiSessionLike, PromptOptions } from "../types.ts";
 
 export class FakeSession implements PiSessionLike {
   readonly sessionId: string;
@@ -27,8 +27,8 @@ export class FakeSession implements PiSessionLike {
     this.listener?.(event);
   }
 
-  prompt(text: string): Promise<void> {
-    this.calls.push(`prompt:${text}`);
+  prompt(text: string, options?: PromptOptions): Promise<void> {
+    this.calls.push(`prompt:${text}${options?.streamingBehavior ? `:${options.streamingBehavior}` : ""}`);
     return this.failPromptWith ? Promise.reject(this.failPromptWith) : Promise.resolve();
   }
 

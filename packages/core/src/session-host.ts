@@ -6,7 +6,7 @@ import { errorMessage } from "@pi-studio/shared/errors";
 import type { DriveEvent, DriveStatus } from "@pi-studio/shared/protocol";
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { normalizeSessionEvent } from "./normalize.ts";
-import type { InputDisposition, PiSessionLike } from "./types.ts";
+import type { InputDisposition, PiSessionLike, PromptOptions } from "./types.ts";
 
 export interface SessionHostOptions {
   session: PiSessionLike;
@@ -37,9 +37,10 @@ export class SessionHost {
     return this.session.snapshot();
   }
 
-  /** 发起一轮对话；resolve 即本轮结束，被拒时落 error + 回到 idle */
-  prompt(text: string): Promise<void> {
-    return this.session.prompt(text).catch((err: unknown) => {
+  /** 发起一轮对话；resolve 即本轮结束，被拒时落 error + 回到 idle。
+   *  streamingBehavior 透传内核：运行中到达的 prompt 转排队而非 throw（窗口竞态兜底）。 */
+  prompt(text: string, options?: PromptOptions): Promise<void> {
+    return this.session.prompt(text, options).catch((err: unknown) => {
       this.fail(err);
       this.setStatus("idle");
     });
@@ -84,12 +85,15 @@ export class SessionHost {
     // 为什么是这几个点：pi 的 message_end 监听器先于持久化被调用（列表先看到、条目后落盘），
     // 所以「某个消息已落盘」最早在下一个 message_start 才可观测——用户消息就在此刻首次回显；
     // 否则整轮生成期间用户看到的是一动不动的旧画面（实测白屏约 6.8 秒）。
-    // 每轮拉取次数与轮内的助手消息数同阶，不是每帧拉取。
+    // session_info_changed / thinking_level_changed 同理：改名 / 调级落盘不发 entry_appended，
+    // 不拉取则要等下一轮 message_start 才可见。每轮拉取次数与轮内事件数同阶，不是每帧拉取。
     if (
       event.type === "message_start" ||
       event.type === "message_end" ||
       event.type === "turn_end" ||
-      event.type === "agent_settled"
+      event.type === "agent_settled" ||
+      event.type === "session_info_changed" ||
+      event.type === "thinking_level_changed"
     ) {
       this.flushEntries();
     }

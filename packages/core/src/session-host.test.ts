@@ -89,11 +89,36 @@ describe("SessionHost · 单会话驱动语义", () => {
     expect(emitted.map((e) => e.body.type)).toEqual(["status"]);
   });
 
+  // idle 下改名 / 调思考级别也落盘（不发 entry_appended），不拉取则要等下一轮才可见
+  it("session_info_changed / thinking_level_changed 拉取条目", () => {
+    const { session, emitted } = makeHost();
+    session.pendingEntries = [
+      { type: "session_info", id: "i1", parentId: null, timestamp: "T0", name: "新名字" },
+    ];
+    session.emitEvent({ type: "session_info_changed", name: "新名字" } as AgentSessionEvent);
+    expect(emitted.map((e) => e.body.type)).toEqual(["entry"]);
+
+    session.pendingEntries = [
+      { type: "thinking_level_change", id: "t1", parentId: "i1", timestamp: "T1", thinkingLevel: "high" },
+    ];
+    session.emitEvent({ type: "thinking_level_changed", level: "high" } as AgentSessionEvent);
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1].body.type).toEqual("entry");
+  });
+
   it("prompt 转发文本；正常路径不额外产出事件", async () => {
     const { host, session, emitted } = makeHost();
     await host.prompt("hi");
     expect(session.calls).toContain("prompt:hi");
     expect(emitted).toEqual([]);
+  });
+
+  it("prompt 透传 streamingBehavior（窗口竞态兜底）", async () => {
+    const { host, session } = makeHost();
+    await host.prompt("插队", { streamingBehavior: "steer" });
+    expect(session.calls).toContain("prompt:插队:steer");
+    await host.prompt("普通");
+    expect(session.calls).toContain("prompt:普通");
   });
 
   it("prompt 被拒 → error 事件 + 回到 idle", async () => {

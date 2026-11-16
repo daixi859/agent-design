@@ -9,6 +9,11 @@ export type DriveStatus = "idle" | "running" | "retrying";
 /** 排队应答（pi 的 QueuedInputDisposition）：steer / followUp 专属，不落盘 */
 export type InputDisposition = "queued" | "handled";
 
+/** 运行中 prompt 的排队策略（pi PromptOptions.streamingBehavior）：
+ *  内核正在流式时 prompt 被拒，带此字段则转为排队而非报错——
+ *  兜住「客户端还以为 idle、内核已开跑」的事件广播窗口竞态 */
+export type StreamingBehavior = "steer" | "followUp";
+
 /** 服务端自造错误的机器码：客户端据此映射 i18n，避免把中文文案硬编码在服务端 */
 export type DriveErrorCode =
   | "sessionAlreadyDriven"
@@ -19,7 +24,7 @@ export type DriveErrorCode =
 
 /** 客户端 → 内核命令体（sessionId 在信封上，WS 按其多路复用） */
 export type DriveCommandBody =
-  | { type: "prompt"; text: string }
+  | { type: "prompt"; text: string; /** 运行中被拒时的排队策略；idle 下无作用 */ streamingBehavior?: StreamingBehavior }
   | { type: "steer"; text: string }
   | { type: "followUp"; text: string }
   | { type: "abort" };
@@ -36,6 +41,18 @@ export type DriveEventBody =
   | { type: "entry"; entry: SessionEntry }
   /** 瞬态流式增量（打字机效果），用完即弃 */
   | { type: "delta"; field: "text" | "thinking"; delta: string }
+  /** 瞬态工具调用指示：参数流式/执行期间亮起，配对的 end 或权威条目到达即灭 */
+  | { type: "toolCall"; phase: "start" | "end"; id: string; name: string }
+  /** 瞬态排队快照（pi queue_update）：steer / followUp 待送达的内容全量覆盖 */
+  | { type: "queue"; steering: string[]; followUp: string[] }
+  /** 压缩生命周期（pi compaction_start/end）：期间内核拒绝新 prompt */
+  | {
+      type: "compaction";
+      phase: "start" | "end";
+      reason?: "manual" | "threshold" | "overflow";
+      /** 仅 end 携带：压缩是否被中止 */
+      aborted?: boolean;
+    }
   | {
       type: "status";
       status: DriveStatus;

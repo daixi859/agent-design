@@ -1,7 +1,11 @@
 /**
- * pi session JSONL 的最小结构类型（v3）。
- * 只建模 UI 需要的字段，对未知字段宽容；与 pi 内核类型对齐见
+ * pi session JSONL 的结构类型（v3）。
+ * 与 pi 内核 JSONL 契约显式对齐（wire 契约的镜像建模，字段按上游定义收窄），
+ * 对未知字段宽容（catch-all 分支）；上游权威定义见
  * packages/coding-agent/src/core/session-manager.ts（上游仓库 earendil-works/pi）。
+ * 口径说明：不再局限于「UI 当前用到的字段」——驱动协议整行透传 Entry（ADR-0012），
+ * 客户端之外（导出、调试、未来视图）同读这份契约；但可选性以「宽容解析」为先，
+ * 上游必填字段在本侧收窄为可选不算失真。
  */
 
 // ---------- 内容块 ----------
@@ -9,6 +13,8 @@
 export interface TextBlock {
   type: "text";
   text: string;
+  /** OpenAI Responses 等的消息元数据（上游 TextContent.textSignature） */
+  textSignature?: string;
 }
 
 export interface ImageBlock {
@@ -21,6 +27,8 @@ export interface ImageBlock {
 export interface ThinkingBlock {
   type: "thinking";
   thinking: string;
+  /** 供应商加密的推理回放数据；redacted 时为不透明载荷（上游 ThinkingContent.thinkingSignature） */
+  thinkingSignature?: string;
   redacted?: boolean;
 }
 
@@ -29,6 +37,12 @@ export interface ToolCallBlock {
   id: string;
   name: string;
   arguments?: Record<string, unknown>;
+  /** Google 专用：复用 thought 上下文的不透明签名（上游 ToolCall.thoughtSignature） */
+  thoughtSignature?: string;
+  /** OpenAI Responses 命名空间下的动态/带前缀工具（上游 ToolCall.namespace） */
+  namespace?: string;
+  /** 参数文本不是合法 JSON 对象时的问题描述；此时 arguments 为 {}（上游 ToolCall.argumentsError） */
+  argumentsError?: string;
 }
 
 export type ContentBlock = TextBlock | ImageBlock | ThinkingBlock | ToolCallBlock;
@@ -40,6 +54,8 @@ export interface UsageInfo {
   output?: number;
   cacheRead?: number;
   cacheWrite?: number;
+  /** cacheWrite 中按 1h 保留期写入的部分；仅 Anthropic 上报（上游 Usage.cacheWrite1h） */
+  cacheWrite1h?: number;
   reasoning?: number;
   totalTokens?: number;
   cost?: {
@@ -48,6 +64,8 @@ export interface UsageInfo {
     cacheRead?: number;
     cacheWrite?: number;
     total?: number;
+    /** true 表示 total 是供应商账单价；false/缺省为目录估算（上游 cost.totalFromProvider） */
+    totalFromProvider?: boolean;
   };
 }
 
@@ -71,10 +89,33 @@ export interface AssistantMessage {
   content: ContentBlock[];
   provider?: string;
   model?: string;
+  /** 供应商实际回报的模型 id，可能与请求的 model 不同（上游 responseModel） */
+  responseModel?: string;
+  /** 本次响应用到的 thinking 级别（上游 thinkingLevel） */
+  thinkingLevel?: string;
   usage?: UsageInfo;
   stopReason?: StopReason;
   errorMessage?: string;
+  /** 请求开始到响应结束的单调耗时（上游 durationMs） */
+  durationMs?: number;
   timestamp?: number;
+}
+
+/** 工具在执行中对其他工具的调用记录（上游 NestedToolCalls；结果不记录，只记调用） */
+export interface NestedToolCalls {
+  calls: Array<{
+    id: string;
+    name: string;
+    /** 超限时省略并以 argumentsBytes 代替 */
+    arguments?: Record<string, unknown>;
+    argumentsBytes?: number;
+    status: "ok" | "error" | "unfinished";
+    durationMs?: number;
+    /** 截断后的错误文本 */
+    error?: string;
+  }>;
+  /** false 表示有调用/参数被丢弃或未完成 */
+  complete: boolean;
 }
 
 export interface ToolResultMessage {
@@ -84,7 +125,12 @@ export interface ToolResultMessage {
   content: ContentBlock[];
   /** 工具相关的结构化附加信息（如 edit 的 diff） */
   details?: unknown;
+  /** 工具自身执行的用量；不计入主上下文（上游 ToolResultMessage.usage） */
+  usage?: UsageInfo;
+  nestedCalls?: NestedToolCalls;
   isError?: boolean;
+  /** 工具执行的单调耗时（上游 durationMs） */
+  durationMs?: number;
   timestamp?: number;
 }
 
@@ -95,13 +141,18 @@ export interface BashExecutionMessage {
   exitCode?: number;
   cancelled?: boolean;
   truncated?: boolean;
+  /** 截断时完整输出的落盘路径（上游 fullOutputPath） */
+  fullOutputPath?: string;
+  /** true 表示被排除在 LLM 上下文外（!! 前缀，上游 excludeFromContext） */
+  excludeFromContext?: boolean;
 }
 
 /** 系统提示等脚手架消息，UI 不渲染（ADR-0004 隐藏级） */
 export interface SystemMessage {
   role: "system";
   content?: string;
-  sections?: Record<string, string>;
+  /** 后续 system 消息按名替换 section，null 表示删除该 section（上游 sections） */
+  sections?: Record<string, string | null>;
 }
 
 export type AgentMessage =
@@ -137,7 +188,8 @@ export interface EntryBase {
 
 export interface SessionHeaderEntry extends EntryBase {
   type: "session";
-  version: number;
+  /** v1 会话没有该字段（上游 version?: number） */
+  version?: number;
   id: string;
   cwd?: string;
   parentSession?: string;
@@ -181,6 +233,8 @@ export interface UsageEntry extends EntryBase {
   provider?: string;
   model?: string;
   usage: UsageInfo;
+  /** 用量通知的人类可读限定说明（上游 note） */
+  note?: string;
 }
 
 export interface CompactionEntry extends EntryBase {
@@ -188,17 +242,41 @@ export interface CompactionEntry extends EntryBase {
   summary?: string;
   firstKeptEntryId?: string;
   tokensBefore?: number;
+  /** 扩展附加数据（ArtifactIndex、结构化压缩版本标记等） */
+  details?: unknown;
+  /** 生成摘要的 LLM 调用用量 */
+  usage?: UsageInfo;
+  /** true 表示扩展生成；缺省/false 为 pi 生成 */
+  fromHook?: boolean;
+  /** 压缩边界处的完整 prompt 与工具状态 */
+  systemMessage?: SystemMessage;
 }
 
 export interface BranchSummaryEntry extends EntryBase {
   type: "branch_summary";
   fromId: string;
   summary?: string;
+  /** 扩展附加数据（不送 LLM） */
+  details?: unknown;
+  /** 生成摘要的 LLM 调用用量 */
+  usage?: UsageInfo;
+  /** true 表示扩展生成，false 为 pi 生成 */
+  fromHook?: boolean;
 }
 
 export interface SessionInfoEntry extends EntryBase {
   type: "session_info";
-  name: string;
+  name?: string;
+}
+
+/** 扩展注入、参与 LLM 上下文的消息条目（上游 CustomMessageEntry）。
+ *  display:false 完全隐藏；true 以区别于 user 消息的样式渲染。 */
+export interface CustomMessageEntry extends EntryBase {
+  type: "custom_message";
+  customType: string;
+  content: string | (TextBlock | ImageBlock)[];
+  details?: unknown;
+  display: boolean;
 }
 
 export type SessionEntry =
@@ -210,6 +288,7 @@ export type SessionEntry =
   | CompactionEntry
   | BranchSummaryEntry
   | SessionInfoEntry
+  | CustomMessageEntry
   | (EntryBase & { type: string; [key: string]: unknown });
 
 // ---------- API 响应 ----------

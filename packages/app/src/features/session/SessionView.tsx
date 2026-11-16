@@ -4,6 +4,7 @@
 import { useOutletContext, useParams } from "react-router";
 import { useLocale } from "../../state/useLocale";
 import { drive, useConnectionError, useDriveSession } from "../../state/use-drive";
+import { queuedCountOf } from "../../lib/drive-client";
 import { driveErrorText } from "../../lib/drive-errors";
 import type { SessionDetailState } from "../../state/useSessionDetail";
 import { Icon } from "../../ui/Icon";
@@ -47,6 +48,9 @@ export function SessionView() {
           onSend: (text: string) => drive.sendText(id, text),
           onFollowUp: (text: string) => drive.followUp(id, text),
           onAbort: () => drive.abort(id),
+          callingTool: data.drive.streamingToolCall?.name,
+          queuedCount: queuedCountOf(data.drive),
+          compacting: data.drive.compacting,
         }
       : undefined;
 

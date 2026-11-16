@@ -9,13 +9,13 @@
     drivenView 会被永久缓存为 undefined（ADR-0012 补记第 3 条）。
     驱动视图的合成与记忆化在 lib/driven-view.ts（按参数身份缓存，调用侧没有依赖数组可写错）。 */
 import { useEffect, useRef, useState } from "react";
-import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { errorMessage } from "@pi-studio/shared/errors";
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { fetchSession, tailSession } from "../lib/pi-client";
 import { createSessionTail, type SessionTail } from "../lib/session-tail";
 import { buildTranscriptModel, type TranscriptModel } from "../lib/transcript-model";
 import { resolveDrivenView } from "../lib/driven-view";
+import type { DriveSession } from "../lib/drive-client";
 import { drive, useDriveSession } from "./use-drive";
 
 export interface SessionDetailState {
@@ -23,8 +23,8 @@ export interface SessionDetailState {
   error?: string;
   header?: SessionSnapshot["header"];
   view: TranscriptModel;
-  /** 被驱动时非空：驱动状态与动作随组件树下发（sessionId 即当前路由 id） */
-  drive?: { status: DriveStatus };
+  /** 被驱动时非空：驱动状态、瞬态指示与动作随组件树下发（sessionId 即当前路由 id） */
+  drive?: DriveSession;
 }
 
 const EMPTY_VIEW = buildTranscriptModel([]);
@@ -102,7 +102,7 @@ export function useSessionDetail(id: string | undefined): SessionDetailState {
       loading: false,
       header: baseline.header,
       view: drivenView,
-      drive: { status: driveSession.status },
+      drive: driveSession,
     };
   }
   return state;

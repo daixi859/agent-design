@@ -30,7 +30,8 @@ function adaptAgentSession(session: AgentSession): PiSessionLike {
     subscribe(listener) {
       return session.subscribe(listener);
     },
-    prompt: (text) => session.prompt(text),
+    // PromptOptions 是 pi PromptOptions 的窄投影，结构兼容，直接透传
+    prompt: (text, options) => session.prompt(text, options),
     steer: (text) => session.steer(text),
     followUp: (text) => session.followUp(text),
     abort: () => session.abort(),

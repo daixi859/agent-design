@@ -312,6 +312,45 @@ describe("buildTranscriptModel · 注解收缩", () => {
     expect(model.orphanAnnotations.map((entry) => entry.id)).toEqual(["c0"]);
     expect(model.turns[0].items.filter((item) => item.kind === "annotation")).toHaveLength(0);
   });
+
+  // 修复回归：扩展注入的用户可见消息此前被静默丢弃，内容在查看器里丢失
+  it("display:true 的 custom_message 渲染为注解；display:false 隐藏", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      {
+        type: "custom_message",
+        id: "cm1",
+        parentId: "u1",
+        timestamp: TS,
+        customType: "pi-review",
+        content: "审查完成：2 处问题",
+        display: true,
+      },
+      {
+        type: "custom_message",
+        id: "cm2",
+        parentId: "cm1",
+        timestamp: TS,
+        customType: "hidden-thing",
+        content: "不该出现",
+        display: false,
+      },
+    ]);
+    const annotations = model.turns[0].items.filter((item) => item.kind === "annotation");
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0].kind === "annotation" && annotations[0].entry.id).toBe("cm1");
+  });
+
+  // 修复回归：上游清名落 session_info（无 name 字段），此前会渲染「命名为空」
+  it("无 name 的 session_info 不渲染", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      { type: "session_info", id: "si0", parentId: "u1", timestamp: TS },
+    ]);
+    expect(model.turns[0].items.filter((item) => item.kind === "annotation")).toHaveLength(0);
+  });
 });
 
 // ---------- Composer 徽标派生 ----------

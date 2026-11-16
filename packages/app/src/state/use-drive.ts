@@ -140,13 +140,17 @@ class DriveClient {
   /**
    * 语义化发送（与 pi TUI 输入语义一致）：
    * 运行中 → steer（插话，本轮工具调用后送达）；运行结束后 → followUp / prompt。
+   *
+   * prompt 始终带 streamingBehavior: "steer" 兜底竞态（ADR-0012 补记六）：内核
+   * agent_start 的广播有窗口期，本地看似 idle 时内核可能已在流式——无此字段
+   * 内核会直接 throw，带上则转为排队（idle 下该字段无作用，不影响正常 prompt）。
    */
   sendText(sessionId: string, text: string): void {
     const session = this.sessions.get(sessionId);
     const body: DriveCommandBody =
       session?.status === "running" || session?.status === "retrying"
         ? { type: "steer", text }
-        : { type: "prompt", text };
+        : { type: "prompt", text, streamingBehavior: "steer" };
     this.send({ type: "drive", command: { sessionId, body } });
   }
 

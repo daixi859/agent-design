@@ -56,6 +56,10 @@ _Avoid_: 行、记录、event（与运行时事件流区分）
 条目树中从活动叶子沿 `parentId` 回溯到根的路径；Transcript 仅渲染活动分支。
 _Avoid_: 主线、当前路径
 
+**Annotation**:
+注解级条目：不进 Turn / Process Group 正文，渲染为细分隔线与灰色小字的非消息条目（compaction / branch_summary / 首次 session_info / `display:true` 的 custom_message）；首条 user 之前的落 `orphanAnnotations`（ADR-0004 三级呈现策略）。
+_Avoid_: 注释、系统消息、分隔条
+
 **Compaction**:
 pi 对上下文的压缩事件，原始条目永不删除；Transcript 中渲染为注解。
 _Avoid_: 把压缩表述为删除

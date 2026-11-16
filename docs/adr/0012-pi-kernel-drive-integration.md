@@ -86,3 +86,15 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 
 两条都**尚未实施**——是本轮主动的范围切分，不是缺陷。修复路线与实证见 [pi-kernel-notes.md §5.4](research/pi-kernel-notes.md)（注入 `resourceLoader` 的代码已在本机验证：工具数 11、含 codemode）。
 
+## 补记六（上游对齐轮）：prompt 的 streamingBehavior 竞态兜底
+
+**问题**：客户端的 `DriveStatus` 由 `agent_start` / `agent_settled` 事件驱动，与内核的真实运行状态之间存在广播窗口。窗口内用户再发一条消息时，客户端以为是 idle 走 `prompt`，而内核正在 streaming——pi 对无 `streamingBehavior` 的 prompt 直接 throw（`agent-session.ts` 的 `_preparePrompt`），用户只见一条 error，消息没送达。
+
+**决定**：协议 `prompt` 命令增带可选 `streamingBehavior`（`"steer" | "followUp"`，与 pi `PromptOptions` 及官方 RPC 同名同形），`SessionHost` 原样透传内核；客户端 `sendText` 发 prompt 时**固定带 `"steer"`**。内核 idle 时该字段无作用，正常运行语义不变；命中窗口时消息转为插话排队而非报错。运行中的显式 steer / followUp 命令保持不变，不受此兜底影响。
+
+**后果**：
+
+- prompt 与 steer 的区别只剩送达时机语义（本轮 vs 插话），不再承担「拒绝运行中发送」的守门职责——守门移交给内核的排队机制。
+- 协议字段为可选，旧客户端不带该字段时行为与从前一致（命中窗口仍会报错），无破坏性。
+
+

@@ -119,6 +119,89 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     expect(state?.streaming).toBeUndefined();
   });
 
+  it("toolCall 帧：start 亮起调用指示，end 按 id 匹配熄灭", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
+    expect(state?.streamingToolCall).toEqual({ id: "tc1", name: "bash" });
+    // 迟到的 end（id 不匹配）不得灭掉后来的 start
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc2", name: "edit" }));
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "end", id: "tc1", name: "bash" }));
+    expect(state?.streamingToolCall).toEqual({ id: "tc2", name: "edit" });
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "end", id: "tc2", name: "edit" }));
+    expect(state?.streamingToolCall).toBeUndefined();
+  });
+
+  // end 帧丢失时的条目侧兜底：权威条目引用了正在指示的调用，指示随之熄灭（与草稿让位同权威语义）
+  it("权威条目到达：引用该调用的 entry 清除 toolCall 指示，无关条目不清", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
+    const toolResultEntry: SessionEntry = {
+      type: "message",
+      id: "tr1",
+      parentId: null,
+      timestamp: "T1",
+      message: { role: "toolResult", toolCallId: "tc1", toolName: "bash", content: [], isError: false },
+    };
+    state = applyServerFrame(state, event({ type: "entry", entry: toolResultEntry }));
+    expect(state?.streamingToolCall).toBeUndefined();
+
+    // 其它引用（无关注解、别的调用）不清指示
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc2", name: "edit" }));
+    const annotation: SessionEntry = { type: "compaction", id: "c9", parentId: null, timestamp: "T2", tokensBefore: 1 };
+    state = applyServerFrame(state, event({ type: "entry", entry: annotation }));
+    expect(state?.streamingToolCall).toEqual({ id: "tc2", name: "edit" });
+    const otherResult: SessionEntry = {
+      type: "message",
+      id: "tr2",
+      parentId: null,
+      timestamp: "T3",
+      message: { role: "toolResult", toolCallId: "other", toolName: "read", content: [], isError: false },
+    };
+    state = applyServerFrame(state, event({ type: "entry", entry: otherResult }));
+    expect(state?.streamingToolCall).toEqual({ id: "tc2", name: "edit" });
+    const assistantEntry: SessionEntry = {
+      type: "message",
+      id: "a1",
+      parentId: null,
+      timestamp: "T4",
+      message: { role: "assistant", content: [{ type: "toolCall", id: "tc2", name: "edit", arguments: {} }] },
+    };
+    state = applyServerFrame(state, event({ type: "entry", entry: assistantEntry }));
+    expect(state?.streamingToolCall).toBeUndefined();
+  });
+
+  it("queue 帧：排队快照全量覆盖", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "queue", steering: ["一"], followUp: [] }));
+    expect(state?.queued).toEqual({ steering: ["一"], followUp: [] });
+    state = applyServerFrame(state, event({ type: "queue", steering: [], followUp: ["二", "三"] }));
+    expect(state?.queued).toEqual({ steering: [], followUp: ["二", "三"] });
+  });
+
+  it("compaction 帧：start 亮起，end 回到缺省（与 idle 清口一致）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "compaction", phase: "start", reason: "threshold" }));
+    expect(state?.compacting).toBe(true);
+    state = applyServerFrame(state, event({ type: "compaction", phase: "end", reason: "threshold" }));
+    expect(state?.compacting).toBeUndefined();
+  });
+
+  // abort 等异常路径可能不发 tool_execution_end：回到 idle 是瞬态指示的最后兜底熄灭点
+  it("回到 idle：全部瞬态指示一并清空", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
+    state = applyServerFrame(state, event({ type: "queue", steering: ["插话"], followUp: [] }));
+    state = applyServerFrame(state, event({ type: "compaction", phase: "start", reason: "manual" }));
+    expect(state?.streamingToolCall).toBeDefined();
+    expect(state?.queued).toBeDefined();
+    expect(state?.compacting).toBe(true);
+    state = applyServerFrame(state, event({ type: "status", status: "idle", aborted: true }));
+    expect(state?.status).toBe("idle");
+    expect(state?.streamingToolCall).toBeUndefined();
+    expect(state?.queued).toBeUndefined();
+    expect(state?.compacting).toBeUndefined();
+  });
+
   it("released → 状态移除（undefined）", () => {
     let state: DriveSession | undefined = applyServerFrame(undefined, attached);
     state = applyServerFrame(state, { type: "released", sessionId: "s1" });

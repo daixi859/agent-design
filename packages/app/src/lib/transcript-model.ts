@@ -10,6 +10,7 @@
 import type {
   AssistantMessage,
   BashExecutionMessage,
+  CustomMessageEntry,
   MessageEntry,
   SessionEntry,
   SessionInfoEntry,
@@ -367,9 +368,17 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
       entry.type === "message" && (entry as MessageEntry).message.role === "user";
     if (!opensTurn && turn && settlement) accumulate(settlement, entry);
     if (entry.type !== "message") {
-      if (entry.type === "compaction" || entry.type === "branch_summary" || entry.type === "session_info") {
+      // 注解级（ADR-0004）：扩展注入的用户可见消息（display:true）按注解呈现，display:false 隐藏
+      const isAnnotation =
+        entry.type === "compaction" ||
+        entry.type === "branch_summary" ||
+        entry.type === "session_info" ||
+        (entry.type === "custom_message" && (entry as CustomMessageEntry).display !== false);
+      if (isAnnotation) {
         if (entry.type === "session_info") {
           const name = (entry as SessionInfoEntry).name;
+          // 上游允许 name 缺失（清名）：没有可展示的内容，跳过而非渲染空命名
+          if (!name) continue;
           if (namedSeen.has(name)) continue;
           namedSeen.add(name);
         }

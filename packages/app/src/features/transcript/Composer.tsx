@@ -4,6 +4,7 @@ import { useState, type KeyboardEvent } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { Icon } from "../../ui/Icon";
 import { useLocale } from "../../state/useLocale";
+import { translateVars } from "../../lib/i18n";
 import { cx } from "../../lib/cx";
 import styles from "./transcript.module.css";
 
@@ -14,6 +15,12 @@ export interface ComposerDrive {
   /** 追问：本轮运行彻底结束后送达（pi 的 followUp） */
   onFollowUp(text: string): void;
   onAbort(): void;
+  /** 正在流式/执行的工具调用名（瞬态指示，toolCall 帧驱动） */
+  callingTool?: string;
+  /** steer / followUp 待送达条数（queue 帧驱动） */
+  queuedCount?: number;
+  /** 内核正在压缩上下文（compaction 帧驱动）：期间新 prompt 会被内核拒绝 */
+  compacting?: boolean;
 }
 
 export function Composer({
@@ -31,10 +38,13 @@ export function Composer({
   /** 存在即激活：会话已被驱动（GLOSSARY: Attach） */
   drive?: ComposerDrive;
 }) {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [text, setText] = useState("");
   const running = drive?.status === "running";
   const retrying = drive?.status === "retrying";
+  const queuedCount = drive?.queuedCount ?? 0;
+  // 徽标 title 与正文同文案，插值只算一次
+  const callingLabel = drive?.callingTool ? translateVars(locale, "callingBadge", { name: drive.callingTool }) : undefined;
 
   const submit = () => {
     const trimmed = text.trim();
@@ -90,6 +100,23 @@ export function Composer({
             <span className={styles.composerPill} title={t("retryingBadge")}>
               <span className={cx(styles.statusDot, styles.statusDotRetrying)} />
               {t("retryingBadge")}
+            </span>
+          )}
+          {drive && drive.compacting && (
+            <span className={styles.composerPill} title={t("compactingBadge")}>
+              <span className={cx(styles.statusDot, styles.statusDotRunning)} />
+              {t("compactingBadge")}
+            </span>
+          )}
+          {drive && callingLabel && (
+            <span className={styles.composerPill} title={callingLabel}>
+              <span className={cx(styles.statusDot, styles.statusDotRunning)} />
+              {callingLabel}
+            </span>
+          )}
+          {drive && queuedCount > 0 && (
+            <span className={styles.composerPill} title={t("followUpHint")}>
+              {translateVars(locale, "queuedBadge", { n: String(queuedCount) })}
             </span>
           )}
           {/* 运行中：回车 = steer（插话），「追问」= followUp（本轮彻底结束后送达），可中止。

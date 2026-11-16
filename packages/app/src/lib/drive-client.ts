@@ -1,8 +1,22 @@
 // drive-client 纯逻辑核心（ADR-0012 阶段四）：ServerFrame 入 → 客户端状态出。
 // 条目幂等合并是断线恢复的数据基础：REST 全量与 WS 事件流谁先到都收敛到同一集合，
 // 最终汇入 buildTranscriptModel 出口（与 Live Tail 同一派生管线）。
-import type { ContentBlock, SessionEntry, SessionHeaderEntry, StreamingDraft } from "@pi-studio/shared/pi-types";
+import type {
+  AssistantMessage,
+  ContentBlock,
+  MessageEntry,
+  SessionEntry,
+  SessionHeaderEntry,
+  StreamingDraft,
+  ToolResultMessage,
+} from "@pi-studio/shared/pi-types";
 import type { DriveEvent, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
+
+/** 「调用中」指示的形状（协议 toolCall 帧的字段子集，状态与消费方共用同名形状） */
+export interface StreamingToolCall {
+  id: string;
+  name: string;
+}
 
 /** 单个被驱动 Session 的客户端状态 */
 export interface DriveSession {
@@ -12,9 +26,20 @@ export interface DriveSession {
   readonly entries: readonly SessionEntry[];
   /** 尚未落盘的那一段流式内容（delta 帧累积）；权威条目一到即清空（ADR-0012） */
   readonly streaming?: StreamingDraft;
+  /** 正在流式/执行的工具调用（toolCall 帧驱动）：参数流式与执行期间的「调用中」指示 */
+  readonly streamingToolCall?: StreamingToolCall;
+  /** steer / followUp 待送达内容（queue 帧全量覆盖） */
+  readonly queued?: { steering: string[]; followUp: string[] };
+  /** 内核正在压缩上下文（compaction 帧驱动）：期间内核拒绝新 prompt；仅运行期为 true */
+  readonly compacting?: boolean;
   /** create 出的会话在首条消息前不落盘，header 只能来自 attach 回包 */
   readonly header?: SessionHeaderEntry;
   readonly lastError?: string;
+}
+
+/** 待送达插话/追问的总数（Composer 徽标等消费方的唯一派生点） */
+export function queuedCountOf(session: DriveSession | undefined): number {
+  return (session?.queued?.steering.length ?? 0) + (session?.queued?.followUp.length ?? 0);
 }
 
 /** 叠加条目的合成 id：只活在客户端内存里，绝不与内核条目 id 相撞（内核 id 为随机串） */
@@ -92,11 +117,29 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       // 权威条目落盘 = 内核已有该内容的权威副本：草稿整体让位，避免同一句渲染两份。
       // 消息条目必然出自内核，因此这里绝不能按正文比对（权威条目可能不是这里累积的那段）
       const streaming = entries === prev.entries && prev.streaming ? prev.streaming : undefined;
-      if (entries === prev.entries && streaming === prev.streaming) return prev; // 幂等命中：引用不变
-      return { ...prev, entries, streaming };
+      // 权威条目引用了正在指示的工具调用（assistant 条目含该调用块 / toolResult 配对到达）：
+      // 「调用中」指示随之熄灭——end 帧丢失时的条目侧兜底（与草稿让位同一权威语义）
+      const streamingToolCall =
+        prev.streamingToolCall && entryMentionsToolCall(event.body.entry, prev.streamingToolCall.id)
+          ? undefined
+          : prev.streamingToolCall;
+      if (entries === prev.entries && streaming === prev.streaming && streamingToolCall === prev.streamingToolCall)
+        return prev; // 幂等命中：引用不变
+      return { ...prev, entries, streaming, streamingToolCall };
     }
-    case "status":
-      return { ...prev, status: event.body.status };
+    case "status": {
+      const status = event.body.status;
+      // 回到 idle：全部瞬态指示失去宿主，一并清空（abort 等异常路径的兜底熄灭点）
+      return status === "idle"
+        ? {
+            ...prev,
+            status,
+            streamingToolCall: undefined,
+            queued: undefined,
+            compacting: undefined,
+          }
+        : { ...prev, status };
+    }
     case "error":
       return { ...prev, lastError: event.body.message };
     case "delta": {
@@ -107,7 +150,36 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       const field = event.body.field;
       return { ...prev, streaming: { ...prev.streaming, [field]: (prev.streaming?.[field] ?? "") + delta } };
     }
+    case "toolCall": {
+      if (event.body.phase === "start") {
+        const streamingToolCall = { id: event.body.id, name: event.body.name };
+        if (prev.streamingToolCall?.id === streamingToolCall.id && prev.streamingToolCall.name === streamingToolCall.name)
+          return prev;
+        return { ...prev, streamingToolCall };
+      }
+      // end：按 id 匹配才熄灭（一轮多个工具，迟到的 end 不得灭掉后来的 start）
+      if (prev.streamingToolCall?.id !== event.body.id) return prev;
+      return { ...prev, streamingToolCall: undefined };
+    }
+    case "queue":
+      return { ...prev, queued: { steering: event.body.steering, followUp: event.body.followUp } };
+    case "compaction":
+      // 仅运行期为 true，结束回到缺省（与 idle 清口一致，「无压缩」只有一种表示）
+      return { ...prev, compacting: event.body.phase === "start" ? true : undefined };
     default:
       return prev;
   }
+}
+
+/** 条目是否引用了某次工具调用：assistant 条目含该调用块，或 toolResult 与之配对 */
+function entryMentionsToolCall(entry: SessionEntry, toolCallId: string): boolean {
+  if (entry.type !== "message") return false;
+  const message = (entry as MessageEntry).message;
+  if (message.role === "toolResult") return (message as ToolResultMessage).toolCallId === toolCallId;
+  if (message.role === "assistant") {
+    return (message as AssistantMessage).content.some(
+      (block) => block.type === "toolCall" && block.id === toolCallId,
+    );
+  }
+  return false;
 }

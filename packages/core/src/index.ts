@@ -3,4 +3,11 @@ export { SessionHost, type SessionHostOptions } from "./session-host.ts";
 export { RegistryError, SessionRegistry } from "./session-registry.ts";
 export { normalizeSessionEvent } from "./normalize.ts";
 export { openPiSession } from "./pi-session-source.ts";
-export type { InputDisposition, PiSessionLike, PiSessionFactory, PiSessionRequest } from "./types.ts";
+export type {
+  InputDisposition,
+  StreamingBehavior,
+  PromptOptions,
+  PiSessionLike,
+  PiSessionFactory,
+  PiSessionRequest,
+} from "./types.ts";

@@ -15,3 +15,5 @@ package-lock.json
 .DS_Store
 Thumbs.db
 .playwright-mcp
+# 本地临时产物（截图验收等）
+tmp/

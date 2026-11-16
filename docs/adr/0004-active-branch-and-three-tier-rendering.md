@@ -1,6 +1,8 @@
 # Transcript 只渲染活动分支，条目按三级策略呈现
 
-pi 的 session 条目是树且类型多样（十余种 Entry 类型）。我们决定：高保真 v1 的 Transcript **只渲染 Active Branch**（活动叶子沿 `parentId` 回溯到根），被弃分支仅以顶栏「branched」标记示意；条目按三级策略呈现——**消息级**完整渲染（user / assistant / toolResult / bashExecution），**注解级**渲染为细分隔线与灰色小字（model_change / compaction / branch_summary / session_info），**隐藏级**不渲染（usage 汇总进消息页脚与顶栏统计，context_edit / label / custom 不显示）。
+pi 的 session 条目是树且类型多样（十余种 Entry 类型）。我们决定：高保真 v1 的 Transcript **只渲染 Active Branch**（活动叶子沿 `parentId` 回溯到根），被弃分支仅以顶栏「branched」标记示意；条目按三级策略呈现——**消息级**完整渲染（user / assistant / toolResult / bashExecution），**注解级**渲染为细分隔线与灰色小字（model_change / compaction / branch_summary / session_info / `display:true` 的 custom_message），**隐藏级**不渲染（usage 汇总进消息页脚与顶栏统计，context_edit / label / custom / `display:false` 的 custom_message 不显示）。
+
+修订（上游对齐轮）：custom_message（扩展注入、参与 LLM 上下文的用户可见消息）依本条「新增 Entry 类型默认隐藏、显式决定层级」的规则显式定为**注解级**——pi TUI 也有区别于 user 消息的专门渲染；隐藏的只有 `display:false` 变体。
 
 ## 考虑过的选项
 
