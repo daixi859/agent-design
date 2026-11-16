@@ -4,7 +4,7 @@ import type {
   CompactionEntry,
   SessionEntry,
   SessionInfoEntry,
-} from "../../../shared/pi-types";
+} from "@pi-studio/shared/pi-types";
 import { formatTokens } from "../../lib/format";
 import { translate, translateVars, type Locale } from "../../lib/i18n";
 import { useLocale } from "../../state/useLocale";

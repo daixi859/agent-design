@@ -1,6 +1,6 @@
 # Pi Studio · AGENTS.md
 
-pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules），处于高保真设计验收阶段。
+pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules），处于高保真设计验收阶段；内核接入（Drive / Attach，ADR-0012）进行中，仓库已改 pnpm workspace。
 
 ## 术语
 
@@ -17,16 +17,18 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 
 ## 数据与 API
 
-`server/` 只做文件访问与 JSONL 解析，领域逻辑放 `src/lib`，新类型进 `shared/pi-types.ts`，客户端统一经 `src/lib/pi-client.ts` 取数。API 保持只读，输入区是视觉件而非功能件（ADR-0002）。
+`packages/shared` 为同构层（pi 数据类型 + 纯文本逻辑），`packages/server` 只做文件访问与 JSONL 解析，领域逻辑放 `packages/app/src/lib`，pi 数据类型进 `packages/shared/src/pi-types.ts`，客户端统一经 `packages/app/src/lib/pi-client.ts` 取数。API 保持只读，输入区是视觉件而非功能件（ADR-0002）。
+
+`packages/server`（及后续内核接入层 core）在 Node 原生 type-stripping 下直跑：相对导入一律带 `.ts` 扩展名，只用可擦除语法（无参数属性、enum、namespace）。
 
 ## 环境与验收
 
 本机 shell 的 fnm 钩子在进入项目目录时以非零退出中断 `&&` 命令链，npx 同样不可用：命令一律从仓库根直接执行（工作目录默认就是根），用内置 Node 跑：
 
 ```
-node node_modules/typescript/bin/tsc -b   # 类型检查（package.json 的 typecheck）
-node node_modules/vitest/vitest.mjs run   # 测试（package.json 的 test）
-node node_modules/vite/bin/vite.js        # dev server，只读 API 挂在 /api 前缀
+node node_modules/typescript/bin/tsc -b   # 类型检查（根 tsconfig 引用三个包）
+node node_modules/vitest/vitest.mjs run   # 测试（从根扫描全部包）
+node node_modules/vite/bin/vite.js packages/app   # dev server，只读 API 挂在 /api 前缀
 ```
 
 依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 同判据）。

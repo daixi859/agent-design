@@ -8,8 +8,8 @@ import type {
   SessionEntry,
   SessionInfoEntry,
   ToolResultMessage,
-} from "../../shared/pi-types";
-import { contentText } from "../../shared/message-text";
+} from "@pi-studio/shared/pi-types";
+import { contentText } from "@pi-studio/shared/message-text";
 
 // ---------- Active Branch（ADR-0004，实现内部） ----------
 

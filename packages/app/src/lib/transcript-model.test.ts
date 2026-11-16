@@ -7,7 +7,7 @@ import type {
   ContentBlock,
   SessionEntry,
   SessionHeaderEntry,
-} from "../../shared/pi-types";
+} from "@pi-studio/shared/pi-types";
 import { buildTranscriptModel } from "./transcript-model";
 
 // ---------- 合成 Entry 构造器 ----------

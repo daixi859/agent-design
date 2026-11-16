@@ -1,0 +1,11 @@
+{
+  "name": "@pi-studio/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pi-types": "./src/pi-types.ts",
+    "./message-text": "./src/message-text.ts"
+  }
+}

@@ -3,7 +3,7 @@ import type {
   SessionDetail,
   SessionsResponse,
   TailResponse,
-} from "../../shared/pi-types";
+} from "@pi-studio/shared/pi-types";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);

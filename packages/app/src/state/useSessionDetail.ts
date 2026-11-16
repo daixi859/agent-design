@@ -1,7 +1,7 @@
 /** Session 详情状态：首载全量 + Live Tail 增量追新（Q17：1.5s 轮询）。
     追新状态机在 src/lib/session-tail——本 module 只做取数、定时与订阅。 */
 import { useEffect, useRef, useState } from "react";
-import type { SessionHeaderEntry } from "../../shared/pi-types";
+import type { SessionHeaderEntry } from "@pi-studio/shared/pi-types";
 import { fetchSession, tailSession } from "../lib/pi-client";
 import { createSessionTail, type SessionTail } from "../lib/session-tail";
 import { buildTranscriptModel, type TranscriptModel } from "../lib/transcript-model";

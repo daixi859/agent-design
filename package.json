@@ -4,19 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc -b",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-markdown": "^10.0.0",
-    "react-router": "^7.0.0",
-    "remark-gfm": "^4.0.0",
-    "shiki": "^3.0.0"
+    "dev": "pnpm --filter @pi-studio/app dev",
+    "build": "pnpm --filter @pi-studio/app build",
+    "preview": "pnpm --filter @pi-studio/app preview",
+    "typecheck": "node node_modules/typescript/bin/tsc -b",
+    "test": "node node_modules/vitest/vitest.mjs run"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

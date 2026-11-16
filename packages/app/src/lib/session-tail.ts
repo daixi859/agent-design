@@ -1,7 +1,7 @@
 /** Live Tail 的会话内追新状态机（Q17 契约的客户端半边）：
     持有 entries + offset，保证 append-only 与 offset 单调推进，
     TranscriptModel 只在追加发生时重算。hook（useSessionDetail）只做取数、定时与订阅。 */
-import type { SessionDetail, SessionEntry, TailResponse } from "../../shared/pi-types";
+import type { SessionDetail, SessionEntry, TailResponse } from "@pi-studio/shared/pi-types";
 import { buildTranscriptModel, type TranscriptModel } from "./transcript-model";
 
 export interface SessionTail {

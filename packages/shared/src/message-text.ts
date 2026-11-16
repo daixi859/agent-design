@@ -1,6 +1,6 @@
 /** pi 消息内容 → 显示文本的统一规则（server 列表标题与客户端渲染共用，
     AGENTS.md：领域规则不放 server 层）。形状归一、纯文本提取、标题提取各一份实现。 */
-import type { AgentMessage, ContentBlock, MessageEntry, SessionEntry, UserMessage } from "./pi-types";
+import type { AgentMessage, ContentBlock, MessageEntry, SessionEntry, UserMessage } from "./pi-types.ts";
 
 /** 形状归一：string 视为单 text 块，数组原样返回 */
 export function contentBlocks(content: string | ContentBlock[]): ContentBlock[] {

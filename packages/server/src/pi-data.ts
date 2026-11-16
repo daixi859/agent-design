@@ -8,13 +8,13 @@ import { join, basename } from "node:path";
 import { stat, readdir, readFile, open } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { firstUserText } from "../shared/message-text";
+import { firstUserText } from "@pi-studio/shared/message-text";
 import type {
   SessionEntry,
   SessionHeaderEntry,
   SessionInfoEntry,
   SessionSummary,
-} from "../shared/pi-types";
+} from "@pi-studio/shared/pi-types";
 
 const SESSIONS_ROOT =
   process.env.PI_STUDIO_SESSIONS_DIR ?? join(homedir(), ".pi", "agent", "sessions");
@@ -22,12 +22,12 @@ const SESSIONS_ROOT =
 /** 列表标题扫描读取的前缀大小：覆盖 header + 前若干条消息，避免整文件读取 */
 const TITLE_SCAN_BYTES = 64 * 1024;
 
+// 参数属性等非可擦除语法不可用：本包要被 Node 原生 type-stripping 直跑（ADR-0012）
 class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
+  readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
 

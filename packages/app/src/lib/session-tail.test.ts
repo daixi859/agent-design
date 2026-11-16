@@ -1,7 +1,7 @@
 /** SessionTail 黄金序列：初建 / 空 tail / 追加 / 连续追加 / 引用稳定性。
     契约不变量：entries append-only、offset 单调、视图只在追新时重算。 */
 import { describe, expect, it } from "vitest";
-import type { SessionDetail, SessionEntry, TailResponse } from "../../shared/pi-types";
+import type { SessionDetail, SessionEntry, TailResponse } from "@pi-studio/shared/pi-types";
 import { createSessionTail } from "./session-tail";
 
 const TS = "2026-01-01T00:00:00.000Z";

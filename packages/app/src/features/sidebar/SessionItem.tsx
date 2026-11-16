@@ -1,6 +1,6 @@
 /** Sidebar 里的单个 Session 条目：单行（ADR-0005：不展示模型名） */
 import { NavLink } from "react-router";
-import type { SessionSummary } from "../../../shared/pi-types";
+import type { SessionSummary } from "@pi-studio/shared/pi-types";
 import { formatRelativeCompact } from "../../lib/format";
 import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";

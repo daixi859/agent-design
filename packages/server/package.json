@@ -1,0 +1,12 @@
+{
+  "name": "@pi-studio/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@pi-studio/shared": "workspace:*"
+  }
+}

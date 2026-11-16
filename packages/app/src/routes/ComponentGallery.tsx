@@ -2,7 +2,7 @@
     图标全网格、控件与徽标、色板、字阶、消息样张。样式直接引用各组件的
     module.css 源头，保证预览即真实组件而非复刻。 */
 import { useState } from "react";
-import type { ContentBlock, MessageEntry } from "../../shared/pi-types";
+import type { ContentBlock, MessageEntry } from "@pi-studio/shared/pi-types";
 import type { Turn } from "../lib/transcript-model";
 import { AnnotationRow } from "../features/transcript/AnnotationRow";
 import { Composer } from "../features/transcript/Composer";

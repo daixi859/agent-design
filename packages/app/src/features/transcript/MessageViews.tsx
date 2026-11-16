@@ -1,6 +1,6 @@
 /** 用户消息渲染（iMessage 式右侧气泡）；assistant 文本已并入 Turn 结构（ADR-0006） */
-import type { MessageEntry, UserMessage } from "../../../shared/pi-types";
-import { contentBlocks } from "../../../shared/message-text";
+import type { MessageEntry, UserMessage } from "@pi-studio/shared/pi-types";
+import { contentBlocks } from "@pi-studio/shared/message-text";
 import styles from "./transcript.module.css";
 
 export function UserMessageView({ entry }: { entry: MessageEntry }) {

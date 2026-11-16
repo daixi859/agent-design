@@ -1,6 +1,6 @@
 /** Session 列表状态：按 Project 分组（Q16） */
 import { useCallback, useEffect, useState } from "react";
-import type { SessionSummary } from "../../shared/pi-types";
+import type { SessionSummary } from "@pi-studio/shared/pi-types";
 import { fetchSessions } from "../lib/pi-client";
 
 export interface ProjectGroup {
