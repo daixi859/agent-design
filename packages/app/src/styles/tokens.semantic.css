@@ -61,11 +61,17 @@
   --code-text: #45443f;
   --inline-code-bg: #e8e6dc;
 
-  /* ---- Diff（暖光面上的柔和水洗色；文字对洗色底 ≥ 4.9:1） ---- */
+  /* ---- Diff（暖光面上的柔和水洗色；文字对洗色底 ≥ 4.9:1） ----
+     ADR-0013：按 DSH 的分档补齐 bg / gutter / marker 三档。
+     gutter 是行首 +/− 前缀列，marker 是左侧 3px 竖条——两者都比行底更实。 */
   --diff-add-bg: rgba(77, 159, 77, 0.14);
   --diff-add-text: #2d642d;
+  --diff-add-gutter: rgba(77, 159, 77, 0.22);
+  --diff-add-marker: #4d9f4d;
   --diff-del-bg: rgba(204, 75, 64, 0.12);
   --diff-del-text: #9c382e;
+  --diff-del-gutter: rgba(204, 75, 64, 0.2);
+  --diff-del-marker: #b04429;
 
   /* ---- 主按钮（Claude 式墨色） ---- */
   --primary-btn-bg: #141413;
@@ -96,7 +102,13 @@
   --brandfloat-height: 32px;
   --brandfloat-width: 32px;
   --sidebar-width: 280px;
-  --content-measure: 760px;
+  /* 单一列宽轴（ADR-0013）：DSH 式 clamp(680, 列宽 × 0.64, 920)。
+     宿主在 Transcript 根上发布 --pane-width（ResizeObserver）；
+     未发布时兜底 1188px（= 760 / 0.64），行为与旧常数一致。 */
+  --pane-width: 1188px;
+  --content-measure: clamp(680px, calc(var(--pane-width) * 0.64), 920px);
+  /* 用户气泡宽度上限：内容列宽 × 0.702（DSH 原始几何），再夹到 82% */
+  --bubble-measure: min(calc(var(--content-measure) * 0.702), 82%);
   /* 图标钮击打区（IconButton / SearchField / 发送钮共用） */
   --control-size: 28px;
 }
@@ -148,8 +160,12 @@
 
   --diff-add-bg: rgba(125, 197, 140, 0.18);
   --diff-add-text: #86c592;
+  --diff-add-gutter: rgba(125, 197, 140, 0.28);
+  --diff-add-marker: #6fbf67;
   --diff-del-bg: rgba(224, 90, 87, 0.16);
   --diff-del-text: #e78c84;
+  --diff-del-gutter: rgba(224, 90, 87, 0.26);
+  --diff-del-marker: #e07b6f;
 
   --scroll-thumb: rgba(245, 244, 239, 0.32);
   --scroll-track: transparent;

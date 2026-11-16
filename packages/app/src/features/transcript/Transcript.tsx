@@ -1,5 +1,5 @@
-/** Transcript：对话区本体（ADR-0006：Turn / Tool Group 三层折叠结构；数据直收 TranscriptModel） */
-import { useCallback, useEffect, useRef, useState } from "react";
+/** Transcript：对话区本体（ADR-0006 三级结构，ADR-0013 收敛为两级：Turn / Process Group；数据直收 TranscriptModel） */
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TranscriptModel } from "../../lib/transcript-model";
 import type { ComposerDrive } from "./Composer";
 import { Icon } from "../../ui/Icon";
@@ -27,6 +27,20 @@ export function Transcript({
   const [showJump, setShowJump] = useState(false);
   const { t } = useLocale();
 
+  // 单一列宽轴（ADR-0013）：把容器实际宽度发布成 --pane-width，
+  // 内容列宽由 clamp(680px, pane × 0.64, 920px) 派生；未发布时退回 760px 等效值。
+  const [paneWidth, setPaneWidth] = useState<number>();
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width;
+      if (width) setPaneWidth(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const { turns, orphanAnnotations } = view;
   // 末轮即当前生成中的那一轮：只有它值得默认展开（历史轮展开会撑开整篇对话）
   const lastTurnId = turns.at(-1)?.id;
@@ -53,7 +67,11 @@ export function Transcript({
   }, []);
 
   return (
-    <div className={styles.wrap}>
+    <div
+      className={styles.wrap}
+      style={paneWidth ? ({ "--pane-width": `${paneWidth}px` } as CSSProperties) : undefined}
+    >
+      {/* 底部 Composer 与滚动区共用一个列宽轴 */}
       <div className={`scroll-y ${styles.scroll}`} ref={scrollRef} onScroll={handleScroll}>
         <div className={styles.inner}>
           {projectPath && <p className={styles.projectEyebrow}>{projectPath}</p>}

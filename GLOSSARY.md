@@ -61,16 +61,34 @@ pi 对上下文的压缩事件，原始条目永不删除；Transcript 中渲染
 _Avoid_: 把压缩表述为删除
 
 **Turn**:
-一轮对话：从一条 user 消息开始、到下一条 user 消息之前的全部内容；Transcript 的顶层折叠单元。
+一轮对话：从一条 user 消息开始、到下一条 user 消息之前的全部内容；Transcript 的顶层单元。
 _Avoid_: 轮次、回合、session（与 Session 混淆）
 
-**Tool Group**:
-Turn 内以 assistant text 回答为分隔符的一段连续非文本内容（thinking、toolCall+toolResult、bashExecution，可跨多条 assistant 消息）；Turn 的中层折叠单元。
-_Avoid_: 工具批、步骤组、batch
+**Process Group**:
+Turn 内以 assistant text 回答为分隔符的一段连续非文本内容（thinking、toolCall+toolResult、bashExecution，可跨多条 assistant 消息）。一个 Turn 可以有多个 Process Group，它们与回答按源顺序交替（ADR-0013 前称 Tool Group，折叠收敛为一级后改名）。
+_Avoid_: 工具组、工具批、步骤组、batch
 
 **TranscriptModel**:
-Transcript 渲染所需的完整派生数据，Session 视图的唯一派生出口：`buildTranscriptModel(entries)` 从 Entry 列表一次算出 Turn 列表、孤儿注解、被弃分支计数、最后模型声明、思考等级与工具调用数；Entry 树本身不对外暴露。
+Transcript 渲染所需的完整派生数据，Session 视图的唯一派生出口：`buildTranscriptModel(entries)` 从 Entry 列表一次算出 Turn 列表（内含按源顺序交替的 Process Group 与回答）、孤儿注解、被弃分支计数、最后模型声明、思考等级与工具调用数；工具条目的四态、`terminal`、`subCalls` 也在本层归一，视图层零伪造。Entry 树本身不对外暴露。
 _Avoid_: 派生数据、视图状态、session 状态
+
+**Recap**:
+每个 Process Group 顶部默认折叠的结算摘要条，从 `TranscriptModel` 的派生量算出（工具数、思考数、失败数、本轮耗时、本轮 tokens；被弃分支数只标在首个 Turn，Draft 标记只标在末个组）。只报可解释的量，不发明状态色或「思考中」这类自称（ADR-0013）；内核没给 usage 就不报 tokens。
+_Avoid_: 轮聚合条、步骤条、summary（与 compaction 的 summary 混淆）
+
+**Process Strip**:
+Recap 展开后逐条铺开的工具/思考行，DSH 式极简 disclosure 行——图标、工具名、摘要、状态，行内无卡片无耗时；一次点击在 Recap 与 Strip 之间切换（ADR-0013）。
+_Avoid_: 工具组、分组条、工具卡列表
+
+**Tool State**:
+工具行的四态：`running`（无配对结果，内核仍在跑或流式草稿）、`ok`、`error`（`isError`）、`stopped`（bashExecution 被取消）。**行内**只以文字色表达，不用彩色徽标（ADR-0013）；唯**终端块的 gutter 状态点**保留分档颜色，是该条明列的例外。四态各自成类，由视图层一张 `STATE_VIEW` 表统一驱动标签、字形与类名。
+
+嵌套调用（内核 `details.calls[]` 的 `CodemodeNestedCallStatus`：`running` / `ok` / `error` / `cancelled`）在模型层归一到同一套词汇——`cancelled` 即 `stopped`，全应用只保留一套状态词；未知或缺失状态留空，不伪造成 `ok`。
+_Avoid_: 状态徽标、成功失败态、Sub Call Status
+
+**Draft**:
+流式期间由 delta 累积出的瞬态条目（assistant 的 text / thinking），不落盘；权威条目落盘后整段让位。Draft 与落盘条目在 Recap 里可区分（ADR-0013）：模型层以「末条 assistant 的 `stopReason` 仍为 `pending`」判定，标成 `Turn.draft`，视图只读这个布尔，不读内核字段。
+_Avoid_: 草稿、临时消息、streaming entry
 
 **Preview**:
 设计验收用的组件清单页（图标全网格、控件、色板、字阶与消息样张），挂在 Settings 侧栏导航下（/settings/preview）；样式直接引用各组件 module.css 源头。

@@ -10,17 +10,34 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { codeToHtml } from "shiki";
 import { cx } from "../../lib/cx";
+import { useLocale } from "../../state/useLocale";
 import styles from "./transcript.module.css";
 
 /** 折叠预览的最大高度（与 transcript.module.css 的 max-block-size 保持一致） */
 const CODE_PREVIEW_MAX = 210;
 
-function CodeBlock({ code, lang }: { code: string; lang: string }) {
+/** 复制成功的确认时长（DSH useClipboardCopy：1000ms） */
+const COPIED_MS = 1000;
+
+function CodeBlock({
+  code,
+  lang,
+  copyLabel,
+  copyCopied,
+}: {
+  code: string;
+  lang: string;
+  /** 复制文案由调用方注入（DSH CodeBlock 同样不内置文案），默认英文兜底 */
+  copyLabel?: string;
+  copyCopied?: string;
+}) {
   const [html, setHtml] = useState<string>();
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
   const [copied, setCopied] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const copyLabelText = copyLabel ?? "Copy";
+  const copyCopiedText = copyCopied ?? "Copied";
 
   useEffect(() => {
     let cancelled = false;
@@ -49,34 +66,36 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
       .writeText(code)
       .then(() => {
         setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
+        window.setTimeout(() => setCopied(false), COPIED_MS);
       })
       .catch(() => {
         // 剪贴板不可用时静默
       });
   };
 
+  // 结构照 DSH CodeBlock：sticky 的 bannerWrap 包住 banner，正文进 content
+  // （content 是 display:contents，圆角与底色落在 <pre> 上，sticky 才不被裁掉）
   return (
-    <div ref={wrapRef} className={cx(styles.codeShellWrap, expanded && styles.codeExpanded)}>
-      <div className={styles.codeHead}>
-        <span className={styles.codeLang}>{lang || "code"}</span>
-        <button type="button" className={styles.codeCopy} onClick={copy}>
-          {copied ? "Copied" : "Copy"}
-        </button>
+    <div ref={wrapRef} className={cx(styles.codeShell, expanded && styles.codeExpanded)}>
+      <div className={styles.codeBannerWrap}>
+        <div className={styles.codeBanner}>
+          <span className={styles.codeLang}>{lang || "code"}</span>
+          <button type="button" className={styles.codeAction} onClick={copy}>
+            {copied ? copyCopiedText : copyLabelText}
+          </button>
+        </div>
       </div>
-      {html ? (
-        <div className={styles.codeShell} dangerouslySetInnerHTML={{ __html: html }} />
-      ) : (
-        <pre className={styles.codeFallback}>
-          <code>{code}</code>
-        </pre>
-      )}
+      <div className={styles.codeContent}>
+        {html ? (
+          <div dangerouslySetInnerHTML={{ __html: html }} />
+        ) : (
+          <pre className={styles.codeFallback}>
+            <code>{code}</code>
+          </pre>
+        )}
+      </div>
       {!expanded && overflowing && (
-        <button
-          type="button"
-          className={styles.codeExpand}
-          onClick={() => setExpanded(true)}
-        >
+        <button type="button" className={styles.codeExpand} onClick={() => setExpanded(true)}>
           Show code
         </button>
       )}
@@ -85,6 +104,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
 }
 
 export function Markdown({ children }: { children: string }) {
+  const { t } = useLocale();
   return (
     <div className={styles.markdown}>
       <ReactMarkdown
@@ -97,7 +117,14 @@ export function Markdown({ children }: { children: string }) {
               const className = child.props.className ?? "";
               const lang = /language-([\w-]+)/.exec(className)?.[1] ?? "";
               const code = String(child.props.children ?? "").replace(/\n$/, "");
-              return <CodeBlock code={code} lang={lang} />;
+              return (
+                <CodeBlock
+                  code={code}
+                  lang={lang}
+                  copyLabel={t("copy")}
+                  copyCopied={t("copied")}
+                />
+              );
             }
             return <pre className={styles.codeFallback}>{children}</pre>;
           },

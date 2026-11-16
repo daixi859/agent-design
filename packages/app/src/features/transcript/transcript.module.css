@@ -1,5 +1,5 @@
-/* Transcript：对话区（Q9 术语；消息级完整渲染 + 注解级，ADR-0004）
-   骨架：滚动区居中 measure + 底部 Composer 视觉件 */
+/* Transcript 对话区（ADR-0013：DSH 几何 × 暖纸配色；ADR-0006 三级结构收敛为两级）
+   几何来源与 lab.module.css 同源，验收通过后 lab 目录即退场。 */
 
 .wrap {
   position: relative;
@@ -8,11 +8,11 @@
   block-size: 100%;
   background: var(--bg-canvas);
 
-  /* Composer 联动几何：四处一个系统，改 Composer 时一起动（组件层变量随组件定义） */
-  --composer-clearance: 96px;    /* 滚动内容底部让位 */
-  --jump-rest-height: 92px;      /* 跳最新钮悬停位 = 让位 − 一格节奏 */
-  --code-collapse-height: 210px; /* 折叠态代码可见高度 */
-  --code-fade-height: 56px;      /* 折叠渐隐梯度高度 */
+  /* Composer 联动几何：四处一个系统，改 Composer 时一起动 */
+  --composer-clearance: 96px;
+  --jump-rest-height: 92px;
+  --code-collapse-height: 210px;
+  --code-fade-height: 56px;
 }
 
 .scroll {
@@ -22,7 +22,6 @@
 .inner {
   max-inline-size: var(--content-measure);
   margin-inline: auto;
-  /* 底部留白大于 Composer 高度，滚动内容不被遮挡 */
   padding: var(--space-5) var(--space-6) var(--composer-clearance);
 }
 
@@ -36,152 +35,89 @@
   user-select: all;
 }
 
-/* ---- 用户消息：iMessage 式右侧气泡 ---- */
+/* ---- 用户消息：右对齐气泡（宽度随内容列宽派生，DSH 0.702） ---- */
 
 .userRow {
   display: flex;
-  justify-content: flex-end;
-  margin-block: var(--space-3);
+  flex-direction: column;
+  align-items: flex-end;
+  margin-block: var(--space-4);
+}
+
+.userStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  max-inline-size: var(--bubble-measure);
 }
 
 .userBubble {
-  max-inline-size: 72%;
-  padding: var(--space-2) var(--space-3);
+  max-inline-size: 100%;
+  padding: 10px 16px;
   border-radius: var(--radius-bubble);
   background: var(--bubble-user-bg);
   color: var(--on-bubble-user);
-  font-size: var(--text-body);
-  line-height: var(--leading-body-tight);
-  font-weight: var(--weight-medium);
+  font-size: var(--content-font-size);
+  line-height: calc(22px + var(--content-font-delta));
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 
   & img {
-    border-radius: var(--radius-xs);
+    border-radius: var(--radius-sm);
     margin-block-start: var(--space-1);
     max-block-size: 240px;
   }
 }
 
-/* ---- Markdown 排版 ---- */
-
-.markdown {
-  font-size: var(--text-body);
-  line-height: var(--leading-body);
-  overflow-wrap: anywhere;
-
-  & > * + * {
-    margin-block-start: var(--space-3);
-  }
-  & h1,
-  & h2,
-  & h3,
-  & h4 {
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-title);
-    line-height: 1.3;
-    margin-block-start: var(--space-5);
-
-    &:is(h1) { font-size: var(--text-title3); }
-    &:is(h2) { font-size: var(--text-callout); }
-    &:is(h3, h4) { font-size: var(--text-body); }
-  }
-  & ul,
-  & ol {
-    padding-inline-start: var(--space-5);
-
-    & li + li {
-      margin-block-start: var(--space-1);
-    }
-  }
-  & a {
-    color: var(--accent-text);
-    /* 常驻下划线（WCAG 1.4.1：不单靠颜色区分链接），hover 加深到实色 */
-    text-decoration: underline;
-    text-decoration-color: color-mix(in srgb, var(--accent-text) 45%, transparent);
-    text-underline-offset: 2px;
-
-    &:hover {
-      text-decoration-color: var(--accent-text);
-    }
-  }
-  & blockquote {
-    border-inline-start: 2px solid var(--separator-strong);
-    padding-inline-start: var(--space-3);
-    color: var(--text-2);
-  }
-  & hr {
-    border: none;
-    border-block-start: var(--border-hairline) solid var(--separator);
-  }
-  & table {
-    border-collapse: collapse;
-    font-size: var(--text-caption);
-  }
-  & :is(th, td) {
-    border: var(--border-hairline) solid var(--separator-strong);
-    padding: var(--space-1) var(--space-2);
-    text-align: left;
-  }
+.userMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  font-size: var(--content-font-size-secondary);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 
-.inlineCode,
-.markdown code {
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-  background: var(--inline-code-bg);
-  border-radius: var(--radius-xs);
-  padding: var(--space-hairline) var(--space-1);
+/* ---- Turn ---- */
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  margin-block-end: var(--space-4);
+  /* 长会话性能：视口外 Turn 跳过布局与绘制 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
 }
 
-/* 块级代码内的 <code> 不吃行内代码样式（Shiki 输出含 <code>） */
-.codeShell pre code,
-.codeFallback code {
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-  font-size: inherit;
+/* ---- Process Group：recapRow 与 strip 齐平，不缩进、无侧边框 ---- */
+
+.groupWrap {
+  display: flex;
+  flex-direction: column;
+  margin-block: var(--space-2);
 }
 
-/* 代码块：随主题回暖光（ADR-0007），外壳承载边框与圆角，头部栏给身份 */
-.codeShellWrap {
-  position: relative;
-  background: var(--code-bg);
-  border: var(--border-hairline) solid var(--code-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.codeHead {
+.recapRow {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
-  border-block-end: var(--border-hairline) solid var(--code-border);
-  background: color-mix(in srgb, var(--text-1) 3%, transparent);
 }
 
-.codeLang {
-  font-family: var(--font-mono);
-  font-size: var(--text-micro);
-  line-height: var(--leading-micro);
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-  color: var(--text-3);
-  user-select: none;
-}
-
-.codeCopy {
-  margin-inline-start: auto;
+.recap {
   display: inline-flex;
   align-items: center;
-  padding: var(--space-05) var(--space-1h);
+  gap: var(--space-2);
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1h);
   border: none;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-3);
-  font-size: var(--text-caption2);
-  line-height: var(--leading-caption2);
+  color: var(--text-2);
+  font-size: var(--content-font-size-secondary);
+  line-height: calc(24px + var(--content-font-delta-secondary));
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -193,81 +129,22 @@
   }
 }
 
-/* 代码主体：贴外壳，圆角与边框交给 wrap */
-.codeShell pre,
-.codeFallback {
-  margin: 0;
-  font-size: var(--text-caption);
-  line-height: var(--leading-footnote);
-  background: transparent !important;
-  border: none;
-  border-radius: 0;
-  padding: var(--space-3);
-  overflow-x: auto;
+.recapLead {
+  display: grid;
+  place-items: center;
+  inline-size: 16px;
+  block-size: 16px;
+  flex: none;
+  color: var(--text-3);
 }
 
-/* Shiki 双主题：dark 下切到 --shiki-dark 变量。
-   span 带默认主题的内联 color，必须 !important 才能压过（Shiki 官方配方）；
-   只切文字色——深面由外壳提供，span 级背景会造成条带 */
-:global([data-theme="dark"]) .codeShellWrap span {
-  color: var(--shiki-dark) !important;
+.recapLead svg,
+.rowLead svg {
+  inline-size: 14px;
+  block-size: 14px;
 }
 
-/* 代码折叠（用户反馈）：只收 <pre>，头部栏在折叠态保持可见 */
-.codeShellWrap:not(.codeExpanded) :is(.codeShell pre, .codeFallback) {
-  max-block-size: var(--code-collapse-height);
-  overflow: hidden;
-}
-
-.codeShellWrap.codeExpanded :is(.codeShell pre, .codeFallback) {
-  max-block-size: none;
-  overflow-x: auto;
-}
-
-.codeShellWrap:not(.codeExpanded)::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  block-size: var(--code-fade-height);
-  background: linear-gradient(to bottom, transparent, var(--code-bg) 85%);
-  pointer-events: none;
-}
-
-.codeExpand {
-  position: absolute;
-  bottom: var(--space-2);
-  inset-inline-start: 50%;
-  translate: -50% 0;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  border: none;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
-  -webkit-backdrop-filter: blur(var(--blur-floating));
-  backdrop-filter: blur(var(--blur-floating));
-  color: var(--text-2);
-  font-size: var(--text-caption2);
-  line-height: var(--leading-caption2);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  box-shadow:
-    inset 0 0 0 var(--border-hairline) var(--separator-strong),
-    var(--shadow-card);
-
-  &:hover {
-    color: var(--text-1);
-  }
-}
-
-/* ---- 折叠箭头基座：thinking / tool / group 三处共用，只差颜色与触发方式 ---- */
-
-.thinkingChevron,
-.toolChevron,
-.groupChevron {
+.recapChevron {
   display: inline-flex;
   transition: transform var(--duration-fast) var(--ease-standard);
 
@@ -276,172 +153,347 @@
   }
 }
 
-/* ---- Thinking（暖灰折叠卡，ADR-0005） ---- */
-
-.thinking {
-  box-shadow: var(--shadow-hairline);
-  background: var(--thinking-subtle);
-  border-radius: var(--radius-md);
+.recapFacts {
+  color: var(--text-3);
 }
 
-.thinkingSummary {
+/* Draft 标记：文字，不加状态色（ADR-0013「Recap 不发明状态色」） */
+.recapDraft {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.strip {
   display: flex;
-  align-items: center;
-  gap: var(--space-1h);
-  padding: var(--space-1h) var(--space-2);
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  color: var(--thinking);
-  font-size: var(--text-caption);
-  line-height: var(--leading-caption);
-  font-weight: var(--weight-semibold);
-
-  &::-webkit-details-marker {
-    display: none;
-  }
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
-.thinkingChevron {
-  color: color-mix(in srgb, var(--thinking) 65%, var(--text-3));
+/* ---- 工具行 / 思考行：[16px 图标盒] gap8 [标题] gap8 [2×2 圆点] gap8 [摘要] ---- */
+
+.row {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
 }
 
-.thinking[open] .thinkingChevron {
-  transform: rotate(90deg);
-}
-
-.thinkingBody {
-  padding: var(--space-1) var(--space-3) var(--space-2);
-  font-size: var(--text-caption);
-  line-height: var(--leading-footnote);
-  color: var(--text-2);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* ---- 工具调用卡 ---- */
-
-.toolCard {
-  background: var(--bg-inset);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-hairline);
-}
-
-.toolCard[data-error="true"] {
-  box-shadow: inset 0 0 0 var(--border-hairline) color-mix(in srgb, var(--danger) 35%, transparent);
-}
-
-.toolHeader {
+.rowHead {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   inline-size: 100%;
-  padding: var(--space-1h) var(--space-2);
+  padding: var(--space-05) 0 var(--space-05) var(--space-1h);
+  --row-text-inset: calc(var(--space-1h) + 16px + var(--space-2));
   border: none;
-  border-radius: inherit;
   background: transparent;
-  cursor: pointer;
-  font-size: var(--text-caption);
-  line-height: var(--leading-caption);
   color: var(--text-2);
-  text-align: left;
+  font-size: var(--content-font-size-secondary);
+  line-height: calc(24px + var(--content-font-delta-secondary));
+  text-align: start;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast) var(--ease-standard);
 
   &:hover {
     color: var(--text-1);
   }
 }
 
-.toolName {
-  font-family: var(--font-mono);
-  font-size: var(--text-caption2);
-  font-weight: var(--weight-semibold);
+.rowLead {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 16px;
+  block-size: 16px;
+  flex: none;
+  color: var(--text-3);
+}
+
+.rowIcon,
+.rowChevron {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.rowChevron {
+  opacity: 0;
+
+  &[data-open="true"] {
+    opacity: 1;
+    transform: rotate(90deg);
+  }
+}
+
+.rowHead:hover .rowIcon,
+.rowHead:focus-visible .rowIcon {
+  opacity: 0;
+}
+
+.rowHead:hover .rowChevron,
+.rowHead:focus-visible .rowChevron {
+  opacity: 1;
+}
+
+.rowTitle {
+  flex: none;
   color: var(--text-1);
 }
 
-.toolSummary {
+/* 2×2 圆点分隔（DSH 签名件） */
+.dot {
+  flex: none;
+  inline-size: 2px;
+  block-size: 2px;
+  border-radius: 1px;
+  background: var(--text-4);
+}
+
+.rowSummary {
   flex: 1;
   min-inline-size: 0;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: var(--text-caption2);
+  color: var(--text-3);
+  font-size: var(--content-font-size-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 状态只走文字色，没有彩色徽标（ADR-0013）：运行中 / 取消与摘要同档 tertiary，
+   只有失败分档；四态仍各自成类，免得状态映射指向不存在的样式。 */
+.rowState {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
   color: var(--text-3);
 }
 
-.toolErrorIcon {
-  color: var(--danger);
+.stateRunning { color: var(--text-3); }
+.stateOk      { color: var(--text-3); }
+.stateError   { color: var(--danger); }
+.stateStopped { color: var(--text-3); }
+
+.pulse {
+  flex: none;
+  inline-size: var(--size-dot);
+  block-size: var(--size-dot);
+  border-radius: 50%;
+  background: var(--text-3);
+  opacity: 1;
+  animation: pulse 1.4s var(--ease-standard) infinite;
 }
 
-.toolChevron {
-  color: var(--text-3);
+@keyframes pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
 }
 
-.toolBody {
+.rowBody {
+  margin: var(--space-1) 0 var(--space-2) var(--space-1);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-2) var(--space-2);
 }
 
-/* 代码面文字基座：等宽 + 代码文字色（表面由各载体自定，ADR-0007 统一表面语言） */
-.toolArgs,
-.toolOutput,
-.diff,
-.codeShell pre,
-.codeFallback {
-  font-family: var(--font-mono);
-  color: var(--code-text);
+.rowBody .subCalls:not(:first-child) {
+  margin-block-start: var(--space-1);
 }
 
-/* 内嵌代码表面：暖光底 + 发丝边 + 圆角（toolArgs / toolOutput / diff 共用） */
-.toolArgs,
-.toolOutput,
-.diff {
-  font-size: var(--text-caption2);
-  line-height: var(--leading-caption);
+/* 思考正文：tertiary 灰、无斜体、无左边框；左内边距使正文与标题左缘对齐 */
+.thinkingBody {
+  padding-inline-start: calc(var(--row-text-inset, 30px) - var(--space-1));
+  font-size: var(--content-font-size-secondary);
+  line-height: calc(20px + var(--content-font-delta-secondary));
+  color: var(--text-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 嵌套调用：缩进一级 + 发丝竖线表达从属（内核 details.calls） */
+.subCalls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-inline-start: var(--space-3);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-hairline) solid var(--separator);
+}
+
+/* ---- 终端块：左 30px gutter 放状态点（DSH TerminalBlock） ---- */
+
+.terminal {
+  display: grid;
+  grid-template-columns: 30px 1fr;
   background: var(--code-bg);
   border: var(--border-hairline) solid var(--code-border);
   border-radius: var(--radius-md);
-  white-space: pre;
+  overflow: hidden;
+}
+
+.terminalGutter {
+  display: flex;
+  justify-content: center;
+  padding-block-start: var(--space-2);
+  border-inline-end: var(--border-hairline) solid var(--code-border);
+}
+
+.terminalMain {
+  min-inline-size: 0;
+}
+
+.terminalCommand {
+  padding: var(--space-1) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: var(--leading-footnote);
+  color: var(--code-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.terminalPrompt {
+  color: var(--text-4);
+  user-select: none;
+}
+
+.terminalOutputWrap {
+  border-block-start: var(--border-hairline) solid var(--code-border);
+}
+
+.terminalOutput {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption2);
+  line-height: var(--leading-code-small);
+  color: var(--text-2);
   overflow: auto;
-}
-
-.toolArgs,
-.toolOutput {
-  padding: var(--space-2);
-  max-block-size: 220px;
-}
-
-/* 代码/输出类滚动容器：细滚动条，避免 Windows 箭头样式 */
-.toolArgs,
-.toolOutput,
-.diff,
-.codeFallback,
-.codeShell :global(.shiki),
-.codeShell pre {
+  max-block-size: 224px;
+  white-space: pre;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) transparent;
 }
 
-.toolOutput[data-error="true"] {
+.terminalOutput[data-error="true"] {
   color: var(--danger);
 }
 
-/* ---- Diff ---- */
+.runDot {
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  margin-block-start: 5px;
+  border-radius: 50%;
+}
+
+.dotRunning { background: var(--success); animation: pulse 1.4s var(--ease-standard) infinite; }
+.dotOk      { background: var(--success); }
+.dotError   { background: var(--danger); }
+.dotStopped { background: var(--warning); }
+
+/* 代码面文字基座：等宽 + 代码文字色（ADR-0007 统一表面语言） */
+.codeBody {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption2);
+  line-height: var(--leading-code-small);
+  color: var(--code-text);
+  background: var(--code-bg);
+  border: var(--border-hairline) solid var(--code-border);
+  border-radius: var(--radius-md);
+  overflow: auto;
+  max-block-size: 220px;
+  white-space: pre;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+.codeBody[data-error="true"] {
+  color: var(--danger);
+}
+
+/* 历史形态 oldText/newText 的兜底呈现（无行号，与内核 diff 视觉区分） */
+.requested {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.requestedOld {
+  background: var(--diff-del-bg);
+  color: var(--diff-del-text);
+}
+
+.requestedNew {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-text);
+}
+
+/* 行内小文字按钮（看参数 / 复制 diff 共用） */
+.rowAction {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1h);
+  padding: var(--space-05) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--text-caption2);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-1);
+    background: var(--bg-hover);
+  }
+}
+
+.inspectChevron {
+  display: inline-flex;
+  transition: transform var(--duration-fast) var(--ease-standard);
+
+  &[data-open="true"] {
+    transform: rotate(90deg);
+  }
+}
+
+/* ---- Diff：整行铺色 + 左侧 3px 竖条（ADR-0013） ---- */
 
 .diff {
+  background: var(--code-bg);
+  border: var(--border-hairline) solid var(--code-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.diffHead {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-1) var(--space-2) 0;
+}
+
+.diffBody {
+  margin: 0;
   padding: var(--space-1) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption2);
+  line-height: var(--leading-caption);
+  overflow: auto;
   max-block-size: 320px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
-.diffFile {
-  padding: var(--space-1) var(--space-2);
-  color: var(--text-2);
-  font-weight: var(--weight-semibold);
-}
-
-.diffRow {
+.diffLine {
   display: grid;
-  grid-template-columns: var(--space-5) 1fr;
+  grid-template-columns: 3px 18px 1fr;
+  min-block-size: var(--leading-caption);
+}
+
+.diffMarker {
+  background: transparent;
 }
 
 .diffGutter {
@@ -450,34 +502,43 @@
   user-select: none;
 }
 
+.diffText {
+  white-space: pre;
+  color: var(--code-text);
+  padding-inline-end: var(--space-3);
+}
+
 .diffAdd {
   background: var(--diff-add-bg);
 
-  & .diffGutter {
-    color: var(--diff-add-text);
-  }
+  & .diffMarker { background: var(--diff-add-marker); }
+  & .diffGutter { color: var(--diff-add-text); background: var(--diff-add-gutter); }
+  & .diffText   { color: var(--diff-add-text); }
 }
 
 .diffDel {
   background: var(--diff-del-bg);
 
-  & .diffGutter {
-    color: var(--diff-del-text);
-  }
+  & .diffMarker { background: var(--diff-del-marker); }
+  & .diffGutter { color: var(--diff-del-text); background: var(--diff-del-gutter); }
+  & .diffText   { color: var(--diff-del-text); }
 }
 
 .diffHunk {
-  color: var(--text-3);
-  background: var(--bg-hover);
+  & .diffText { color: var(--text-3); }
 }
 
-/* ---- 注解级条目（细分隔线 + 灰字） ---- */
+.diffGap {
+  & .diffText { color: var(--text-4); }
+}
+
+/* ---- 注解行 / 警告行 / 空态 ---- */
 
 .annotation {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-block: var(--space-3);
+  margin-block: var(--space-4);
   color: var(--text-4);
   font-size: var(--text-caption2);
   line-height: var(--leading-caption2);
@@ -492,121 +553,43 @@
   }
 }
 
-/* ---- Turn / Tool Group 三层结构（ADR-0006） ---- */
-
-.turn {
+.warning {
   display: flex;
-  flex-direction: column;
-  /* 长会话性能：视口外 Turn 跳过布局与绘制；
-     auto 关键词记住已渲染高度，滚动条比例首次渲染后趋于真实 */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 300px;
-}
-
-.answerBlock {
-  margin-block: var(--space-4);
-}
-
-.stepsBar {
-  display: inline-flex;
   align-items: center;
-  align-self: flex-start;
   gap: var(--space-1h);
-  white-space: nowrap;
   margin-block: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-2);
-  font-size: var(--text-caption);
-  line-height: var(--leading-caption);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-
-  &:hover {
-    color: var(--text-1);
-    background: var(--bg-hover);
-  }
-}
-
-.groupWrap {
-  margin-inline-start: var(--space-4);
-  margin-block: var(--space-2);
-}
-
-.groupBar {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: var(--space-1h);
-  white-space: nowrap;
-  /* 3px：视觉修正值，让 mono 小字在 bar 里垂直居中 */
-  padding: 3px var(--space-2);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-caption2);
-  line-height: var(--leading-caption2);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-
-  &:hover {
-    color: var(--text-1);
-    background: var(--bg-hover);
-  }
-}
-
-.groupChevron {
-  /* 结构（display/transition/rotate）在折叠箭头基座统一声明；
-     颜色随 groupBar 文字色（含 hover）联动，currentcolor 显式表达 */
-  color: currentcolor;
-}
-
-.groupItems {
-  margin-block: var(--space-2);
-  margin-inline-start: var(--space-3);
-  padding-inline-start: var(--space-3);
-  border-inline-start: var(--border-hairline) solid var(--separator-strong);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.warningNote {
-  margin-block: var(--space-2);
-  font-size: var(--text-caption);
-  line-height: var(--leading-caption);
+  font-size: var(--content-font-size-secondary);
+  line-height: calc(20px + var(--content-font-delta-secondary));
   font-weight: var(--weight-medium);
 }
 
-.warningAborted {
-  color: var(--warning);
-}
-
-.warningError {
-  color: var(--danger);
-}
-
-/* ---- 未知 user/自定义消息 ---- */
+.warningAborted { color: var(--warning); }
+.warningError   { color: var(--danger); }
 
 .quietText {
-  font-size: var(--text-caption);
+  font-size: var(--content-font-size-secondary);
   color: var(--text-2);
   white-space: pre-wrap;
 }
 
-/* ---- bashExecution ---- */
+.emptyState {
+  block-size: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--content-font-size-secondary);
+  text-align: center;
 
-/* 复用 toolCard 系列样式 */
+  & svg {
+    color: var(--text-4);
+  }
+  & strong {
+    color: var(--text-1);
+    font-weight: var(--weight-semibold);
+  }
+}
 
 /* ---- 跳到最新 / Composer ---- */
 
@@ -663,13 +646,11 @@
   border: none;
   background: transparent;
   resize: none;
-  /* 只读阶段保持单行视觉；接入 pi 后如需多行滚动改回 overflow: auto。
-     field-sizing: content 仅 Chromium；不支持的引擎回退 rows={1}（Composer.tsx） */
   overflow: hidden;
   field-sizing: content;
   max-block-size: 160px;
   padding: var(--space-1h) var(--space-2) 0;
-  font-size: var(--text-body);
+  font-size: var(--content-font-size);
   line-height: var(--leading-body-tight);
   color: var(--text-1);
 
@@ -722,8 +703,6 @@
   }
 }
 
-/* ---- 驱动状态（ADR-0012 阶段四）：状态点与中止 ---- */
-
 .statusDot {
   inline-size: var(--size-dot);
   block-size: var(--size-dot);
@@ -775,8 +754,6 @@
   }
 }
 
-/* ---- 驱动错误条（错误不再静默，ADR-0012 阶段四修正）---- */
-
 .errorBar {
   display: flex;
   align-items: center;
@@ -788,23 +765,227 @@
   border-block-end: var(--border-hairline) solid var(--separator);
 }
 
-/* ---- 空态 ---- */
+/* ---- Markdown 排版 ---- */
 
-.emptyState {
-  block-size: 100%;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: var(--space-2);
-  color: var(--text-2);
-  font-size: var(--text-footnote);
-  text-align: center;
+.markdown {
+  font-size: var(--content-font-size);
+  line-height: calc(24px + var(--content-font-delta));
+  overflow-wrap: anywhere;
 
-  & svg {
-    color: var(--text-4);
+  & > * + * {
+    margin-block-start: var(--space-4);
   }
-  & strong {
-    color: var(--text-1);
+  & h1,
+  & h2,
+  & h3,
+  & h4 {
     font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-title);
+    line-height: 1.3;
+    margin-block-start: var(--space-5);
+
+    &:is(h1) { font-size: var(--text-title3); }
+    &:is(h2) { font-size: var(--text-callout); }
+    &:is(h3, h4) { font-size: var(--content-font-size); }
+  }
+  & ul,
+  & ol {
+    padding-inline-start: 18px;
+
+    & li + li {
+      margin-block-start: var(--space-1h);
+    }
+  }
+  & a {
+    color: var(--accent-text);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent-text) 45%, transparent);
+    text-underline-offset: 2px;
+
+    &:hover {
+      text-decoration-color: var(--accent-text);
+    }
+  }
+  & blockquote {
+    border-inline-start: 2px solid var(--separator-strong);
+    padding-inline-start: var(--space-3);
+    color: var(--text-2);
+  }
+  & hr {
+    border: none;
+    border-block-start: var(--border-hairline) solid var(--separator);
+    margin-block: var(--space-7);
+  }
+  & table {
+    border-collapse: collapse;
+    font-size: var(--text-caption);
+  }
+  & :is(th, td) {
+    border: var(--border-hairline) solid var(--separator-strong);
+    padding: var(--space-1) var(--space-2);
+    text-align: left;
+  }
+}
+
+.inlineCode,
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--inline-code-bg);
+  border-radius: var(--radius-xs);
+  padding: var(--space-hairline) var(--space-1);
+}
+
+/* ---- 代码块：几何照 DSH CodeBlock（只换配色，ADR-0007） ----
+   DSH packages/client/ui-primitives/src/markdown/CodeBlock.module.css：
+     .block  margin 16px 0，非末位 margin-bottom 11px
+     .banner padding 9px 14px / space-between / gap 12px / font 11px·18px
+     .bannerWrap position sticky top 0 z-index 6
+     pre     padding 16px / pre-wrap / break-all / 11px·19px
+   圆角分落 banner 与 pre 两端（wrapper 不能 overflow:hidden，否则 sticky 失效）。 */
+
+.codeShell {
+  position: relative;
+  margin: 16px 0;
+  background: var(--code-bg);
+  border: var(--border-hairline) solid var(--code-border);
+  border-radius: var(--radius-md);
+}
+
+.codeShell:not(:last-child) {
+  margin-block-end: 11px;
+}
+
+.codeBannerWrap {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background-color: var(--bg-canvas);
+  border-start-start-radius: var(--radius-md);
+  border-start-end-radius: var(--radius-md);
+}
+
+.codeBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--text-1) 4%, transparent);
+  border-start-start-radius: var(--radius-md);
+  border-start-end-radius: var(--radius-md);
+}
+
+.codeLang {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption2);
+  line-height: 18px;
+  color: var(--text-1);
+  user-select: none;
+}
+
+.codeAction {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard);
+
+  &:hover {
+    color: var(--text-1);
+  }
+}
+
+.codeContent {
+  display: contents;
+}
+
+.codeShell pre,
+.codeFallback {
+  margin: 0 !important;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption2);
+  line-height: var(--leading-code);
+  color: var(--code-text);
+  background: var(--code-bg);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-end-start-radius: var(--radius-md);
+  border-end-end-radius: var(--radius-md);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+.codeShell pre code,
+.codeFallback code {
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* Shiki 双主题：dark 下切到 --shiki-dark 变量。
+   span 带默认主题的内联 color，必须 !important 才能压过（Shiki 官方配方）。 */
+:global([data-theme="dark"]) .codeShell span {
+  color: var(--shiki-dark) !important;
+}
+
+/* 代码折叠：只收 <pre>，头部栏在折叠态保持可见 */
+.codeShell:not(.codeExpanded) :is(pre, .codeFallback) {
+  max-block-size: var(--code-collapse-height);
+  overflow: hidden;
+}
+
+.codeShell.codeExpanded :is(pre, .codeFallback) {
+  max-block-size: none;
+  overflow-x: auto;
+}
+
+.codeShell:not(.codeExpanded)::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  block-size: var(--code-fade-height);
+  background: linear-gradient(to bottom, transparent, var(--code-bg) 85%);
+  pointer-events: none;
+}
+
+.codeExpand {
+  position: absolute;
+  bottom: var(--space-2);
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  -webkit-backdrop-filter: blur(var(--blur-floating));
+  backdrop-filter: blur(var(--blur-floating));
+  color: var(--text-2);
+  font-size: var(--text-caption2);
+  line-height: var(--leading-caption2);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 var(--border-hairline) var(--separator-strong),
+    var(--shadow-card);
+
+  &:hover {
+    color: var(--text-1);
   }
 }

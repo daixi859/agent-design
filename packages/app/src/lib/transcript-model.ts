@@ -1,6 +1,12 @@
 /** 领域层唯一派生出口：buildTranscriptModel 把 Entry 列表一次算成 TranscriptModel
-    —— Active Branch 回溯（ADR-0004）+ Turn/Tool Group 三层结构（ADR-0006）
-    + Composer 徽标所需派生。Entry 树只在实现内部流转，不对外暴露。 */
+    —— Active Branch 回溯（ADR-0004）+ Turn / Process Group 两层结构（ADR-0006，ADR-0013 修订）
+    + Composer 徽标所需派生。Entry 树只在实现内部流转，不对外暴露。
+
+    ADR-0013 修订了两处：
+    · 视图层折叠收敛为一级（Recap + Process Strip），模型不再需要一个「轮聚合」层；
+      过程与回答的穿插顺序原样保留在 items 里，视图按序平铺即可。
+    · 工具条目补 `state`（四态）与 `subCalls`（内核 details.calls 的嵌套调用），
+      `terminal` 由本层按工具名归一——视图不必知道哪些工具是终端类。 */
 import type {
   AssistantMessage,
   BashExecutionMessage,
@@ -96,7 +102,7 @@ function summarizeArgs(args?: Record<string, unknown>): string | undefined {
   return JSON.stringify(args);
 }
 
-/** edit 类工具的结构化 diff（details.diff） */
+/** edit 类工具的结构化 diff（details.diff）——内核产出，客户端不自己算 */
 function extractDiff(details: unknown): string | undefined {
   if (details && typeof details === "object" && "diff" in details) {
     const diff = (details as { diff?: unknown }).diff;
@@ -105,13 +111,110 @@ function extractDiff(details: unknown): string | undefined {
   return undefined;
 }
 
+/** edit 类工具的标准 unified diff（details.patch）：ADR-0013 定位为复制/导出用，
+    只在 details.diff 缺失时兜底呈现（edit-diff.ts 的 parseToolDiff 负责优先序）。 */
+function extractPatch(details: unknown): string | undefined {
+  if (details && typeof details === "object" && "patch" in details) {
+    const patch = (details as { patch?: unknown }).patch;
+    if (typeof patch === "string" && patch) return patch;
+  }
+  return undefined;
+}
+
+/** 历史形态：请求里的 oldText/newText。pi 的 edit 参数有 `edits[]` 与顶层两种形态，
+    两者都要兼容。它**不是**内核 diff（没有行号），只在结果没有 diff/patch 时兜底呈现。 */
+function extractRequestedEdits(args?: Record<string, unknown>): RequestedEdit[] | undefined {
+  if (!args) return undefined;
+  const edits: RequestedEdit[] = [];
+  if (Array.isArray(args.edits)) {
+    for (const item of args.edits) {
+      if (!item || typeof item !== "object") continue;
+      const { oldText, newText } = item as { oldText?: unknown; newText?: unknown };
+      if (typeof oldText === "string" && typeof newText === "string") edits.push({ oldText, newText });
+    }
+  }
+  if (edits.length === 0 && typeof args.oldText === "string" && typeof args.newText === "string") {
+    edits.push({ oldText: args.oldText, newText: args.newText });
+  }
+  return edits.length > 0 ? edits : undefined;
+}
+
+/** 内核把嵌套调用放在 details.calls[]，且 `args` 是 **JSON 字符串**（实测行为）。
+    形状不合法时整段丢弃，绝不因脏数据抛错。 */
+function extractSubCalls(details: unknown): SubCallItem[] | undefined {
+  if (!details || typeof details !== "object" || !("calls" in details)) return undefined;
+  const raw = (details as { calls?: unknown }).calls;
+  if (!Array.isArray(raw)) return undefined;
+
+  const calls: SubCallItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const call = item as Record<string, unknown>;
+    if (typeof call.name !== "string") continue;
+    calls.push({
+      id: typeof call.id === "string" ? call.id : `${call.name}-${calls.length}`,
+      name: call.name,
+      args: typeof call.args === "string" ? call.args : undefined,
+      summary: summarizeSubArgs(call.args),
+      status: subCallStatus(call.status),
+      error: typeof call.error === "string" ? call.error : undefined,
+      durationMs: typeof call.durationMs === "number" ? call.durationMs : undefined,
+    });
+  }
+  return calls.length > 0 ? calls : undefined;
+}
+
+/** 嵌套调用的摘要：args 是字符串，能解析出对象就挑一个像路径/命令的值 */
+function summarizeSubArgs(args: unknown): string | undefined {
+  if (typeof args !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(args) as Record<string, unknown>;
+    const value =
+      (parsed.path as string) ??
+      (parsed.url as string) ??
+      (parsed.command as string) ??
+      (parsed.code as string) ??
+      Object.values(parsed).find((v) => typeof v === "string");
+    if (typeof value === "string") return value.replace(/\s+/g, " ");
+  } catch {
+    // 解析失败：原样返回，视图再截断
+  }
+  return args.replace(/\s+/g, " ");
+}
+
 function argsForDisplay(args?: Record<string, unknown>): Record<string, unknown> | undefined {
   return args && Object.keys(args).length > 0 ? args : undefined;
 }
 
-// ---------- Turn / Tool Group 三层结构（ADR-0006，实现内部） ----------
+/** 终端类工具：命令即正文，参数与输出同块呈现（pi 的 bash / powershell） */
+const TERMINAL_TOOLS = new Set(["bash", "powershell"]);
 
-/** 层 3：分组内的单条目——归一化后的显示形状（pi 类型只在实现内部流转，不外泄）。
+// ---------- Turn / Process Group 两层结构（ADR-0006，ADR-0013 修订） ----------
+
+/** 工具状态四态（pi 语义）：无配对结果即运行中，取消与失败分开 */
+export type ToolState = "running" | "ok" | "error" | "stopped";
+
+/** 请求里的编辑对（历史形态 / 兜底来源）：无行号，故与内核 diff 分开承载 */
+export interface RequestedEdit {
+  oldText: string;
+  newText: string;
+}
+
+/** 嵌套调用（内核 details.calls[] 的显示形状） */
+export interface SubCallItem {
+  id: string;
+  name: string;
+  /** 原始 JSON **字符串**（内核就这样存），视图负责美化 */
+  args?: string;
+  summary?: string;
+  /** 内核给的是 CodemodeNestedCallStatus（running / ok / error / cancelled），
+      在此归一为同一套 Tool State；值缺失或未知时留空——绝不伪造成 ok。 */
+  status?: ToolState;
+  error?: string;
+  durationMs?: number;
+}
+
+/** 层 3：过程组内的单条目——归一化后的显示形状（pi 类型只在实现内部流转，不外泄）。
     bashExecution 与孤儿 toolResult 在此归一为 toolCall 条目，视图层零伪造。 */
 export type GroupItem =
   | { kind: "thinking"; id: string; thinking: string; redacted?: boolean }
@@ -120,7 +223,7 @@ export type GroupItem =
       id: string;
       /** 显示名（bashExecution 归一为 "bash"；孤儿条目取 toolName） */
       name: string;
-      /** 原始参数（展开体的 JSON 展示用；空对象归一为 undefined） */
+      /** 原始参数（展开体的 JSON 展示用；命令类工具由视图跳过） */
       args?: Record<string, unknown>;
       /** 头部摘要（已提取、未截断） */
       summary?: string;
@@ -128,16 +231,32 @@ export type GroupItem =
       output?: string;
       /** 结构化 diff（details.diff 提取） */
       diff?: string;
-      /** 结果 isError，或 bash 被取消 / 非零退出 */
-      isError: boolean;
+      /** 标准 unified diff（details.patch）：diff 缺失时的兜底与复制/导出来源 */
+      patch?: string;
+      /** 请求里的 oldText/newText：内核没给 diff/patch 时的最后兜底 */
+      requested?: RequestedEdit[];
+      /** 终端类工具的命令与输出（bash / powershell） */
+      terminal?: { command: string; output?: string };
+      /** 嵌套调用（codemode 等） */
+      subCalls?: SubCallItem[];
+      state: ToolState;
     };
 
-/** 工具调用显示条目（ToolCallCard 的消费形状） */
+/** 工具调用显示条目（ToolRow 的消费形状） */
 export type ToolCallItem = Extract<GroupItem, { kind: "toolCall" }>;
 
-/** 层 2/1：Turn 内的条目（组条在轮聚合条之后按原位穿插在回答之间） */
+/** Recap 的结算事实（GLOSSARY「Recap」）：只数可解释的量。
+    ADR-0013 写「N 步」——动作数 = 工具数 + 思考数，与这两档重复，故不单独承载。 */
+export interface GroupRecap {
+  tools: number;
+  thoughts: number;
+  /** 其中失败的工具数（error 态） */
+  failed: number;
+}
+
+/** 层 2：Turn 内的条目——过程组与回答按源顺序交替（text 是分隔符，也是分组边界） */
 export type TurnItem =
-  | { kind: "group"; id: string; group: GroupItem[] }
+  | { kind: "group"; id: string; group: GroupItem[]; recap: GroupRecap }
   | { kind: "text"; id: string; text: string }
   | { kind: "quiet"; id: string; text: string }
   | { kind: "annotation"; id: string; entry: SessionEntry }
@@ -148,11 +267,46 @@ export interface Turn {
   id: string;
   user?: MessageEntry;
   items: TurnItem[];
+  /** 被弃分支数——只挂在首个 Turn 上（Recap 标注用），避免每轮重复同一个数 */
+  abandonedCount?: number;
+  /** 本轮耗时（末条目 − user 条目）；任一侧缺时间戳时留空，不发明 */
+  durationMs?: number;
+  /** 本轮 tokens（assistant.usage.totalTokens 累加）；内核未给 usage 时留空 */
+  tokens?: number;
+  /** 本轮仍挂在内核流式草稿上（GLOSSARY「Draft」）：末条 assistant 是 stopReason "pending"。
+      草稿是瞬态叠加，权威条目落盘后该标记自然消失——视图据此把 Draft 与落盘条目区分开。 */
+  draft?: boolean;
+}
+
+/** 配对结果 → 显示状态 */
+function stateOf(result: ToolResultMessage | undefined): ToolState {
+  if (!result) return "running"; // 无配对结果：内核还在跑，或流式草稿
+  return result.isError ? "error" : "ok";
+}
+
+/** 内核 CodemodeNestedCallStatus → 本项目的 Tool State。
+    cancelled 与顶层 bashExecution 的 stopped 同义，故归一为 stopped，
+    全应用只保留一套状态词汇；未知或缺失返回 undefined。 */
+function subCallStatus(value: unknown): ToolState | undefined {
+  switch (value) {
+    case "running":
+      return "running";
+    case "ok":
+      return "ok";
+    case "error":
+      return "error";
+    case "cancelled":
+      return "stopped";
+    default:
+      return undefined;
+  }
 }
 
 /**
- * 把活动分支切成 Turn → Tool Group 两层（ADR-0006）。
+ * 把活动分支切成 Turn → Process Group 两层（ADR-0006）。
  * 分组以 assistant 的 text 块为分隔符，非文本连续区跨消息归并；
+ * 穿插顺序原样保留（text 与 group 在 items 里按源顺序交替）——
+ * 这正是「同一条 assistant 消息里 text→tool→text」能被正确分组的依据。
  * 注解级收缩：model_change / thinking_level_change 不渲染，session_info 仅首次。
  */
 function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations: SessionEntry[] } {
@@ -176,23 +330,42 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
   const orphanAnnotations: SessionEntry[] = [];
   let turn: Turn | undefined;
   let group: GroupItem[] | undefined;
+  /** 当前轮的结算（turn 切换时重置）；j 与 turns 同步推进 */
+  let settlement: TurnSettlement | undefined;
+  let settled: TurnSettlement[] = [];
   const namedSeen = new Set<string>();
 
   const flushGroup = () => {
     if (group?.length && turn) {
-      turn.items.push({ kind: "group", id: `group-${group[0].id}`, group });
+      const tools = group.filter((item) => item.kind === "toolCall");
+      turn.items.push({
+        kind: "group",
+        id: `group-${group[0].id}`,
+        group,
+        recap: {
+          tools: tools.length,
+          thoughts: group.length - tools.length,
+          failed: tools.filter((item) => item.state === "error").length,
+        },
+      });
     }
     group = undefined;
   };
   const ensureTurn = (firstId: string): Turn => {
     if (!turn) {
       turn = { id: firstId, items: [] };
+      settlement = {};
+      settled.push(settlement);
       turns.push(turn);
     }
     return turn;
   };
 
   for (const entry of branch) {
+    // user 条目开启新一轮，它的时间戳属于新 Turn——留给下面 user 分支累加
+    const opensTurn =
+      entry.type === "message" && (entry as MessageEntry).message.role === "user";
+    if (!opensTurn && turn && settlement) accumulate(settlement, entry);
     if (entry.type !== "message") {
       if (entry.type === "compaction" || entry.type === "branch_summary" || entry.type === "session_info") {
         if (entry.type === "session_info") {
@@ -215,6 +388,9 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
       case "user": {
         flushGroup();
         turn = { id: entry.id, user: entry as MessageEntry, items: [] };
+        settlement = {};
+        settled.push(settlement);
+        accumulate(settlement, entry);
         turns.push(turn);
         break;
       }
@@ -231,15 +407,24 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
           } else if (block.type === "toolCall") {
             group ??= [];
             const result = results.get(block.id);
+            const output = result ? contentText(result.content) : undefined;
+            const command = block.arguments?.command;
             group.push({
               kind: "toolCall",
               id: block.id,
               name: block.name,
               args: argsForDisplay(block.arguments),
               summary: summarizeArgs(block.arguments),
-              output: result ? contentText(result.content) : undefined,
+              output,
               diff: extractDiff(result?.details),
-              isError: result?.isError ?? false,
+              patch: extractPatch(result?.details),
+              requested: extractRequestedEdits(block.arguments),
+              subCalls: extractSubCalls(result?.details),
+              terminal:
+                TERMINAL_TOOLS.has(block.name) && typeof command === "string"
+                  ? { command, output }
+                  : undefined,
+              state: stateOf(result),
             });
           }
         }
@@ -266,7 +451,11 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
           summary: undefined,
           output: contentText(result.content),
           diff: extractDiff(result.details),
-          isError: result.isError ?? false,
+          patch: extractPatch(result.details),
+          requested: undefined,
+          subCalls: extractSubCalls(result.details),
+          terminal: undefined,
+          state: result.isError ? "error" : "ok",
         });
         break;
       }
@@ -283,7 +472,9 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
           summary: bash.command,
           output: bash.output,
           diff: undefined,
-          isError: bash.cancelled === true || (bash.exitCode !== undefined && bash.exitCode !== 0),
+          subCalls: undefined,
+          terminal: { command: bash.command, output: bash.output },
+          state: bash.cancelled === true ? "stopped" : bash.exitCode !== undefined && bash.exitCode !== 0 ? "error" : "ok",
         });
         break;
       }
@@ -300,7 +491,53 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
     }
   }
   flushGroup();
+
+  // 结算：耗时 = 末条目 − 首条目（同一时刻不报），tokens 只在真累到时报
+  turns.forEach((item, index) => {
+    const s = settled[index];
+    if (!s) return;
+    if (s.first !== undefined && s.last !== undefined && s.last > s.first) {
+      item.durationMs = s.last - s.first;
+    }
+    if (s.tokens !== undefined) item.tokens = s.tokens;
+    if (s.draft) item.draft = true;
+  });
+
   return { turns, orphanAnnotations };
+}
+
+/** 时间戳 → 毫秒；EntryBase.timestamp 是 ISO 字符串，消息里的 timestamp 是毫秒数 */
+function timeOf(value: string | number | undefined): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+/** 本轮结算：切分时按条目顺序内联累加（不按 id 反查——合成 item id 不等于 entry id）。
+    只累加内核真给了的：时间戳缺就不报耗时，usage 缺就不报 tokens。 */
+interface TurnSettlement {
+  first?: number;
+  last?: number;
+  tokens?: number;
+  /** 末条 assistant 仍是 pending（stopReason "pending"）——即内核流式草稿尚未被权威条目取代 */
+  draft?: boolean;
+}
+
+/** 把一个条目喂进本轮结算：时间取最早/最晚，tokens 只取 assistant 的 totalTokens */
+function accumulate(settlement: TurnSettlement, entry: SessionEntry): void {
+  const message = entry.type === "message" ? (entry as MessageEntry).message : undefined;
+  const at = timeOf(entry.timestamp) ?? timeOf((message as { timestamp?: number } | undefined)?.timestamp);
+  if (at !== undefined) {
+    if (settlement.first === undefined || at < settlement.first) settlement.first = at;
+    if (settlement.last === undefined || at > settlement.last) settlement.last = at;
+  }
+  if (message?.role !== "assistant") return;
+  const assistant = message as AssistantMessage;
+  const usage = assistant.usage;
+  if (usage?.totalTokens !== undefined) settlement.tokens = (settlement.tokens ?? 0) + usage.totalTokens;
+  // Draft 判定：内核流式期的 assistant 落盘时 stopReason 停在 pending（ADR-0012 的瞬态草稿）
+  settlement.draft = assistant.stopReason === "pending";
 }
 
 // ---------- TranscriptModel：唯一出口 ----------
@@ -317,7 +554,7 @@ export interface TranscriptModel {
   model?: { provider?: string; modelId?: string };
   /** 活动分支上最后一次 thinking_level_change（Composer 徽标） */
   thinkingLevel?: string;
-  /** 活动分支上的工具调用数 = Tool Group 内 toolCall + bashExecution（Composer 徽标） */
+  /** 活动分支上的工具调用数 = Process Group 内 toolCall + bashExecution（Composer 徽标） */
   toolCallCount: number;
 }
 
@@ -329,6 +566,12 @@ export interface TranscriptModel {
 export function buildTranscriptModel(entries: SessionEntry[]): TranscriptModel {
   const branch = buildActiveBranch(entries);
   const { turns, orphanAnnotations } = buildTurns(branch.entries);
+
+  // 被弃分支数只标注在首个 Turn 上（Recap 用），避免每轮重复
+  if (turns[0] && branch.abandonedCount > 0) {
+    turns[0].abandonedCount = branch.abandonedCount;
+  }
+
 
   // 活动分支上最后一次思考等级（Composer 徽标）
   let thinkingLevel: string | undefined;

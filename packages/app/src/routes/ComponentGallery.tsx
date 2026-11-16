@@ -2,12 +2,6 @@
     图标全网格、控件与徽标、色板、字阶、消息样张。样式直接引用各组件的
     module.css 源头，保证预览即真实组件而非复刻。 */
 import { useState } from "react";
-import type { ContentBlock, MessageEntry } from "@pi-studio/shared/pi-types";
-import type { Turn } from "../lib/transcript-model";
-import { AnnotationRow } from "../features/transcript/AnnotationRow";
-import { Composer } from "../features/transcript/Composer";
-import { DiffView } from "../features/transcript/DiffView";
-import { TurnView } from "../features/transcript/TurnView";
 import { IconButton } from "../ui/IconButton";
 import { SearchField } from "../ui/SearchField";
 import { Icon, ICON_NAMES } from "../ui/Icon";
@@ -44,66 +38,6 @@ const TYPE_SAMPLES: Array<[string, string, string]> = [
   ["title3", "17px", "Session summary heading"],
   ["title2", "20px", "Pi Studio"],
 ];
-
-const SAMPLE_DIFF = `diff --git a/src/auth/session.ts b/src/auth/session.ts
-index 3f2a1b..9c4d2e 100644
---- a/src/auth/session.ts
-+++ b/src/auth/session.ts
-@@ -12,7 +12,9 @@ export async function refreshSession(token: string) {
-   const payload = await verify(token)
--  if (!payload.sub) throw new Error("invalid token")
-+  if (!payload.sub) {
-+    throw new AuthError("invalid token", { cause: token.slice(0, 8) })
-+  }
-   return extendSession(payload.sub)
- }`;
-
-function entry(role: MessageEntry["message"]["role"], content: ContentBlock[]): MessageEntry {
-  return {
-    type: "message",
-    id: Math.random().toString(16).slice(2),
-    parentId: null,
-    timestamp: new Date().toISOString(),
-    message: { role, content } as MessageEntry["message"],
-  };
-}
-
-/** 三层结构样张（ADR-0006）：分组（思考+edit）→ 回答（样张直接构造 TranscriptModel 显示形状） */
-const SAMPLE_TURN: Turn = {
-  id: "sample-turn",
-  user: entry("user", [
-    { type: "text", text: "登录之后一直重定向回 /login，帮我查一下 session 刷新的逻辑" },
-  ]),
-  items: [
-    {
-      kind: "group",
-      id: "sample-group-1",
-      group: [
-        {
-          kind: "thinking",
-          id: "sample-think-1",
-          thinking:
-            "The redirect loop likely comes from the guard reading a stale cookie. Plan: inspect session.ts refresh path first, then the login route.",
-        },
-        {
-          kind: "toolCall",
-          id: "call-1",
-          name: "edit",
-          args: { path: "src/auth/session.ts", edits: [] },
-          summary: "src/auth/session.ts",
-          output: "Edited 1 file",
-          diff: SAMPLE_DIFF,
-          isError: false,
-        },
-      ],
-    },
-    {
-      kind: "text",
-      id: "sample-text-1",
-      text: "找到了根因：`refreshSession` 在 cookie 过期后仍复用旧 token。修复如下：\n\n```ts\nif (!payload.sub) {\n  throw new AuthError(\"invalid token\")\n}\n```\n\n- 新增 `AuthError` 便于上游区分\n- 登录路由不再静默续期\n\n详见下面的 diff。",
-    },
-  ],
-};
 
 export function ComponentGallery() {
   const [search, setSearch] = useState("");
@@ -185,34 +119,6 @@ export function ComponentGallery() {
           </div>
         </section>
 
-        <section>
-          <h2 className={styles.sectionTitle}>{t("transcriptSamples")}</h2>
-          <p className={styles.sectionNote}>{t("transcriptNote")}</p>
-          <div className={styles.sampleFrame}>
-            <TurnView turn={SAMPLE_TURN} />
-            <AnnotationRow
-              entry={{
-                type: "compaction",
-                id: "anno-1",
-                parentId: null,
-                timestamp: new Date().toISOString(),
-                tokensBefore: 128000,
-              }}
-            />
-            <Composer
-              model="deepseek-v4.1-flash"
-              thinkingLevel="max"
-              toolCount={7}
-              variant="docked"
-            />
-          </div>
-        </section>
-
-        <section>
-          <h2 className={styles.sectionTitle}>{t("diff")}</h2>
-          <p className={styles.sectionNote}>{t("diffNote")}</p>
-          <DiffView diff={SAMPLE_DIFF} />
-        </section>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 /** TranscriptModel 黄金样本测试：interface 即测试面——合成 Entry 进，完整模型出。
-    样本按领域概念分节：Active Branch 回溯（ADR-0004）、Turn/Tool Group 切分（ADR-0006）、
+    样本按领域概念分节：Active Branch 回溯（ADR-0004）、Turn/Process Group 切分（ADR-0006）、
     注解收缩、Composer 徽标派生。 */
 import { describe, expect, it } from "vitest";
 import type {
@@ -97,10 +97,10 @@ describe("buildTranscriptModel · Active Branch 回溯", () => {
   });
 });
 
-// ---------- Turn / Tool Group（ADR-0006） ----------
+// ---------- Turn / Process Group（ADR-0006，ADR-0013 改名） ----------
 
-describe("buildTranscriptModel · Turn 与 Tool Group 切分", () => {
-  it("非文本内容跨 assistant 消息归并进同一 Tool Group，text 是分隔符", () => {
+describe("buildTranscriptModel · Turn 与 Process Group 切分", () => {
+  it("非文本内容跨 assistant 消息归并进同一 Process Group，text 是分隔符", () => {
     const model = buildTranscriptModel([
       header(),
       user("u1", null),
@@ -160,7 +160,8 @@ describe("buildTranscriptModel · Turn 与 Tool Group 切分", () => {
       expect(item.args).toEqual({ command: "ls" });
       expect(item.summary).toBe("ls");
       expect(item.output).toBe("file");
-      expect(item.isError).toBe(false);
+      expect(item.state).toBe("ok");
+      expect(item.terminal).toEqual({ command: "ls", output: "file" });
     }
   });
 
@@ -177,10 +178,11 @@ describe("buildTranscriptModel · Turn 与 Tool Group 切分", () => {
     ]);
     const itemOf = (model: ReturnType<typeof buildTranscriptModel>) => {
       const group = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
-      return group[0].kind === "toolCall" ? group[0].isError : undefined;
+      return group[0].kind === "toolCall" ? group[0].state : undefined;
     };
-    expect(itemOf(cancelled)).toBe(true);
-    expect(itemOf(failed)).toBe(true);
+    // 取消与失败分开：ADR-0013 的四态语义
+    expect(itemOf(cancelled)).toBe("stopped");
+    expect(itemOf(failed)).toBe("error");
   });
 
   it("assistant stopReason=aborted 产生 warning 条目", () => {
@@ -279,7 +281,7 @@ describe("buildTranscriptModel · 显示字段提取", () => {
       },
     ]);
     const group = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
-    expect(group[0].kind === "toolCall" && group[0].isError).toBe(true);
+    expect(group[0].kind === "toolCall" && group[0].state).toBe("error");
   });
 });
 
@@ -367,5 +369,351 @@ describe("buildTranscriptModel · Composer 徽标派生", () => {
     ]);
     expect(model.toolCallCount).toBe(1);
     expect(model.abandonedCount).toBe(1);
+  });
+});
+
+// ---------- ADR-0013 新增语义：四态、嵌套调用、穿插分组 ----------
+
+describe("buildTranscriptModel · 工具四态（ADR-0013）", () => {
+  it("无配对结果 → running（内核还在跑，或流式草稿）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [call("t1", "bash")]),
+    ]);
+    const group = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
+    expect(group[0].kind === "toolCall" && group[0].state).toBe("running");
+  });
+
+  it("配对成功 → ok；isError → error", () => {
+    const okModel = buildTranscriptModel([
+      header(), user("u1", null),
+      assistant("m1", "u1", [call("t1")]),
+      toolResult("r1", "m1", "t1"),
+    ]);
+    const errModel = buildTranscriptModel([
+      header(), user("u1", null),
+      assistant("m1", "u1", [call("t1")]),
+      {
+        type: "message", id: "r1", parentId: "m1", timestamp: TS,
+        message: { role: "toolResult", toolCallId: "t1", toolName: "bash", content: [], isError: true },
+      },
+    ]);
+    const stateOf = (m: ReturnType<typeof buildTranscriptModel>) => {
+      const g = m.turns[0].items[0].kind === "group" ? m.turns[0].items[0].group : [];
+      return g[0].kind === "toolCall" ? g[0].state : undefined;
+    };
+    expect(stateOf(okModel)).toBe("ok");
+    expect(stateOf(errModel)).toBe("error");
+  });
+
+  it("bashExecution 落进 terminal 字段（视图不必知道哪些工具是命令类）", () => {
+    const model = buildTranscriptModel([header(), user("u1", null), bashExec("b1", "u1", "ls -la")]);
+    const g = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
+    const item = g[0];
+    expect(item.kind === "toolCall" && item.terminal).toEqual({ command: "ls -la", output: "file" });
+  });
+});
+
+describe("buildTranscriptModel · 嵌套调用（kernel details.calls）", () => {
+  it("details.calls 归一为 subCalls，args 保持 JSON 字符串、status 走 Tool State 四态", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [call("t1", "codemode")]),
+      {
+        type: "message", id: "r1", parentId: "m1", timestamp: TS,
+        message: {
+          role: "toolResult", toolCallId: "t1", toolName: "codemode",
+          content: [{ type: "text", text: "Script completed" }],
+          details: {
+            calls: [
+              { id: "c1", name: "browser_navigate", args: '{"url":"http://x/"}', status: "ok", durationMs: 12 },
+              { id: "c2", name: "browser_click", args: '{"selector":"#a"}', status: "error", error: "timeout" },
+            ],
+          },
+        },
+      },
+    ]);
+    const g = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
+    const item = g[0];
+    expect(item.kind).toBe("toolCall");
+    if (item.kind !== "toolCall") return;
+    expect(item.subCalls).toHaveLength(2);
+    // args 是字符串：保持原样，不许在本层解析掉
+    expect(item.subCalls?.[0].args).toBe('{"url":"http://x/"}');
+    // 摘要从字符串里解析出来
+    expect(item.subCalls?.[0].summary).toBe("http://x/");
+    expect(item.subCalls?.[0].status).toBe("ok");
+    expect(item.subCalls?.[1].status).toBe("error");
+    expect(item.subCalls?.[1].error).toBe("timeout");
+  });
+
+  it("内核 cancelled 归一为 stopped（真实数据里确实出现过），未知/缺失状态留 undefined", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [call("t1", "codemode")]),
+      {
+        type: "message", id: "r1", parentId: "m1", timestamp: TS,
+        message: {
+          role: "toolResult", toolCallId: "t1", toolName: "codemode",
+          content: [{ type: "text", text: "Script failed" }],
+          details: {
+            calls: [
+              { id: "c1", name: "grep", args: '{"pattern":"x"}', status: "cancelled" },
+              { id: "c2", name: "read", args: '{"path":"a.ts"}', status: "running" },
+              { id: "c3", name: "find", args: '{"glob":"*.ts"}', status: "someFutureStatus" },
+              { id: "c4", name: "ls", args: "{}" },
+            ],
+          },
+        },
+      },
+    ]);
+    const g = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
+    const item = g[0];
+    if (item.kind !== "toolCall") throw new Error("expected toolCall");
+    // cancelled 与顶层 bashExecution 的 stopped 同词汇
+    expect(item.subCalls?.[0].status).toBe("stopped");
+    expect(item.subCalls?.[1].status).toBe("running");
+    // 未知状态不许伪造成 ok
+    expect(item.subCalls?.[2].status).toBeUndefined();
+    expect(item.subCalls?.[3].status).toBeUndefined();
+  });
+
+  it("details.calls 形状不合法时整段丢弃，不抛错", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [call("t1", "codemode")]),
+      {
+        type: "message", id: "r1", parentId: "m1", timestamp: TS,
+        message: {
+          role: "toolResult", toolCallId: "t1", toolName: "codemode",
+          content: [{ type: "text", text: "x" }],
+          details: { calls: ["not-an-object", { name: 42 }, { name: "ok", args: 7 }] },
+        },
+      },
+    ]);
+    const g = model.turns[0].items[0].kind === "group" ? model.turns[0].items[0].group : [];
+    const item = g[0];
+    if (item.kind !== "toolCall") throw new Error("expected toolCall");
+    // 只有最后一项有合法 name
+    expect(item.subCalls).toHaveLength(1);
+    expect(item.subCalls?.[0].name).toBe("ok");
+    expect(item.subCalls?.[0].args).toBeUndefined();
+  });
+});
+
+describe("buildTranscriptModel · 穿插分组的顺序", () => {
+  it("text 分隔出的多个过程组各自成组，且在 items 里保持源顺序", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      // 第 1 组：thinking + call
+      assistant("m1", "u1", [thinking("first thought"), call("t1", "read")]),
+      toolResult("r1", "m1", "t1", "read"),
+      // 分隔回答
+      assistant("m2", "m1", [{ type: "text", text: "先说一半" }]),
+      // 第 2 组：两个 call
+      assistant("m3", "m2", [call("t2", "edit")]),
+      assistant("m4", "m3", [call("t3", "bash")]),
+      toolResult("r2", "m4", "t2", "edit"),
+      toolResult("r3", "m4", "t3", "bash"),
+      // 收尾回答
+      assistant("m5", "m4", [{ type: "text", text: "全部完成" }]),
+    ]);
+    expect(model.turns).toHaveLength(1);
+    expect(model.turns[0].items.map((item) => item.kind)).toEqual([
+      "group",
+      "text",
+      "group",
+      "text",
+    ]);
+    const groups = model.turns[0].items.filter((item) => item.kind === "group");
+    expect(groups[0].kind === "group" && groups[0].group.map((x) => x.kind)).toEqual(["thinking", "toolCall"]);
+    expect(groups[1].kind === "group" && groups[1].group.map((x) => x.kind)).toEqual(["toolCall", "toolCall"]);
+    expect(model.turns[0].items[1].kind === "text" && model.turns[0].items[1].text).toBe("先说一半");
+  });
+
+  it("同一 assistant 消息内 text→toolCall→text 被切成两组", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [
+        call("t1", "read"),
+        { type: "text", text: "中间回答" },
+        call("t2", "write"),
+      ]),
+    ]);
+    expect(model.turns[0].items.map((item) => item.kind)).toEqual(["group", "text", "group"]);
+  });
+
+  it("被弃分支数只挂在首个 Turn 上（Recap 标注不重复）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("a1", "u1", [text("old")]),
+      user("u2", "u1"),
+      assistant("a2", "u2", [text("new")]),
+    ]);
+    expect(model.turns[0].abandonedCount).toBe(1);
+    expect(model.turns[1].abandonedCount).toBeUndefined();
+  });
+});
+
+describe("buildTranscriptModel · Recap 结算事实（ADR-0013）", () => {
+  it("每组一条 recap：工具数、思考数、失败数", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [thinking("想"), call("t1", "read"), call("t2", "bash")]),
+      toolResult("r1", "m1", "t1", "read"),
+      {
+        type: "message",
+        id: "r2",
+        parentId: "r1",
+        timestamp: TS,
+        message: { role: "toolResult", toolCallId: "t2", toolName: "bash", content: [{ type: "text", text: "boom" }], isError: true },
+      },
+    ]);
+    const group = model.turns[0].items[0];
+    expect(group.kind === "group" && group.recap).toEqual({ tools: 2, thoughts: 1, failed: 1 });
+  });
+
+  it("耗时 = 本轮末条目 − user 条目；tokens 取 assistant.usage 累加", () => {
+    const model = buildTranscriptModel([
+      { type: "session", id: "s1", parentId: null, timestamp: "2026-01-01T00:00:00.000Z", version: 3 },
+      { type: "message", id: "u1", parentId: null, timestamp: "2026-01-01T00:00:00.000Z", message: { role: "user", content: "hi" } },
+      {
+        type: "message",
+        id: "m1",
+        parentId: "u1",
+        timestamp: "2026-01-01T00:00:03.000Z",
+        message: {
+          role: "assistant",
+          content: [text("done")],
+          usage: { totalTokens: 1500 },
+        },
+      },
+      {
+        type: "message",
+        id: "m2",
+        parentId: "m1",
+        timestamp: "2026-01-01T00:00:05.000Z",
+        message: { role: "assistant", content: [text("more")], usage: { totalTokens: 500 } },
+      },
+    ]);
+    expect(model.turns[0].durationMs).toBe(5000);
+    expect(model.turns[0].tokens).toBe(2000);
+  });
+
+  it("内核没给耗时/tokens 时留空，不发明数据（本地 session 无 usage 的常态）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [text("x"), call("t1", "read")]),
+    ]);
+    // 所有条目同一时刻：耗时为 0，不写成负值也不写成字段
+    expect(model.turns[0].durationMs).toBeUndefined();
+    expect(model.turns[0].tokens).toBeUndefined();
+  });
+});
+
+describe("buildTranscriptModel · diff / patch / oldText 三种来源（ADR-0013）", () => {
+  const editResult = (details: unknown): SessionEntry => ({
+    type: "message",
+    id: "r1",
+    parentId: "m1",
+    timestamp: TS,
+    message: { role: "toolResult", toolCallId: "t1", toolName: "edit", content: [{ type: "text", text: "ok" }], details },
+  });
+
+  it("details.diff 与 details.patch 同时提取，优先序交给 edit-diff", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [{ type: "toolCall", id: "t1", name: "edit", arguments: {} }]),
+      editResult({ diff: " 1 keep\n-2 old\n+2 new", patch: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new" }),
+    ]);
+    const item = model.turns[0].items[0];
+    const call = item.kind === "group" ? item.group[0] : undefined;
+    expect(call?.kind === "toolCall" && call.diff).toBe(" 1 keep\n-2 old\n+2 new");
+    expect(call?.kind === "toolCall" && call.patch).toContain("@@ -1 +1 @@");
+  });
+
+  it("只有 patch 时仍可兜底（内核没产出 diff 的历史会话）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [{ type: "toolCall", id: "t1", name: "edit", arguments: {} }]),
+      editResult({ patch: "@@ -1 +1 @@\n-old\n+new" }),
+    ]);
+    const item = model.turns[0].items[0];
+    const call = item.kind === "group" ? item.group[0] : undefined;
+    expect(call?.kind === "toolCall" && call.diff).toBeUndefined();
+    expect(call?.kind === "toolCall" && call.patch).toContain("-old");
+  });
+
+  it("历史形态的 edits[].oldText/newText 与顶层 oldText/newText 都兼容", () => {
+    const modelWithEdits = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [
+        { type: "toolCall", id: "t1", name: "edit", arguments: { edits: [{ oldText: "a", newText: "b" }, { oldText: "c", newText: "d" }] } },
+      ]),
+    ]);
+    const groupItem = modelWithEdits.turns[0].items[0];
+    const call = groupItem.kind === "group" ? groupItem.group[0] : undefined;
+    expect(call?.kind === "toolCall" && call.requested).toEqual([
+      { oldText: "a", newText: "b" },
+      { oldText: "c", newText: "d" },
+    ]);
+
+    const modelWithTop = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [{ type: "toolCall", id: "t1", name: "edit", arguments: { oldText: "x", newText: "y" } }]),
+    ]);
+    const g2 = modelWithTop.turns[0].items[0];
+    const c2 = g2.kind === "group" ? g2.group[0] : undefined;
+    expect(c2?.kind === "toolCall" && c2.requested).toEqual([{ oldText: "x", newText: "y" }]);
+  });
+
+  it("非 edit 工具不产生 requested（不误吞其它工具的 oldText 字段）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } }]),
+    ]);
+    const item = model.turns[0].items[0];
+    const call = item.kind === "group" ? item.group[0] : undefined;
+    expect(call?.kind === "toolCall" && call.requested).toBeUndefined();
+  });
+});
+
+describe("buildTranscriptModel · Draft 与落盘条目（ADR-0013）", () => {
+  it("末条 assistant 停在 pending 即标 draft；定稿后标记消失", () => {
+    const entries = [
+      header(),
+      user("u1", null),
+      { type: "message", id: "m1", parentId: "u1", timestamp: TS, message: { role: "assistant", content: [text("打字中")], stopReason: "pending" } },
+    ];
+    expect(buildTranscriptModel(entries as SessionEntry[]).turns[0].draft).toBe(true);
+
+    const done = entries.map((e, i) =>
+      i === 2 ? { ...e, message: { ...(e as { message: object }).message, stopReason: "stop" } } : e,
+    );
+    expect(buildTranscriptModel(done as SessionEntry[]).turns[0].draft).toBeUndefined();
+  });
+
+  it("paused 期间的中间 assistant 也是 pending 时不误判（只有末条算）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      { type: "message", id: "m1", parentId: "u1", timestamp: TS, message: { role: "assistant", content: [text("中途")], stopReason: "pending" } },
+      { type: "message", id: "m2", parentId: "m1", timestamp: TS, message: { role: "assistant", content: [text("定稿")], stopReason: "stop" } },
+    ]);
+    expect(model.turns[0].draft).toBeUndefined();
   });
 });

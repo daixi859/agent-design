@@ -77,3 +77,12 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 
 **另一处同源缺陷**：`SessionHost` 只在 `turn_end` / `agent_settled` 拉条目，连**用户消息**都要等整轮结束才回显（实测 6.8 秒后才出现）。pi 的监听器**先于持久化**被调用（`message_end` 列表先看到、条目后落盘），因此「某消息已落盘」最早在下一个 `message_start` 可观测。故刷新点改为 `message_start` / `message_end` / `turn_end` / `agent_settled`；水位改用 `getEntryCount()`（Map.size，无复制），避免 `getEntries()` 每次 `filter` 复制整个会话。
 
+## 补记五（验收探针）：被「延后」的 codemode 实测长什么样
+
+本清单 L13 把「扩展交互（MCP / codemode）」列为延后。为排查一次「真实数据不渲染 codemode」的报告，实测出**两个彼此独立**的缺口，记此以免后期误判为回归：
+
+- **被驱动的会话里没有任何内置扩展**。`packages/core/src/pi-session-source.ts` 调 `createAgentSession({ sessionManager })` 不传 `resourceLoader`，落回 `DefaultResourceLoader` 而 `extensionFactories` 默认为空；`builtInExtensions`（codemode / tool-search / mcp / llama.cpp）只由 pi CLI 自己注入。实测 create 与 attach 均为 10 个工具、无 codemode —— **全量 780 个 session 里那 63 个真有 codemode 调用的会话，都是 pi CLI 跑的，与 pi-studio 无关**。
+- **实时嵌套状态到不了客户端**。嵌套调用状态只挂在顶层 codemode 的 `tool_execution_update.partialResult.details.calls` 上（子调用自己带 `parentToolCallId` 的事件不带 aggregate details），而 `normalize.ts` 丢弃全部 `tool_execution_*`。落盘后的 `details.calls` 只有终态（残留 `running` 在脚本收尾时已被改写成 `cancelled`），所以**不存在「卡在 running」，只是看不到过程**。
+
+两条都**尚未实施**——是本轮主动的范围切分，不是缺陷。修复路线与实证见 [pi-kernel-notes.md §5.4](research/pi-kernel-notes.md)（注入 `resourceLoader` 的代码已在本机验证：工具数 11、含 codemode）。
+

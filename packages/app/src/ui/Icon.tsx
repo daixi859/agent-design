@@ -30,7 +30,12 @@ export type IconName =
   | "gear"
   | "expand"
   | "contract"
-  | "arrow-left";
+  | "arrow-left"
+  /* ADR-0013 工具行所需：内核工具名 → 图标的映射不能在 wrench 上收口 */
+  | "globe"
+  | "code"
+  | "users"
+  | "clock";
 
 const glyphs: Record<IconName, JSX.Element> = {
   "panel-left": (
@@ -140,6 +145,30 @@ const glyphs: Record<IconName, JSX.Element> = {
     </>
   ),
   "arrow-left": <path d="M16.5 10h-13m0 0 4.25-4.25M3.5 10l4.25 4.25" />,
+  /* 网页取用（web_fetch / web_search） */
+  globe: (
+    <>
+      <circle cx="10" cy="10" r="6.75" />
+      <path d="M3.5 10h13M10 3.25c1.9 1.9 2.9 4.2 2.9 6.75s-1 4.85-2.9 6.75c-1.9-1.9-2.9-4.2-2.9-6.75s1-4.85 2.9-6.75Z" />
+    </>
+  ),
+  /* 代码工具（codemode） */
+  code: <path d="m7.25 6.75-3.25 3.25 3.25 3.25M12.75 6.75l3.25 3.25-3.25 3.25" />,
+  /* 子代理 / Agent */
+  users: (
+    <>
+      <circle cx="7.75" cy="7" r="2.5" />
+      <path d="M3.25 16.25c0-2.5 2-4.25 4.5-4.25s4.5 1.75 4.5 4.25" />
+      <path d="M13.5 4.9a2.5 2.5 0 0 1 0 4.2M14.5 12.3c1.6.4 2.75 1.6 2.75 3.2" />
+    </>
+  ),
+  /* 列表 / 待办 */
+  clock: (
+    <>
+      <circle cx="10" cy="10" r="6.75" />
+      <path d="M10 6.25V10l2.6 1.6" />
+    </>
+  ),
 };
 
 export function Icon({
