@@ -33,8 +33,16 @@ _Avoid_: 顶栏、TopBar、工具栏
 _Avoid_: 设置面板、设置弹层
 
 **Live Tail**:
-对最近活跃 Session 的轮询追踪，只读地呈现其进行中的流式更新。
+对最近活跃 Session 的轮询追踪，只读地呈现其进行中的流式更新；被驱动（Drive）的 Session 由驱动事件流供给增量，不经 Live Tail。
 _Avoid_: 实时模式、streaming 模式
+
+**Drive**:
+经内核驱动一个 Session：发出 prompt、执行工具并产生真实写入（新建或追加该 Session 的 JSONL）；区别于只读的 Live Tail。
+_Avoid_: 聊天、发送消息（作为能力名）、跑 agent
+
+**Attach**:
+把一个已有 Session 载入内核继续 Drive；接管后该 Session 走驱动事件流，Live Tail 对其失效。
+_Avoid_: 打开、载入、恢复会话
 
 **Entry**:
 session JSONL 中的一行记录，是条目树的节点（含 `id` 与 `parentId`）。
