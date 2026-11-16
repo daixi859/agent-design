@@ -4,22 +4,30 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { WebSocket } from "ws";
 import type { ClientFrame, DriveEvent, ServerFrame } from "@pi-studio/shared/protocol";
-import { createWsGateway, type DriveOutcome, type WsGatewayDeps } from "./ws-gateway.ts";
+import { createWsGateway, type DriveOutcome, type OpenedSession, type WsGatewayDeps } from "./ws-gateway.ts";
 
 // —— 测试基建：真 http + ws 服务器（随机端口），deps 全 fake ——
 
 function fakeDeps() {
   const calls: string[] = [];
   const driveOutcomes: DriveOutcome[] = [];
+  // 基线快照：header 与 entries 都在 attach 回包里（create 的会话文件尚未落盘）
+  const snap = (sessionId: string): OpenedSession => ({
+    sessionId,
+    snapshot: () => ({
+      header: { type: "session", version: 3, id: sessionId, parentId: null, timestamp: "T0", cwd: "/p" },
+      entries: [{ type: "message", id: `${sessionId}-m1`, parentId: null, timestamp: "T0", message: { role: "user", content: "hi" } }],
+    }),
+  });
   const deps: WsGatewayDeps = {
     attach: async (file) => {
       calls.push(`attach:${file}`);
       if (file.endsWith("locked.jsonl")) throw new Error("已被驱动");
-      return { sessionId: `sid-${file}` };
+      return snap(`sid-${file}`);
     },
     create: async (cwd) => {
       calls.push(`create:${cwd}`);
-      return { sessionId: "sid-created" };
+      return snap("sid-created");
     },
     release: (id) => {
       calls.push(`release:${id}`);
@@ -52,11 +60,10 @@ function connect(port: number) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   const frames: ServerFrame[] = [];
   ws.on("message", (data) => {
-    console.log("[client] frame arrived:", String(data).slice(0, 60));
     frames.push(JSON.parse(String(data)) as ServerFrame);
   });
   const opened = new Promise<void>((resolve, reject) => {
-    ws.on("open", () => { console.log("[client] open"); resolve(); });
+    ws.on("open", () => resolve());
     ws.on("error", reject);
   });
   const send = (frame: ClientFrame) => ws.send(JSON.stringify(frame));
@@ -90,7 +97,7 @@ describe("createWsGateway · 驱动协议传输", () => {
       await client.opened;
       client.send({ type: "attach", file: "f1.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
-      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-f1.jsonl", file: "f1.jsonl" });
+      expect(client.frames).toContainEqual(expect.objectContaining({ type: "attached", sessionId: "sid-f1.jsonl", file: "f1.jsonl" }));
       expect(calls).toContain("attach:f1.jsonl");
 
       server.gateway.emit(statusEvent("sid-f1.jsonl"));
@@ -109,7 +116,7 @@ describe("createWsGateway · 驱动协议传输", () => {
       await client.opened;
       client.send({ type: "create", cwd: "D:/proj" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
-      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-created" });
+      expect(client.frames).toContainEqual(expect.objectContaining({ type: "attached", sessionId: "sid-created" }));
       expect(calls).toContain("create:D:/proj");
     } finally {
       await server.close();
@@ -181,7 +188,7 @@ describe("createWsGateway · 驱动协议传输", () => {
 
       client.send({ type: "attach", file: "f2.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
-      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-f2.jsonl", file: "f2.jsonl" });
+      expect(client.frames).toContainEqual(expect.objectContaining({ type: "attached", sessionId: "sid-f2.jsonl", file: "f2.jsonl" }));
     } finally {
       await server.close();
     }

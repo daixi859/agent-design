@@ -41,3 +41,18 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 - **条目推送不能只靠 `entry_appended`**。pi 只在部分路径发该事件（custom entry、context edit、边界草稿）；普通消息与工具结果落盘时**不发**。协议仍以 Entry 为中心，但由 `SessionHost` 在 `turn_end` 与 `agent_settled` 两个边界主动向内核拉取条目树的新增尾部（`PiSessionLike.drainNewEntries()`，以条目数为水位）。事件流因此仍是权威条目的搬运工，而非唯一来源。
 - **属主标记必须随连接消亡释放**。原设计写「进程消亡即释放」；实测浏览器刷新（WS 断开）后旧标记残留，同一 session 再也无法接管。修正：连接关闭时逐一 `release` 该连接持有的全部 session —— 属主生命周期是**连接**，不是进程。
 - **渲染层派生 memo 不能漏掉数据就绪信号**。`attached` 帧可能先于 REST 全量返回；若驱动视图 memo 只依赖驱动状态，会永久冻结在非驱动分支（实测：徽标已变、输入框仍禁用）。修正：memo 依赖里带上 fetch 完成信号。
+
+## 补记二（复核轮）：create 快照与快照范围
+
+**问题**：`SessionManager.create` 在首条 user/assistant 消息落盘前不写文件（pi 的 `_hasConversation` 门），而驱动 UI 必须在用户发出第一条消息**之前**就能渲染并激活输入区。原设计「断线恢复以落盘文件为准」在此不成立——文件还不存在。
+
+**决定**：`attached` 帧增带 `header` + `entries` 快照（`PiSessionLike.snapshot()`，形状定义为 shared 的 `SessionSnapshot`）。**快照只随 create 路径下发**：attach 的会话已落盘，基线走 REST，事件流只供增量——避免把「按字节偏移重放」静默替换成「每次 attach 全量重放」（那会把 Live Tail 的故障搬进 WS）。
+
+**后果**：
+
+- create 出的会话在首条消息前没有文件，REST 404 属预期；客户端以回包快照为基线，首条消息落盘后 REST 自然接管。
+- attach 路径不带宽量快照，重连的 `attach` 仍是一句轻量帧。
+
+## 补记三（复核轮）：错误码与文案归属
+
+服务端自造的协议错误（会话已被驱动 / 冲突 / 未驱动 / 坏帧）只发机器码 `DriveErrorCode`；文案在客户端 i18n（ADR-0011 英文为源语言）。服务端 `message` 保留为调试兜底，不作为用户可见文案。

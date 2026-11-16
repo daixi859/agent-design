@@ -54,7 +54,6 @@ describe("SessionHost · 单会话驱动语义", () => {
         entry: { type: "message", id: "m1", parentId: null, timestamp: "T0", message: { role: "assistant", content: "好" } },
       },
     });
-    expect(session.calls).toContain("drain:1");
   });
 
   it("agent_settled 也拉取条目，且与 status 同时产出", () => {
@@ -66,11 +65,14 @@ describe("SessionHost · 单会话驱动语义", () => {
     expect(emitted.map((e) => e.body.type)).toEqual(["status", "entry"]);
   });
 
-  it("未到边界事件不拉取条目（不刷屏）", () => {
+  it("未到边界事件不产出条目（不刷屏）", () => {
     const { session, emitted } = makeHost();
+    session.pendingEntries = [
+      { type: "message", id: "m3", parentId: null, timestamp: "T2", message: { role: "assistant", content: "不该出现" } },
+    ];
     session.emitEvent({ type: "agent_start" } as AgentSessionEvent);
-    expect(session.calls.some((c) => c.startsWith("drain:"))).toBe(false);
-    expect(emitted).toHaveLength(1);
+    // 只有 status，没有 entry
+    expect(emitted.map((e) => e.body.type)).toEqual(["status"]);
   });
 
   it("prompt 转发文本；正常路径不额外产出事件", async () => {

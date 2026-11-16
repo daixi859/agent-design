@@ -1,8 +1,8 @@
 /** Sidebar 的 Project 分组（可折叠）；组级「+」在该项目 cwd 新建会话（GLOSSARY: Drive） */
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import type { ProjectGroup } from "../../state/sessions";
-import { drive, useDriveSessions } from "../../state/use-drive";
+import { drive } from "../../state/use-drive";
 import { Icon } from "../../ui/Icon";
 import { IconButton } from "../../ui/IconButton";
 import { SessionItem } from "./SessionItem";
@@ -22,24 +22,6 @@ export function ProjectGroupView({
   const [collapsed, setCollapsed] = useState(false);
   const { t } = useLocale();
   const navigate = useNavigate();
-  const driveSessions = useDriveSessions();
-  // 新建会话的导航：create 后 attached 帧带回新 sessionId（无 file），出现在驱动表里即导航过去
-  const pendingCreate = useRef(false);
-  const knownIds = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const ids = new Set(driveSessions.keys());
-    if (pendingCreate.current) {
-      for (const id of ids) {
-        if (!knownIds.current.has(id)) {
-          pendingCreate.current = false;
-          navigate(`/session/${id}`);
-          break;
-        }
-      }
-    }
-    knownIds.current = ids;
-  }, [driveSessions, navigate]);
 
   const needle = filter.trim().toLowerCase();
   const sessions = needle
@@ -72,8 +54,13 @@ export function ProjectGroupView({
           title={t("createInProject")}
           aria-label={t("createInProject")}
           onClick={() => {
-            pendingCreate.current = true;
-            drive.create(group.projectPath);
+            // create 的兑付在 DriveClient 内部：attached/error 帧到达即 resolve/reject
+            drive
+              .create(group.projectPath)
+              .then((sessionId) => navigate(`/session/${sessionId}`))
+              .catch(() => {
+                // 失败已落连接级错误位（SessionView 顶部错误条渲染），不额外导航
+              });
           }}
           className={styles.groupAdd}
         />

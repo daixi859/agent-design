@@ -1,9 +1,18 @@
 // SessionRegistry：多 Session 并存的属主表（ADR-0012）。
-// 内存属主标记是唯一互斥手段（进程消亡即释放，对 pi CLI 仅 best-effort）：
+// 内存属主标记是唯一互斥手段（**连接**消亡即释放，对 pi CLI 仅 best-effort）：
 // 文件级标记防同一 JSONL 被重开双写，sessionId 级标记防事件流串流。
-import type { DriveEvent } from "@pi-studio/shared/protocol";
+import type { DriveErrorCode, DriveEvent } from "@pi-studio/shared/protocol";
 import { SessionHost } from "./session-host.ts";
 import type { PiSessionFactory, PiSessionRequest } from "./types.ts";
+
+/** 属主表错误：文案与机器码分离，客户端按 code 走 i18n（ADR-0011） */
+export class RegistryError extends Error {
+  readonly code: DriveErrorCode;
+  constructor(code: DriveErrorCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
 
 interface Registration {
   host: SessionHost;
@@ -62,12 +71,12 @@ export class SessionRegistry {
   private async open(request: PiSessionRequest): Promise<SessionHost> {
     const file = request.kind === "attach" ? request.file : undefined;
     if (file && this.isFileDriven(file)) {
-      throw new Error(`session 已被驱动，拒绝重开：${file}`);
+      throw new RegistryError("sessionAlreadyDriven", `session 已被驱动，拒绝重开：${file}`);
     }
     const session = await this.factory(request);
     if (this.registrations.has(session.sessionId)) {
       session.dispose();
-      throw new Error(`sessionId 冲突，拒绝登记：${session.sessionId}`);
+      throw new RegistryError("sessionConflict", `sessionId 冲突，拒绝登记：${session.sessionId}`);
     }
     const host = new SessionHost({ session, emit: this.emit });
     this.registrations.set(host.sessionId, { host, file });

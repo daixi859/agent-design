@@ -13,7 +13,7 @@ import { createWsGateway, type DriveOutcome } from "./ws-gateway.ts";
 
 const PORT = Number(process.env.PI_STUDIO_PORT ?? "3001");
 // 生产模式托管 app 构建产物；dev 下 dist 不存在时静态层直接 404（vite 另行供页）
-const APP_DIST = fileURLToPath(new URL("../app/dist", import.meta.url));
+const APP_DIST = fileURLToPath(new URL("../../app/dist", import.meta.url));
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -39,7 +39,7 @@ registry = new SessionRegistry(openPiSession, (event) => gateway.emit(event));
 /** drive 帧到 SessionHost 的分发：prompt/abort 不等运行结束（事件流负责反馈） */
 async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
   const host = registry.get(command.sessionId);
-  if (!host) return { ok: false, message: `session 未驱动：${command.sessionId}` };
+  if (!host) return { ok: false, code: "sessionNotDriven", message: `session 未驱动：${command.sessionId}` };
   const body = command.body;
   switch (body.type) {
     case "prompt":
@@ -58,7 +58,6 @@ async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
     }
   }
 }
-
 // ===== HTTP：/api（剥前缀转 pi-data）→ 静态托管 → 404 =====
 
 const piDataApi = createPiDataApi();
@@ -91,14 +90,15 @@ function serveStatic(res: ServerResponse, pathname: string): void {
 }
 
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-  const { pathname } = new URL(req.url ?? "/", "http://localhost");
-  if (pathname.startsWith("/api/")) {
-    // pi-data 按 connect 语义写成「已剥前缀」的路由；此处手工剥 /api
-    req.url = pathname.slice(4) || "/";
-    void piDataApi(req, res, () => serveStatic(res, pathname));
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (url.pathname.startsWith("/api/")) {
+    // pi-data 按 connect 语义写成「已剥前缀」的路由；剥 /api 时必须保留 query
+    // （Live Tail 的 ?offset= 在此，丢了就从文件头全量重放）
+    req.url = url.pathname.slice(4) + url.search;
+    void piDataApi(req, res, () => serveStatic(res, url.pathname));
     return;
   }
-  serveStatic(res, pathname);
+  serveStatic(res, url.pathname);
 });
 gateway.bind(server);
 

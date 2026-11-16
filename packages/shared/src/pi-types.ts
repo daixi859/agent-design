@@ -13,7 +13,7 @@ export interface TextBlock {
 
 export interface ImageBlock {
   type: "image";
-  /** base64 */
+  /** base64 编码的图像数据 */
   data?: string;
   mimeType?: string;
 }
@@ -146,6 +146,14 @@ export interface SessionHeaderEntry extends EntryBase {
 export interface MessageEntry extends EntryBase {
   type: "message";
   message: AgentMessage;
+}
+
+/** 内核会话快照：header + 条目列表。
+ * attach 回包走它（create 出的会话尚未落盘，客户端只能靠这份快照渲染）。
+ * 形状只在协议层声明一次，core / server / app 均匀引用（避免结构型 Data Clump 四处重述）。 */
+export interface SessionSnapshot {
+  header?: SessionHeaderEntry;
+  entries: SessionEntry[];
 }
 
 export interface ModelChangeEntry extends EntryBase {

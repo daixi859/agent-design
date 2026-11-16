@@ -1,10 +1,21 @@
 // 驱动协议（ADR-0012）：web 走 WS、desktop 走 IPC，两端实现同一套 Command/Event。
 // Event 以条目为中心：`entry` 与 JSONL 行同构（shared/pi-types），客户端汇入同一
 // buildTranscriptModel 出口；`delta` / `status` 是瞬态信息，不落盘、可丢。
-import type { SessionEntry } from "./pi-types";
+import type { SessionEntry, SessionHeaderEntry } from "./pi-types.ts";
 
 /** 运行状态：由 agent_start / agent_settled / auto_retry 驱动的权威生命周期 */
 export type DriveStatus = "idle" | "running" | "retrying";
+
+/** 排队应答（pi 的 QueuedInputDisposition）：steer / followUp 专属，不落盘 */
+export type InputDisposition = "queued" | "handled";
+
+/** 服务端自造错误的机器码：客户端据此映射 i18n，避免把中文文案硬编码在服务端 */
+export type DriveErrorCode =
+  | "sessionAlreadyDriven"
+  | "sessionConflict"
+  | "sessionNotDriven"
+  | "badFrame"
+  | "unknownFrame";
 
 /** 客户端 → 内核命令体（sessionId 在信封上，WS 按其多路复用） */
 export type DriveCommandBody =
@@ -54,11 +65,18 @@ export type ClientFrame =
 
 /** 服务端帧；attach / create 被拒、坏帧、未知类型均走 error，连接不断 */
 export type ServerFrame =
-  /** file 回带供客户端断线重连 re-attach（create 路径无 file，重连后从侧栏重新接管） */
-  | { type: "attached"; sessionId: string; file?: string }
+  /** file 回带供客户端断线重连 re-attach；
+   *  header / entries 为内核当前快照（create 出的会话尚未落盘，客户端只能靠它渲染） */
+  | {
+      type: "attached";
+      sessionId: string;
+      file?: string;
+      header?: SessionHeaderEntry;
+      entries?: SessionEntry[];
+    }
   | { type: "released"; sessionId: string }
-  | { type: "commandFailed"; sessionId: string; message: string }
+  | { type: "commandFailed"; sessionId: string; message: string; code?: DriveErrorCode }
   /** steer / followUp 的排队应答（prompt / abort 靠事件流反馈，无应答帧） */
-  | { type: "disposition"; sessionId: string; command: "steer" | "followUp"; disposition: "queued" | "handled" }
-  | { type: "error"; message: string }
+  | { type: "disposition"; sessionId: string; command: "steer" | "followUp"; disposition: InputDisposition }
+  | { type: "error"; message: string; code?: DriveErrorCode }
   | { type: "event"; event: DriveEvent };

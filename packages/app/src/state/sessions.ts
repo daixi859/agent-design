@@ -1,6 +1,7 @@
 /** Session 列表状态：按 Project 分组（Q16） */
 import { useCallback, useEffect, useState } from "react";
 import type { SessionSummary } from "@pi-studio/shared/pi-types";
+import { errorMessage } from "@pi-studio/shared/errors";
 import { fetchSessions } from "../lib/pi-client";
 
 export interface ProjectGroup {
@@ -58,7 +59,7 @@ export function useSessions(): SessionsState {
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         })),
       );
   }, []);

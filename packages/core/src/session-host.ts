@@ -2,7 +2,9 @@
 // 错误一律落事件流（宿主层不必区分 WS/IPC），prompt 失败伴随回到 idle，
 // steer/followUp 失败不动状态（运行中会话不受影响）。
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { errorMessage } from "@pi-studio/shared/errors";
 import type { DriveEvent, DriveStatus } from "@pi-studio/shared/protocol";
+import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { normalizeSessionEvent } from "./normalize.ts";
 import type { InputDisposition, PiSessionLike } from "./types.ts";
 
@@ -28,6 +30,11 @@ export class SessionHost {
 
   get status(): DriveStatus {
     return this.currentStatus;
+  }
+
+  /** 内核当前快照：attach 回包用它补齐客户端基线（create 出的会话文件未落盘） */
+  snapshot(): SessionSnapshot {
+    return this.session.snapshot();
   }
 
   /** 发起一轮对话；resolve 即本轮结束，被拒时落 error + 回到 idle */
@@ -89,7 +96,6 @@ export class SessionHost {
   }
 
   private fail(err: unknown): void {
-    const message = err instanceof Error ? err.message : String(err);
-    this.emit({ sessionId: this.sessionId, body: { type: "error", message } });
+    this.emit({ sessionId: this.sessionId, body: { type: "error", message: errorMessage(err) } });
   }
 }

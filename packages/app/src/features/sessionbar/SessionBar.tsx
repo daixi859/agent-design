@@ -5,6 +5,7 @@ import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { useTheme } from "../../state/useTheme";
 import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
+import { driveBadgeKey } from "../../lib/drive-labels";
 import { Icon } from "../../ui/Icon";
 import { IconButton } from "../../ui/IconButton";
 import nav from "../../ui/nav.module.css";
@@ -52,6 +53,9 @@ export function SessionBar({
     }
   };
 
+  // 驱动徽标文案只算一次（title 与正文同源；idle 时悬停提示解除动作）
+  const badgeText = attach?.status ? t(driveBadgeKey(attach.status)) : undefined;
+
   return (
     <header className={cx(styles.bar, collapsed && styles.clearFloat)}>
       <div className={styles.titleGroup}>
@@ -70,10 +74,10 @@ export function SessionBar({
             {attach.attached && (
               <span
                 className={cx(styles.drivePill, attach.status === "running" && styles.drivePillRunning)}
-                title={attach.status === "running" ? t("runningBadge") : attach.status === "retrying" ? t("retryingBadge") : t("detach")}
+                title={attach.status === "idle" ? t("detach") : badgeText}
               >
                 <span className={styles.driveDot} />
-                {attach.status === "running" ? t("runningBadge") : attach.status === "retrying" ? t("retryingBadge") : t("drivenBadge")}
+                {badgeText}
               </span>
             )}
             <IconButton

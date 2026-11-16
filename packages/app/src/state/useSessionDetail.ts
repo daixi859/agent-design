@@ -1,8 +1,16 @@
 /** Session 详情状态：首载全量 + 增量追新（ADR-0012）。
-    两种增量源，互斥切换：被驱动（Drive）的 session 走 WS 事件流（Live Tail 对其失效），
-    其余 session 维持 Live Tail 轮询。两源条目按 id 幂等归并后经同一 buildTranscriptModel 出口。 */
+    两种基线来源：
+      · 已落盘会话 → REST 全量（Live Tail 轮询供增量）
+      · create 出的新会话 → 只在 WS attached 回包的快照里（首条消息前文件不落盘，REST 会 404）
+    增量来源唯一：WS 驱动事件流；被驱动的 session 停用 Live Tail。
+    两源条目按 id 幂等归并后经同一 buildTranscriptModel 出口。
+
+    基线与驱动视图都放在 state 里（而非 ref）：memo 的依赖必须是响应式值，
+    否则 attached 先于 REST 落地时 drivenView 会被永久缓存为 undefined（ADR-0012 补记第 3 条）。 */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionHeaderEntry } from "@pi-studio/shared/pi-types";
+import type { DriveStatus } from "@pi-studio/shared/protocol";
+import { errorMessage } from "@pi-studio/shared/errors";
+import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { fetchSession, tailSession } from "../lib/pi-client";
 import { createSessionTail, type SessionTail } from "../lib/session-tail";
 import { buildTranscriptModel, type TranscriptModel } from "../lib/transcript-model";
@@ -12,51 +20,60 @@ import { drive, useDriveSession } from "./use-drive";
 export interface SessionDetailState {
   loading: boolean;
   error?: string;
-  header?: SessionHeaderEntry;
+  header?: SessionSnapshot["header"];
   view: TranscriptModel;
   /** 被驱动时非空：驱动状态与动作随组件树下发（sessionId 即当前路由 id） */
-  drive?: { status: DriveStatusMeta };
+  drive?: { status: DriveStatus };
 }
-
-/** 避免直接暴露协议类型名给展示层以外的模块引用 */
-type DriveStatusMeta = "idle" | "running" | "retrying";
 
 const EMPTY_VIEW = buildTranscriptModel([]);
 
 export function useSessionDetail(id: string | undefined): SessionDetailState {
   const [state, setState] = useState<SessionDetailState>({ loading: !!id, view: EMPTY_VIEW });
+  /** REST 基线（响应式：驱动视图的 memo 依赖它） */
+  const [baseline, setBaseline] = useState<SessionSnapshot | null>(null);
   const tailRef = useRef<SessionTail | null>(null);
-  const detailRef = useRef<{ header?: SessionHeaderEntry; entries: SessionDetailEntries } | null>(null);
   const driveSession = useDriveSession(id);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     tailRef.current = null; // 清空旧 session 的状态机：新详情未决期间轮询空转，防串档
-    detailRef.current = null;
+    setBaseline(null);
     setState({ loading: true, view: EMPTY_VIEW });
+
     fetchSession(id)
       .then((detail) => {
         if (cancelled) return;
         const tail = createSessionTail(detail);
         tailRef.current = tail;
-        detailRef.current = { header: detail.header, entries: detail.entries };
+        setBaseline({ header: detail.header, entries: [...detail.entries] });
         setState({ loading: false, header: detail.header, view: tail.view });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: error instanceof Error ? error.message : String(error),
-        }));
+        // 未落盘的 create 会话：REST 404 属预期，基线等 attached 回包（下方 effect 兜底）
+        const attached = drive.getSnapshot().get(id);
+        if (attached?.header) {
+          setBaseline({ header: attached.header, entries: [...attached.entries] });
+          setState({ loading: false, header: attached.header, view: EMPTY_VIEW });
+          return;
+        }
+        setState((prev) => ({ ...prev, loading: false, error: errorMessage(error) }));
       });
     return () => {
       cancelled = true;
     };
   }, [id]);
 
-  // Live Tail 轮询：仅未被驱动的 session（GLOSSARY: 被 Drive 的 session 不经 Live Tail）
+  // create 会话的基线兜底：attached 回包带了 header 而 REST 尚无基线时，用它落地
+  useEffect(() => {
+    if (!id || !driveSession?.header || baseline) return;
+    setBaseline({ header: driveSession.header, entries: [...driveSession.entries] });
+    setState((prev) => ({ ...prev, loading: false, error: undefined, header: driveSession.header }));
+  }, [id, driveSession?.header, driveSession?.entries, baseline]);
+
+  // Live Tail 轮询：仅未被驱动且已有 REST 基线的 session（GLOSSARY: 被 Drive 的 session 不经 Live Tail）
   useEffect(() => {
     if (!id) return;
     const timer = window.setInterval(() => {
@@ -76,18 +93,19 @@ export function useSessionDetail(id: string | undefined): SessionDetailState {
     return () => window.clearInterval(timer);
   }, [id]);
 
-  // 驱动覆盖视图：REST 全量 × WS 增量按 id 幂等归并（引用稳定，未变不重算）。
-  // 依赖含 state：attached 先于 fetch 完成到达时，memo 需随 fetch 落地重算，否则永久冻结在非驱动分支。
+  // 驱动覆盖视图：基线 × 驱动条目按 id 幂等归并
   const drivenView = useMemo(() => {
-    const detail = detailRef.current;
-    if (!driveSession || !detail || state.loading) return undefined;
-    return buildTranscriptModel([...mergeEntries(detail.entries, driveSession.entries)]);
-  }, [driveSession, state]);
+    if (!driveSession || !baseline) return undefined;
+    return buildTranscriptModel([...mergeEntries(baseline.entries, driveSession.entries)]);
+  }, [driveSession, baseline]);
 
-  if (drivenView && state.header) {
-    return { ...state, view: drivenView, drive: { status: driveSession!.status } };
+  if (driveSession && baseline && drivenView) {
+    return {
+      loading: false,
+      header: baseline.header,
+      view: drivenView,
+      drive: { status: driveSession.status },
+    };
   }
   return state;
 }
-
-type SessionDetailEntries = Awaited<ReturnType<typeof fetchSession>>["entries"];

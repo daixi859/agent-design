@@ -1,10 +1,10 @@
 // DriveClient：浏览器侧驱动连接（ADR-0012 阶段四）。组装层不做单测——
 // 帧到状态的纯逻辑在 lib/drive-client（已测），WS 半边由 server 侧集成测试覆盖。
-// 连接管理：断线指数退避重连；重连后按 file 表 re-attach（create 出的会话除外，
-// 其已落盘为真实 JSONL，从侧栏重新接管即可）。
+// 连接管理：断线指数退避重连；重连后按 file 表 re-attach（create 出的会话无 file，
+// 由附着回包的快照支撑渲染，断线后从侧栏重新接管）。
 import { useSyncExternalStore } from "react";
 import { applyServerFrame, type DriveSession } from "../lib/drive-client";
-import type { ClientFrame, DriveCommandBody, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
+import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
 class DriveClient {
   private sessions = new Map<string, DriveSession>();
@@ -15,7 +15,8 @@ class DriveClient {
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private reconnectDelay = 500;
-  private closed = false;
+  /** 连接级错误（无 sessionId 归属）：当前路由的会话页把它渲染成错误条 */
+  private lastConnectionError: { message: string; code?: DriveErrorCode } | undefined;
 
   constructor() {
     this.connect();
@@ -39,7 +40,8 @@ class DriveClient {
       this.handleFrame(JSON.parse(String(message.data)) as ServerFrame);
     };
     ws.onclose = () => {
-      if (this.closed) return;
+      // 断线：待定的 create 立即失败，避免调用方永久悬挂
+      this.failPendingCreates("驱动连接已断开");
       this.reconnectTimer = window.setTimeout(() => this.connect(), this.reconnectDelay);
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
     };
@@ -52,13 +54,19 @@ class DriveClient {
 
   private handleFrame(frame: ServerFrame): void {
     if (frame.type === "error") {
-      // attach/create 被拒等连接级错误：无 sessionId 归属，暂以控制台暴露（阶段一）
-      console.warn("[drive]", frame.message);
+      // 连接级错误（attach/create 被拒、坏帧）：落错误位并兑付待定 create；
+      // 错误文案走 i18n（服务端只给 code），无 code 时退回服务端原文
+      this.lastConnectionError = { message: frame.message, code: frame.code };
+      this.settleCreates({ ok: false, message: frame.message });
+      this.publish();
       return;
     }
+    this.lastConnectionError = undefined;
     switch (frame.type) {
       case "attached":
         if (frame.file) this.files.set(frame.sessionId, frame.file);
+        // create 路径无 file：兑付待定的新建导航
+        else this.settleCreates({ ok: true, sessionId: frame.sessionId });
         break;
       case "released":
         this.files.delete(frame.sessionId);
@@ -69,13 +77,28 @@ class DriveClient {
     if (next === this.sessions.get(sessionId)) return;
     if (next) this.sessions.set(sessionId, next);
     else this.sessions.delete(sessionId);
+    this.publish();
+  }
+
+  private publish(): void {
     this.snapshot = new Map(this.sessions);
     for (const listener of this.listeners) listener();
   }
 
-  private notifyOnly(): void {
-    this.snapshot = new Map(this.sessions);
-    for (const listener of this.listeners) listener();
+  // —— 新建会话的待定应答（create 无 file，靠 attached/error 帧兑付；断线也要兑付） ——
+
+  private pendingCreates: Array<{ resolve: (sessionId: string) => void; reject: (err: Error) => void }> = [];
+
+  private settleCreates(outcome: { ok: true; sessionId: string } | { ok: false; message: string }): void {
+    const pending = this.pendingCreates.shift();
+    if (!pending) return;
+    if (outcome.ok) pending.resolve(outcome.sessionId);
+    else pending.reject(new Error(outcome.message));
+  }
+
+  /** 连接断开：待定的 create 立即失败，避免调用方的 .then 永久悬挂 */
+  private failPendingCreates(message: string): void {
+    for (const pending of this.pendingCreates.splice(0)) pending.reject(new Error(message));
   }
 
   // —— 对 UI 的命令面 ——
@@ -85,27 +108,43 @@ class DriveClient {
     return this.sessions.has(sessionId);
   }
 
+  get connectionError(): { message: string; code?: DriveErrorCode } | undefined {
+    return this.lastConnectionError;
+  }
+
   /** 接管已有 session（GLOSSARY: Attach） */
   attach(file: string): void {
     this.send({ type: "attach", file });
   }
 
-  /** 在项目 cwd 新建 session（GLOSSARY: Drive）；attached 帧到达后由 UI 导航 */
-  create(cwd: string): void {
-    this.send({ type: "create", cwd });
+  /** 在项目 cwd 新建 session（GLOSSARY: Drive）；resolve 为 attached 帧带回的新 sessionId */
+  create(cwd: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      this.pendingCreates.push({ resolve, reject });
+      if (this.ws?.readyState !== WebSocket.OPEN) {
+        this.pendingCreates.pop();
+        reject(new Error("驱动连接未就绪"));
+        return;
+      }
+      this.send({ type: "create", cwd });
+    });
   }
 
   release(sessionId: string): void {
     this.files.delete(sessionId);
     this.sessions.delete(sessionId);
-    this.notifyOnly();
+    this.publish();
     this.send({ type: "release", sessionId });
   }
 
-  /** 语义化发送：running 中转 steer，否则 prompt（与 pi TUI 输入语义一致） */
+  /**
+   * 语义化发送（与 pi TUI 输入语义一致）：
+   * 运行中 → steer（插话，本轮工具调用后送达）；运行结束后 → followUp / prompt。
+   */
   sendText(sessionId: string, text: string): void {
+    const session = this.sessions.get(sessionId);
     const body: DriveCommandBody =
-      this.sessions.get(sessionId)?.status === "running"
+      session?.status === "running" || session?.status === "retrying"
         ? { type: "steer", text }
         : { type: "prompt", text };
     this.send({ type: "drive", command: { sessionId, body } });
@@ -113,6 +152,11 @@ class DriveClient {
 
   abort(sessionId: string): void {
     this.send({ type: "drive", command: { sessionId, body: { type: "abort" } } });
+  }
+
+  /** 队列式追问：本轮运行彻底结束（含工具与插话）后才送达 */
+  followUp(sessionId: string, text: string): void {
+    this.send({ type: "drive", command: { sessionId, body: { type: "followUp", text } } });
   }
 
   // —— 订阅面（useSyncExternalStore） ——
@@ -140,6 +184,14 @@ export function useDriveSessions(): ReadonlyMap<string, DriveSession> {
 export function useDriveSession(id: string | undefined): DriveSession | undefined {
   const sessions = useDriveSessions();
   return id ? sessions.get(id) : undefined;
+}
+
+/** 连接级错误（无 sessionId 归属）：订阅式读取，SessionView 顶部错误条消费 */
+export function useConnectionError(): { message: string; code?: DriveErrorCode } | undefined {
+  return useSyncExternalStore(
+    (cb) => drive.subscribe(cb),
+    () => drive.connectionError,
+  );
 }
 
 export type { DriveSession, DriveStatus };

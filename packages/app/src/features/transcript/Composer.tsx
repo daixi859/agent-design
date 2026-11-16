@@ -9,7 +9,10 @@ import styles from "./transcript.module.css";
 
 export interface ComposerDrive {
   status: DriveStatus;
+  /** 回车发送：running 时为 steer，否则 prompt */
   onSend(text: string): void;
+  /** 追问：本轮运行彻底结束后送达（pi 的 followUp） */
+  onFollowUp(text: string): void;
   onAbort(): void;
 }
 
@@ -88,6 +91,24 @@ export function Composer({
               <span className={cx(styles.statusDot, styles.statusDotRetrying)} />
               {t("retryingBadge")}
             </span>
+          )}
+          {/* 运行中：回车 = steer（插话），「追问」= followUp（本轮彻底结束后送达），可中止。
+              idle 下两者语义与 prompt 重合，故只保留发送，避免双入口。 */}
+          {drive && running && (
+            <button
+              type="button"
+              className={styles.followUpButton}
+              title={t("followUpHint")}
+              disabled={!text.trim()}
+              onClick={() => {
+                const trimmed = text.trim();
+                if (!trimmed) return;
+                drive.onFollowUp(trimmed);
+                setText("");
+              }}
+            >
+              {t("followUp")}
+            </button>
           )}
           {drive && running && (
             <button type="button" className={styles.abortButton} title={t("abort")} onClick={drive.onAbort}>

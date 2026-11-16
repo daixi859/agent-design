@@ -3,15 +3,26 @@
 // release / 断开即撤订；协议层错误一律走 error 帧，连接不断。
 // deps 是 registry 的窄投影（attach/create/release/drive），组装层注入。
 import type { Server } from "node:http";
-import type { ClientFrame, DriveCommand, DriveEvent, ServerFrame } from "@pi-studio/shared/protocol";
+import { errorMessage } from "@pi-studio/shared/errors";
+import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
+import type { ClientFrame, DriveCommand, DriveErrorCode, DriveEvent, InputDisposition, ServerFrame } from "@pi-studio/shared/protocol";
 import { WebSocket, WebSocketServer, type WebSocket as WsSocket } from "ws";
 
-/** drive 命令的处理结果（组装层产出）：ok 时 steer/followUp 携带 disposition */
-export type DriveOutcome = { ok: true; disposition?: "queued" | "handled" } | { ok: false; message: string };
+/** drive 命令的处理结果（组装层产出）：ok 时 steer/followUp 携带 disposition；
+ *  失败可带机器码，客户端据此走 i18n（ADR-0011） */
+export type DriveOutcome =
+  | { ok: true; disposition?: InputDisposition }
+  | { ok: false; message: string; code?: DriveErrorCode };
+
+/** 打开会话的返回值：sessionId + 内核当前快照（attach 回包用，create 的会话文件尚未落盘） */
+export interface OpenedSession {
+  sessionId: string;
+  snapshot(): SessionSnapshot;
+}
 
 export interface WsGatewayDeps {
-  attach(file: string): Promise<{ sessionId: string }>;
-  create(cwd: string): Promise<{ sessionId: string }>;
+  attach(file: string): Promise<OpenedSession>;
+  create(cwd: string): Promise<OpenedSession>;
   release(sessionId: string): void;
   drive(command: DriveCommand): Promise<DriveOutcome>;
 }
@@ -49,6 +60,60 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
     if (set.size === 0) subscriptions.delete(sessionId);
   }
 
+  /** attach / create 共用骨架：打开 → （新建时）带基线快照回 attached → 登记订阅 */
+  async function openSubscription(
+    socket: WsSocket,
+    owned: Set<string>,
+    open: () => Promise<OpenedSession>,
+    file?: string,
+  ): Promise<void> {
+    try {
+      const opened = await open();
+      const { sessionId } = opened;
+      owned.add(sessionId);
+      subscribe(sessionId, socket);
+      // 快照只随 create 下发：attach 的会话已落盘，基线走 REST（ADR-0012：读路径不变）；
+      // 且断线重连的 attach 不应全量重放（那是 Live Tail 的活儿，用字节偏移）
+      const snapshot = file === undefined ? opened.snapshot() : undefined;
+      send(socket, snapshot ? { type: "attached", sessionId, header: snapshot.header, entries: snapshot.entries } : { type: "attached", sessionId, file });
+    } catch (err) {
+      // 机器码供客户端走 i18n（ADR-0011）；服务端文案仅作调试兜底
+      const code = (err as { code?: DriveErrorCode }).code;
+      send(socket, { type: "error", message: errorMessage(err), ...(code ? { code } : {}) });
+    }
+  }
+
+  async function handleFrame(socket: WsSocket, frame: ClientFrame, owned: Set<string>): Promise<void> {
+    switch (frame?.type) {
+      case "attach":
+        return openSubscription(socket, owned, () => deps.attach(frame.file), frame.file);
+      case "create":
+        return openSubscription(socket, owned, () => deps.create(frame.cwd));
+      case "release":
+        deps.release(frame.sessionId);
+        owned.delete(frame.sessionId);
+        unsubscribe(frame.sessionId, socket);
+        send(socket, { type: "released", sessionId: frame.sessionId });
+        return;
+      case "drive": {
+        const { sessionId, body } = frame.command;
+        try {
+          const outcome = await deps.drive(frame.command);
+          if (!outcome.ok) {
+            send(socket, { type: "commandFailed", sessionId, message: outcome.message, ...(outcome.code ? { code: outcome.code } : {}) });
+          } else if (outcome.disposition && (body.type === "steer" || body.type === "followUp")) {
+            send(socket, { type: "disposition", sessionId, command: body.type, disposition: outcome.disposition });
+          }
+        } catch (err) {
+          send(socket, { type: "commandFailed", sessionId, message: errorMessage(err) });
+        }
+        return;
+      }
+      default:
+        send(socket, { type: "error", message: "未知帧类型", code: "unknownFrame" });
+    }
+  }
+
   wss.on("connection", (socket) => {
     // 本连接拥有的订阅（断开时逐一撤销并释放属主）
     const owned = new Set<string>();
@@ -57,7 +122,7 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
       try {
         frame = JSON.parse(String(data)) as ClientFrame;
       } catch {
-        send(socket, { type: "error", message: "无法解析的帧" });
+        send(socket, { type: "error", message: "无法解析的帧", code: "badFrame" });
         return;
       }
       void handleFrame(socket, frame, owned);
@@ -65,72 +130,12 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
     socket.on("close", () => {
       // 连接消亡即释放属主（ADR-0012：内存标记随生命周期消亡）；
       // 否则浏览器刷新后旧连接的标记残留，同一 session 将无法重新接管
-      for (const sessionId of owned) deps.release(sessionId);
-      for (const sessionId of owned) unsubscribe(sessionId, socket);
+      for (const sessionId of owned) {
+        deps.release(sessionId);
+        unsubscribe(sessionId, socket);
+      }
     });
   });
-
-  async function handleFrame(socket: WsSocket, frame: ClientFrame, owned: Set<string>): Promise<void> {
-    switch (frame?.type) {
-      case "attach": {
-        try {
-          const { sessionId } = await deps.attach(frame.file);
-          owned.add(sessionId);
-          subscribe(sessionId, socket);
-          send(socket, { type: "attached", sessionId, file: frame.file });
-        } catch (err) {
-          send(socket, { type: "error", message: err instanceof Error ? err.message : String(err) });
-        }
-        return;
-      }
-      case "create": {
-        try {
-          const { sessionId } = await deps.create(frame.cwd);
-          owned.add(sessionId);
-          subscribe(sessionId, socket);
-          send(socket, { type: "attached", sessionId });
-        } catch (err) {
-          send(socket, { type: "error", message: err instanceof Error ? err.message : String(err) });
-        }
-        return;
-      }
-      case "release": {
-        deps.release(frame.sessionId);
-        owned.delete(frame.sessionId);
-        unsubscribe(frame.sessionId, socket);
-        send(socket, { type: "released", sessionId: frame.sessionId });
-        return;
-      }
-      case "drive": {
-        try {
-          const outcome = await deps.drive(frame.command);
-          if (!outcome.ok) {
-            send(socket, {
-              type: "commandFailed",
-              sessionId: frame.command.sessionId,
-              message: outcome.message,
-            });
-          } else if (outcome.disposition && (frame.command.body.type === "steer" || frame.command.body.type === "followUp")) {
-            send(socket, {
-              type: "disposition",
-              sessionId: frame.command.sessionId,
-              command: frame.command.body.type,
-              disposition: outcome.disposition,
-            });
-          }
-        } catch (err) {
-          send(socket, {
-            type: "commandFailed",
-            sessionId: frame.command.sessionId,
-            message: err instanceof Error ? err.message : String(err),
-          });
-        }
-        return;
-      }
-      default:
-        send(socket, { type: "error", message: "未知帧类型" });
-    }
-  }
 
   return {
     emit(event) {

@@ -65,8 +65,8 @@
 }
 
 .driveDot {
-  inline-size: 6px;
-  block-size: 6px;
+  inline-size: var(--size-dot);
+  block-size: var(--size-dot);
   border-radius: 50%;
   background: var(--text-3);
 }

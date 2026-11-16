@@ -8,6 +8,7 @@ import { join, basename } from "node:path";
 import { stat, readdir, readFile, open } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { errorMessage } from "@pi-studio/shared/errors";
 import { firstUserText } from "@pi-studio/shared/message-text";
 import type {
   SessionEntry,
@@ -250,7 +251,7 @@ export function createPiDataApi() {
       }
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       return json(res, status, { error: message });
     }
     next();

@@ -1,7 +1,7 @@
 /** drive-client 纯逻辑契约：ServerFrame 入 → 客户端状态出；
     条目幂等合并（REST 全量 × WS 事件流归并的数据基础，ADR-0012 断线恢复） */
 import { describe, expect, it } from "vitest";
-import type { SessionEntry } from "@pi-studio/shared/pi-types";
+import type { SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
 import type { DriveEvent, ServerFrame } from "@pi-studio/shared/protocol";
 import { applyServerFrame, mergeEntries, type DriveSession } from "./drive-client";
 
@@ -15,7 +15,8 @@ const entry = (id: string): SessionEntry => ({
 
 const event = (body: DriveEvent["body"]): ServerFrame => ({ type: "event", event: { sessionId: "s1", body } });
 
-const attached: ServerFrame = { type: "attached", sessionId: "s1", file: "f1.jsonl" };
+const header: SessionHeaderEntry = { type: "session", version: 3, id: "s1", parentId: null, timestamp: "T0", cwd: "/p" };
+const attached: ServerFrame = { type: "attached", sessionId: "s1", file: "f1.jsonl", header, entries: [] };
 
 describe("mergeEntries · 双源幂等归并", () => {
   it("按 id 去重、先见顺序保留（REST 全量在前，驱动增量在后）", () => {
@@ -33,7 +34,7 @@ describe("mergeEntries · 双源幂等归并", () => {
 describe("applyServerFrame · 帧到客户端状态", () => {
   it("attached → 建 idle 空态；重复 attached 幂等保留已有条目", () => {
     const created = applyServerFrame(undefined, attached);
-    expect(created).toEqual({ sessionId: "s1", status: "idle", entries: [] });
+    expect(created).toEqual({ sessionId: "s1", status: "idle", entries: [], header });
 
     const withEntry = applyServerFrame(created, event({ type: "entry", entry: entry("e1") }));
     expect(applyServerFrame(withEntry, attached)).toBe(withEntry);

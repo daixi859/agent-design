@@ -1,14 +1,17 @@
 // drive-client 纯逻辑核心（ADR-0012 阶段四）：ServerFrame 入 → 客户端状态出。
 // 条目幂等合并是断线恢复的数据基础：REST 全量与 WS 事件流谁先到都收敛到同一集合，
 // 最终汇入 buildTranscriptModel 出口（与 Live Tail 同一派生管线）。
-import type { SessionEntry } from "@pi-studio/shared/pi-types";
+import type { SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
 import type { DriveEvent, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
 /** 单个被驱动 Session 的客户端状态 */
 export interface DriveSession {
   readonly sessionId: string;
   readonly status: DriveStatus;
+  /** 内核回带/事件累积的条目；客户端渲染与 REST 全量按 id 幂等归并 */
   readonly entries: readonly SessionEntry[];
+  /** create 出的会话在首条消息前不落盘，header 只能来自 attach 回包 */
+  readonly header?: SessionHeaderEntry;
   readonly lastError?: string;
 }
 
@@ -30,9 +33,14 @@ export function applyServerFrame(
   frame: ServerFrame,
 ): DriveSession | undefined {
   switch (frame.type) {
-    case "attached":
-      // 重连 re-attach 会重复到达：已有状态原样保留（条目靠 id 幂等，不清基线）
-      return prev ?? { sessionId: frame.sessionId, status: "idle", entries: [] };
+    case "attached": {
+      // 重连 re-attach 会重复到达：条目按 id 幂等，header 后到者为准
+      const base = prev ?? { sessionId: frame.sessionId, status: "idle" as const, entries: [] };
+      const merged = mergeEntries(base.entries, frame.entries ?? []);
+      const header = frame.header ?? base.header;
+      if (merged === base.entries && header === base.header) return prev;
+      return { ...base, entries: merged, header };
+    }
     case "released":
       return undefined;
     case "event":

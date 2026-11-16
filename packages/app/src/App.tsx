@@ -53,16 +53,24 @@ function MainShell({ sessions, collapsed }: { sessions: SessionsState; collapsed
     ? (session.name ?? session.title ?? t("untitledSession"))
     : "Pi Studio";
 
-  // 驱动动作区：只有拿到真实文件路径的 session 才可接管
-  const attach: SessionBarAttach | undefined =
-    session?.file && id
+  // 驱动动作区：已驱动的 session 总能解除（含 create 出、尚未进 REST 列表的新会话）；
+  // 未驱动的 session 需要真实文件路径才能接管
+  const attach: SessionBarAttach | undefined = id
+    ? driveSession
       ? {
-          attached: !!driveSession,
-          status: driveSession?.status,
-          onAttach: () => drive.attach(session.file!),
+          attached: true,
+          status: driveSession.status,
+          onAttach: () => session?.file && drive.attach(session.file),
           onRelease: () => drive.release(id),
         }
-      : undefined;
+      : session?.file
+        ? {
+            attached: false,
+            onAttach: () => drive.attach(session.file!),
+            onRelease: () => drive.release(id),
+          }
+        : undefined
+    : undefined;
 
   return (
     <>

@@ -1,7 +1,7 @@
 // 真 pi SDK 适配器：把 AgentSession 包装成 PiSessionLike（ADR-0012）。
 // 薄层不单测（fake 已覆盖宿主语义），由阶段四真内核冒烟兜底。
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry } from "@pi-studio/shared/pi-types";
+import type { SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
 import type { PiSessionLike, PiSessionRequest } from "./types.ts";
 
 /** 按请求打开真实内核会话：attach = open(file)；create = 在 cwd 新建持久会话 */
@@ -19,6 +19,11 @@ function adaptAgentSession(session: AgentSession): PiSessionLike {
   return {
     get sessionId() {
       return session.sessionId;
+    },
+    snapshot() {
+      const entries = session.sessionManager.getEntries() as unknown as SessionEntry[];
+      const header = session.sessionManager.getHeader() as unknown as SessionHeaderEntry | null;
+      return header ? { header, entries } : { entries };
     },
     subscribe(listener) {
       return session.subscribe(listener);

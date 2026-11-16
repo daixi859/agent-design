@@ -725,8 +725,8 @@
 /* ---- 驱动状态（ADR-0012 阶段四）：状态点与中止 ---- */
 
 .statusDot {
-  inline-size: 6px;
-  block-size: 6px;
+  inline-size: var(--size-dot);
+  block-size: var(--size-dot);
   border-radius: 50%;
   background: var(--text-3);
 }
@@ -737,6 +737,25 @@
 
 .statusDotRetrying {
   background: var(--warning);
+}
+
+.followUpButton {
+  padding: var(--space-05) var(--space-2);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+  color: var(--text-2);
+  font-size: var(--text-caption2);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
 }
 
 .abortButton {
@@ -754,6 +773,19 @@
   &:hover {
     background: color-mix(in srgb, var(--accent) 18%, transparent);
   }
+}
+
+/* ---- 驱动错误条（错误不再静默，ADR-0012 阶段四修正）---- */
+
+.errorBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  padding: var(--space-1h) var(--space-3);
+  background: var(--warning-subtle);
+  color: var(--text-1);
+  font-size: var(--text-caption);
+  border-block-end: var(--border-hairline) solid var(--separator);
 }
 
 /* ---- 空态 ---- */

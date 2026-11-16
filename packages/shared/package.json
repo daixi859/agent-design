@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./pi-types": "./src/pi-types.ts",
     "./message-text": "./src/message-text.ts",
-    "./protocol": "./src/protocol.ts"
+    "./protocol": "./src/protocol.ts",
+    "./errors": "./src/errors.ts"
   }
 }
