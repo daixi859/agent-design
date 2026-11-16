@@ -90,7 +90,7 @@ describe("createWsGateway · 驱动协议传输", () => {
       await client.opened;
       client.send({ type: "attach", file: "f1.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
-      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-f1.jsonl" });
+      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-f1.jsonl", file: "f1.jsonl" });
       expect(calls).toContain("attach:f1.jsonl");
 
       server.gateway.emit(statusEvent("sid-f1.jsonl"));
@@ -181,7 +181,7 @@ describe("createWsGateway · 驱动协议传输", () => {
 
       client.send({ type: "attach", file: "f2.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
-      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-f2.jsonl" });
+      expect(client.frames).toContainEqual({ type: "attached", sessionId: "sid-f2.jsonl", file: "f2.jsonl" });
     } finally {
       await server.close();
     }
@@ -226,6 +226,20 @@ describe("createWsGateway · 驱动协议传输", () => {
     } finally {
       await server.close();
     }
+  });
+
+  it("连接断开 → 该连接持有的 session 逐一释放属主", async () => {
+    const { calls, deps } = fakeDeps();
+    const server = await startServer(deps);
+    const client = connect(server.port);
+    await client.opened;
+    client.send({ type: "attach", file: "f1.jsonl" });
+    client.send({ type: "attach", file: "f2.jsonl" });
+    await waitFor(() => calls.filter((c) => c.startsWith("attach:")).length >= 2);
+    await client.close();
+    await waitFor(() => calls.some((c) => c === "release:sid-f1.jsonl"));
+    await waitFor(() => calls.some((c) => c === "release:sid-f2.jsonl"));
+    await server.close();
   });
 
   it("坏 JSON 与未知帧类型 → error 帧且连接存活", async () => {

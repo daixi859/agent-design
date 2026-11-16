@@ -6,10 +6,11 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useSessions, type SessionsState } from "./state/sessions";
 import { useSessionDetail, type SessionDetailState } from "./state/useSessionDetail";
 import { currentSessionId } from "./state/current-session";
+import { drive, useDriveSession } from "./state/use-drive";
 import { useLocale } from "./state/useLocale";
 import { BrandFloat } from "./features/shell/BrandFloat";
 import { Sidebar } from "./features/sidebar/Sidebar";
-import { SessionBar } from "./features/sessionbar/SessionBar";
+import { SessionBar, type SessionBarAttach } from "./features/sessionbar/SessionBar";
 import { SessionView } from "./features/session/SessionView";
 import { ComponentGallery } from "./routes/ComponentGallery";
 import { SettingsShell } from "./features/settings/SettingsShell";
@@ -46,14 +47,26 @@ function MainShell({ sessions, collapsed }: { sessions: SessionsState; collapsed
   const { t } = useLocale();
   const id = currentSessionId(pathname);
   const detail = useSessionDetail(id);
+  const driveSession = useDriveSession(id);
   const session = id ? sessions.sessions.find((candidate) => candidate.id === id) : undefined;
   const title = session
     ? (session.name ?? session.title ?? t("untitledSession"))
     : "Pi Studio";
 
+  // 驱动动作区：只有拿到真实文件路径的 session 才可接管
+  const attach: SessionBarAttach | undefined =
+    session?.file && id
+      ? {
+          attached: !!driveSession,
+          status: driveSession?.status,
+          onAttach: () => drive.attach(session.file!),
+          onRelease: () => drive.release(id),
+        }
+      : undefined;
+
   return (
     <>
-      <SessionBar title={title} branched={detail.view.abandonedCount > 0} collapsed={collapsed} />
+      <SessionBar title={title} branched={detail.view.abandonedCount > 0} collapsed={collapsed} attach={attach} />
       <div className={styles.mainContent}>
         <Outlet context={detail satisfies SessionDetailState} />
       </div>

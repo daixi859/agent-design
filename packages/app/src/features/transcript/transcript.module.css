@@ -715,6 +715,45 @@
   background: var(--primary-btn-bg);
   color: var(--primary-btn-fg);
   cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+}
+
+/* ---- 驱动状态（ADR-0012 阶段四）：状态点与中止 ---- */
+
+.statusDot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.statusDotRunning {
+  background: var(--success);
+}
+
+.statusDotRetrying {
+  background: var(--warning);
+}
+
+.abortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-05);
+  padding: var(--space-05) var(--space-2);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: var(--text-caption2);
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+  }
 }
 
 /* ---- 空态 ---- */

@@ -40,6 +40,10 @@ _Avoid_: 实时模式、streaming 模式
 经内核驱动一个 Session：发出 prompt、执行工具并产生真实写入（新建或追加该 Session 的 JSONL）；区别于只读的 Live Tail。
 _Avoid_: 聊天、发送消息（作为能力名）、跑 agent
 
+**Disposition**:
+内核对一个排队输入的应答：`queued`（已入队）或 `handled`（已被扩展处理）；仅 steer / followUp 有，不落盘。
+_Avoid_: 返回值、ack
+
 **Attach**:
 把一个已有 Session 载入内核继续 Drive；接管后该 Session 走驱动事件流，Live Tail 对其失效。
 _Avoid_: 打开、载入、恢复会话

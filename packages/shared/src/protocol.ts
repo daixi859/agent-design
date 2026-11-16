@@ -54,7 +54,8 @@ export type ClientFrame =
 
 /** 服务端帧；attach / create 被拒、坏帧、未知类型均走 error，连接不断 */
 export type ServerFrame =
-  | { type: "attached"; sessionId: string }
+  /** file 回带供客户端断线重连 re-attach（create 路径无 file，重连后从侧栏重新接管） */
+  | { type: "attached"; sessionId: string; file?: string }
   | { type: "released"; sessionId: string }
   | { type: "commandFailed"; sessionId: string; message: string }
   /** steer / followUp 的排队应答（prompt / abort 靠事件流反馈，无应答帧） */

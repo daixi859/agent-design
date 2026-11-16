@@ -20,8 +20,7 @@ export function Sidebar({ collapsed, ...state }: SessionsState & { collapsed: bo
       <div className={styles.inner}>
         <div className={styles.header}>
         <SearchField value={filter} onChange={setFilter} placeholder={t("search")} />
-        {/* 视觉件（ADR-0002）：下一阶段接入 pi 后触发 new_session */}
-        <IconButton icon="plus" title={t("newSessionHint")} />
+        {/* 新建入口在项目组标题行（组级「+」，带 cwd 语义；见 ProjectGroupView） */}
       </div>
 
         <nav className={`scroll-y ${styles.list}`}>

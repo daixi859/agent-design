@@ -71,6 +71,16 @@ export class SessionHost {
       if (body.type === "status") this.currentStatus = body.status;
       this.emit({ sessionId: this.sessionId, body });
     }
+    // pi 只在部分路径发 entry_appended（custom / context_edit / 边界草稿），普通消息落盘不发；
+    // 因此在轮次边界与结算时刻主动拉取权威条目，补齐消息与工具结果（ADR-0012 条目为中心）
+    if (event.type === "turn_end" || event.type === "agent_settled") this.flushEntries();
+  }
+
+  /** 把内核新落盘的条目逐一推给客户端（按 id 幂等，可重复推送） */
+  private flushEntries(): void {
+    for (const entry of this.session.drainNewEntries()) {
+      this.emit({ sessionId: this.sessionId, body: { type: "entry", entry } });
+    }
   }
 
   private setStatus(status: DriveStatus): void {

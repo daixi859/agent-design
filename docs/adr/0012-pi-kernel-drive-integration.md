@@ -33,3 +33,11 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 - 被驱动的 Session 是用户真实数据，Drive / Attach 语义见 GLOSSARY；与 pi CLI 并发驱动同一 session 无强制互斥。
 - dev 拓扑变化：`node packages/server` + `vite`（proxy `/api` 与 `/ws`）；typecheck / test / githooks 判据需随 workspace 迁移同步调整。
 - 从 Web UI 驱动会在真实 cwd 执行工具（含 bash），信任边界与 pi CLI 相同（本机单用户，无鉴权）。
+
+## 实施后补记（阶段四落地时被真内核推翻的假设）
+
+三条原设计假设被实证推翻，记录以免后人重走：
+
+- **条目推送不能只靠 `entry_appended`**。pi 只在部分路径发该事件（custom entry、context edit、边界草稿）；普通消息与工具结果落盘时**不发**。协议仍以 Entry 为中心，但由 `SessionHost` 在 `turn_end` 与 `agent_settled` 两个边界主动向内核拉取条目树的新增尾部（`PiSessionLike.drainNewEntries()`，以条目数为水位）。事件流因此仍是权威条目的搬运工，而非唯一来源。
+- **属主标记必须随连接消亡释放**。原设计写「进程消亡即释放」；实测浏览器刷新（WS 断开）后旧标记残留，同一 session 再也无法接管。修正：连接关闭时逐一 `release` 该连接持有的全部 session —— 属主生命周期是**连接**，不是进程。
+- **渲染层派生 memo 不能漏掉数据就绪信号**。`attached` 帧可能先于 REST 全量返回；若驱动视图 memo 只依赖驱动状态，会永久冻结在非驱动分支（实测：徽标已变、输入框仍禁用）。修正：memo 依赖里带上 fetch 完成信号。

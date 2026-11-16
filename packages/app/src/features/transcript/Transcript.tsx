@@ -1,6 +1,7 @@
 /** Transcript：对话区本体（ADR-0006：Turn / Tool Group 三层折叠结构；数据直收 TranscriptModel） */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TranscriptModel } from "../../lib/transcript-model";
+import type { ComposerDrive } from "./Composer";
 import { Icon } from "../../ui/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
@@ -11,9 +12,12 @@ import styles from "./transcript.module.css";
 export function Transcript({
   projectPath,
   view,
+  drive,
 }: {
   projectPath?: string;
   view: TranscriptModel;
+  /** 会话被驱动时由 SessionView 下发：输入区激活、状态徽标与中止 */
+  drive?: ComposerDrive;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
@@ -74,6 +78,7 @@ export function Transcript({
         model={view.model?.modelId}
         thinkingLevel={view.thinkingLevel}
         toolCount={view.toolCallCount}
+        drive={drive}
       />
     </div>
   );

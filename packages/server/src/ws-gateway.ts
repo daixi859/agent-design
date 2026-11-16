@@ -50,7 +50,7 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
   }
 
   wss.on("connection", (socket) => {
-    // 本连接拥有的订阅（断开时逐一撤销）
+    // 本连接拥有的订阅（断开时逐一撤销并释放属主）
     const owned = new Set<string>();
     socket.on("message", (data) => {
       let frame: ClientFrame;
@@ -63,6 +63,9 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
       void handleFrame(socket, frame, owned);
     });
     socket.on("close", () => {
+      // 连接消亡即释放属主（ADR-0012：内存标记随生命周期消亡）；
+      // 否则浏览器刷新后旧连接的标记残留，同一 session 将无法重新接管
+      for (const sessionId of owned) deps.release(sessionId);
       for (const sessionId of owned) unsubscribe(sessionId, socket);
     });
   });
@@ -74,7 +77,7 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
           const { sessionId } = await deps.attach(frame.file);
           owned.add(sessionId);
           subscribe(sessionId, socket);
-          send(socket, { type: "attached", sessionId });
+          send(socket, { type: "attached", sessionId, file: frame.file });
         } catch (err) {
           send(socket, { type: "error", message: err instanceof Error ? err.message : String(err) });
         }

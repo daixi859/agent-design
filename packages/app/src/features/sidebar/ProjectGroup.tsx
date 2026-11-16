@@ -1,6 +1,8 @@
-/** Sidebar 的 Project 分组（可折叠） */
-import { useState } from "react";
+/** Sidebar 的 Project 分组（可折叠）；组级「+」在该项目 cwd 新建会话（GLOSSARY: Drive） */
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import type { ProjectGroup } from "../../state/sessions";
+import { drive, useDriveSessions } from "../../state/use-drive";
 import { Icon } from "../../ui/Icon";
 import { IconButton } from "../../ui/IconButton";
 import { SessionItem } from "./SessionItem";
@@ -19,6 +21,26 @@ export function ProjectGroupView({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const { t } = useLocale();
+  const navigate = useNavigate();
+  const driveSessions = useDriveSessions();
+  // 新建会话的导航：create 后 attached 帧带回新 sessionId（无 file），出现在驱动表里即导航过去
+  const pendingCreate = useRef(false);
+  const knownIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const ids = new Set(driveSessions.keys());
+    if (pendingCreate.current) {
+      for (const id of ids) {
+        if (!knownIds.current.has(id)) {
+          pendingCreate.current = false;
+          navigate(`/session/${id}`);
+          break;
+        }
+      }
+    }
+    knownIds.current = ids;
+  }, [driveSessions, navigate]);
+
   const needle = filter.trim().toLowerCase();
   const sessions = needle
     ? group.sessions.filter((session) => {
@@ -44,11 +66,15 @@ export function ProjectGroupView({
             {group.projectName}
           </span>
         </button>
-        {/* 视觉件（ADR-0002）：下一阶段接入 pi 后触发 new_session；hover 显现 */}
+        {/* 组级新建：在该项目 cwd 触发 new_session（ADR-0012 阶段四接线）；hover 显现 */}
         <IconButton
           icon="plus"
-          title={t("newSessionHint")}
-          aria-label={t("newSessionHint")}
+          title={t("createInProject")}
+          aria-label={t("createInProject")}
+          onClick={() => {
+            pendingCreate.current = true;
+            drive.create(group.projectPath);
+          }}
           className={styles.groupAdd}
         />
       </div>

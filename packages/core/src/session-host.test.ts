@@ -41,6 +41,38 @@ describe("SessionHost · 单会话驱动语义", () => {
     expect(host.status).toBe("idle");
   });
 
+  it("turn_end / agent_settled 拉取新落盘条目（entry 事件）", () => {
+    const { session, emitted } = makeHost();
+    session.pendingEntries = [
+      { type: "message", id: "m1", parentId: null, timestamp: "T0", message: { role: "assistant", content: "好" } },
+    ];
+    session.emitEvent({ type: "turn_end", message: {}, toolResults: [] } as unknown as AgentSessionEvent);
+    expect(emitted).toContainEqual({
+      sessionId: "s1",
+      body: {
+        type: "entry",
+        entry: { type: "message", id: "m1", parentId: null, timestamp: "T0", message: { role: "assistant", content: "好" } },
+      },
+    });
+    expect(session.calls).toContain("drain:1");
+  });
+
+  it("agent_settled 也拉取条目，且与 status 同时产出", () => {
+    const { session, emitted } = makeHost();
+    session.pendingEntries = [
+      { type: "message", id: "m2", parentId: "m1", timestamp: "T1", message: { role: "user", content: "再" } },
+    ];
+    session.emitEvent({ type: "agent_settled", aborted: false } as AgentSessionEvent);
+    expect(emitted.map((e) => e.body.type)).toEqual(["status", "entry"]);
+  });
+
+  it("未到边界事件不拉取条目（不刷屏）", () => {
+    const { session, emitted } = makeHost();
+    session.emitEvent({ type: "agent_start" } as AgentSessionEvent);
+    expect(session.calls.some((c) => c.startsWith("drain:"))).toBe(false);
+    expect(emitted).toHaveLength(1);
+  });
+
   it("prompt 转发文本；正常路径不额外产出事件", async () => {
     const { host, session, emitted } = makeHost();
     await host.prompt("hi");

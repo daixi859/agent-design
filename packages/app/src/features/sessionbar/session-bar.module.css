@@ -45,3 +45,32 @@
   align-items: center;
   gap: var(--space-1);
 }
+
+/* ---- 驱动状态（ADR-0012 阶段四）---- */
+
+.drivePill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-05) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+  color: var(--text-2);
+  font-size: var(--text-caption2);
+}
+
+.drivePillRunning {
+  background: var(--success-subtle);
+  color: var(--text-1);
+}
+
+.driveDot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.drivePillRunning .driveDot {
+  background: var(--success);
+}

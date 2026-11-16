@@ -1,6 +1,7 @@
 // 内核接入层的窄替身边界（ADR-0012）：SessionHost 只依赖此接口，
 // 单测注入最小 fake；真实现见 pi-session-source.ts（包装 pi SDK 的 AgentSession）。
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry } from "@pi-studio/shared/pi-types";
 
 /** 排队应答：= pi 的 QueuedInputDisposition（该型未从包根导出，字面量对齐） */
 export type InputDisposition = "queued" | "handled";
@@ -18,5 +19,7 @@ export interface PiSessionLike {
   steer(text: string): Promise<InputDisposition>;
   followUp(text: string): Promise<InputDisposition>;
   abort(): Promise<void>;
+  /** 拉取自上次调用以来新增的权威条目（pi 的 entry_appended 不覆盖普通消息落盘） */
+  drainNewEntries(): SessionEntry[];
   dispose(): void;
 }
