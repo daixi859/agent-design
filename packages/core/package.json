@@ -1,0 +1,13 @@
+{
+  "name": "@pi-studio/core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@pi-studio/shared": "workspace:*",
+    "@earendil-works/pi-coding-agent": "^1.5.2"
+  }
+}

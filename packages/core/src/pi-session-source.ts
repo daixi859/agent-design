@@ -1,0 +1,28 @@
+// 真 pi SDK 适配器：把 AgentSession 包装成 PiSessionLike（ADR-0012）。
+// 薄层不单测（fake 已覆盖宿主语义），由阶段四真内核手动冒烟兜底。
+import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
+import type { PiSessionLike, PiSessionRequest } from "./types.ts";
+
+/** 按请求打开真实内核会话：attach = open(file)；create = 在 cwd 新建持久会话 */
+export async function openPiSession(request: PiSessionRequest): Promise<PiSessionLike> {
+  const sessionManager =
+    request.kind === "attach" ? SessionManager.open(request.file) : SessionManager.create(request.cwd);
+  const { session } = await createAgentSession({ sessionManager });
+  return adaptAgentSession(session);
+}
+
+function adaptAgentSession(session: AgentSession): PiSessionLike {
+  return {
+    get sessionId() {
+      return session.sessionId;
+    },
+    subscribe(listener) {
+      return session.subscribe(listener);
+    },
+    prompt: (text) => session.prompt(text),
+    steer: (text) => session.steer(text),
+    followUp: (text) => session.followUp(text),
+    abort: () => session.abort(),
+    dispose: () => session.dispose(),
+  };
+}
