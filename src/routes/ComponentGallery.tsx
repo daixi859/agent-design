@@ -2,8 +2,8 @@
     图标全网格、控件与徽标、色板、字阶、消息样张。样式直接引用各组件的
     module.css 源头，保证预览即真实组件而非复刻。 */
 import { useState } from "react";
-import type { ContentBlock, MessageEntry, ToolResultMessage } from "../../shared/pi-types";
-import type { Turn } from "../lib/session-model";
+import type { ContentBlock, MessageEntry } from "../../shared/pi-types";
+import type { Turn } from "../lib/transcript-model";
 import { AnnotationRow } from "../features/transcript/AnnotationRow";
 import { Composer } from "../features/transcript/Composer";
 import { DiffView } from "../features/transcript/DiffView";
@@ -68,16 +68,7 @@ function entry(role: MessageEntry["message"]["role"], content: ContentBlock[]): 
   };
 }
 
-const SAMPLE_EDIT_RESULT: ToolResultMessage = {
-  role: "toolResult",
-  toolCallId: "call-1",
-  toolName: "edit",
-  isError: false,
-  content: [{ type: "text", text: "Edited 1 file" }],
-  details: { diff: SAMPLE_DIFF, patch: SAMPLE_DIFF, firstChangedLine: 14 },
-};
-
-/** 三层结构样张（ADR-0006）：分组（思考+edit）→ 回答 */
+/** 三层结构样张（ADR-0006）：分组（思考+edit）→ 回答（样张直接构造 TranscriptModel 显示形状） */
 const SAMPLE_TURN: Turn = {
   id: "sample-turn",
   user: entry("user", [
@@ -97,8 +88,12 @@ const SAMPLE_TURN: Turn = {
         {
           kind: "toolCall",
           id: "call-1",
-          call: { type: "toolCall", id: "call-1", name: "edit", arguments: { path: "src/auth/session.ts", edits: [] } },
-          result: SAMPLE_EDIT_RESULT,
+          name: "edit",
+          args: { path: "src/auth/session.ts", edits: [] },
+          summary: "src/auth/session.ts",
+          output: "Edited 1 file",
+          diff: SAMPLE_DIFF,
+          isError: false,
         },
       ],
     },

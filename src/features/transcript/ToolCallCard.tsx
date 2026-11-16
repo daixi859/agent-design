@@ -1,14 +1,11 @@
-/** 工具调用卡：call + 配对 result 合并渲染（Q14 消息级） */
+/** 工具调用卡：TranscriptModel 归一化后的显示条目（ToolCallItem）折叠呈现。
+    本 module 只做呈现——icon 映射、摘要截断、展开交互；提取规则在模型层。 */
 import { useState } from "react";
-import type {
-  ContentBlock,
-  ToolCallBlock,
-  ToolResultMessage,
-} from "../../../shared/pi-types";
 import { Icon, type IconName } from "../../ui/Icon";
 import { DiffView } from "./DiffView";
 import styles from "./transcript.module.css";
 import { cx } from "../../lib/cx";
+import type { ToolCallItem } from "../../lib/transcript-model";
 
 const TOOL_ICONS: Record<string, IconName> = {
   bash: "terminal",
@@ -25,61 +22,28 @@ function toolIcon(name: string): IconName {
   return TOOL_ICONS[name] ?? "wrench";
 }
 
-function argSummary(args?: Record<string, unknown>): string {
-  if (!args) return "";
-  const value =
-    (args.path as string) ??
-    (args.command as string) ??
-    (args.pattern as string) ??
-    (args.glob as string) ??
-    Object.values(args).find((v) => typeof v === "string");
-  const text = typeof value === "string" ? value : JSON.stringify(args);
-  return text.replace(/\s+/g, " ").slice(0, 80);
+/** 头部摘要：空白折叠 + 80 字符截断（卡片宽度的呈现约束） */
+function truncateSummary(summary: string | undefined): string {
+  return (summary ?? "").replace(/\s+/g, " ").slice(0, 80);
 }
 
-function blocksToText(blocks: ContentBlock[]): string {
-  return blocks
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-}
-
-function detailDiff(details: unknown): string | undefined {
-  if (details && typeof details === "object" && "diff" in details) {
-    const diff = (details as { diff?: unknown }).diff;
-    if (typeof diff === "string" && diff) return diff;
-  }
-  return undefined;
-}
-
-export function ToolCallCard({
-  call,
-  result,
-}: {
-  call: ToolCallBlock;
-  /** 同分支上按 toolCallId 配对的 toolResult（可能缺失：中断等） */
-  result?: ToolResultMessage;
-}) {
-  const isError = result?.isError ?? false;
-  const [open, setOpen] = useState(isError);
-  const args = call.arguments;
-  const diff = detailDiff(result?.details);
-  const output = result ? blocksToText(result.content) : undefined;
+export function ToolCallCard({ item }: { item: ToolCallItem }) {
+  const [open, setOpen] = useState(item.isError);
 
   return (
-    <div className={styles.toolCard} data-error={isError}>
+    <div className={styles.toolCard} data-error={item.isError}>
       <button
         type="button"
         className={styles.toolHeader}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
-        <Icon name={toolIcon(call.name)} size={14} />
-        <span className={styles.toolName}>{call.name}</span>
+        <Icon name={toolIcon(item.name)} size={14} />
+        <span className={styles.toolName}>{item.name}</span>
         <span className={cx("ellipsis", styles.toolSummary)}>
-          {argSummary(args)}
+          {truncateSummary(item.summary)}
         </span>
-        {isError && <Icon name="warning" size={13} className={styles.toolErrorIcon} />}
+        {item.isError && <Icon name="warning" size={13} className={styles.toolErrorIcon} />}
         <span className={styles.toolChevron} data-open={open}>
           <Icon name="chevron-right" size={12} />
         </span>
@@ -87,13 +51,13 @@ export function ToolCallCard({
 
       {open && (
         <div className={styles.toolBody}>
-          {args && Object.keys(args).length > 0 && (
-            <pre className={styles.toolArgs}>{JSON.stringify(args, null, 2)}</pre>
+          {item.args && (
+            <pre className={styles.toolArgs}>{JSON.stringify(item.args, null, 2)}</pre>
           )}
-          {diff && <DiffView diff={diff} />}
-          {output && (
-            <pre className={styles.toolOutput} data-error={isError}>
-              {output}
+          {item.diff && <DiffView diff={item.diff} />}
+          {item.output && (
+            <pre className={styles.toolOutput} data-error={item.isError}>
+              {item.output}
             </pre>
           )}
         </div>

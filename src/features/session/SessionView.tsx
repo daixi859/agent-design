@@ -1,24 +1,14 @@
-/** Session 视图：详情加载 + Session Bar branched 徽标推送 + Transcript */
-import { useContext, useEffect } from "react";
-import { useParams } from "react-router";
-import { SessionBadgeSetter } from "../../state/session-badge";
-import { useSessionDetail } from "../../state/useSessionDetail";
+/** Session 视图：加载/错误态 + Transcript（detail 经 outlet context 由 MainShell 下发） */
+import { useOutletContext } from "react-router";
 import { useLocale } from "../../state/useLocale";
+import type { SessionDetailState } from "../../state/useSessionDetail";
 import { Icon } from "../../ui/Icon";
 import { Transcript } from "../transcript/Transcript";
 import styles from "../transcript/transcript.module.css";
 
 export function SessionView() {
-  const { id } = useParams<{ id: string }>();
-  const setSessionBadge = useContext(SessionBadgeSetter);
   const { t } = useLocale();
-  const data = useSessionDetail(id);
-
-  useEffect(() => {
-    setSessionBadge({ branched: data.branch.abandonedCount > 0 });
-  }, [setSessionBadge, data.branch.abandonedCount]);
-
-  if (!id) return null;
+  const data = useOutletContext<SessionDetailState>();
 
   if (data.error) {
     return (
@@ -40,12 +30,6 @@ export function SessionView() {
   }
 
   return (
-    <Transcript
-      projectPath={data.header?.cwd}
-      branch={data.branch.entries}
-      stats={data.stats}
-      model={data.model}
-      thinkingLevel={data.thinkingLevel}
-    />
+    <Transcript projectPath={data.header?.cwd} view={data.view} />
   );
 }

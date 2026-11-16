@@ -1,7 +1,6 @@
-/** Transcript：对话区本体（ADR-0006：Turn / Tool Group 三层折叠结构） */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SessionEntry } from "../../../shared/pi-types";
-import { buildTurns } from "../../lib/session-model";
+/** Transcript：对话区本体（ADR-0006：Turn / Tool Group 三层折叠结构；数据直收 TranscriptModel） */
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { TranscriptModel } from "../../lib/transcript-model";
 import { Icon } from "../../ui/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
@@ -11,23 +10,17 @@ import styles from "./transcript.module.css";
 
 export function Transcript({
   projectPath,
-  branch,
-  stats,
-  model,
-  thinkingLevel,
+  view,
 }: {
   projectPath?: string;
-  branch: SessionEntry[];
-  stats: { toolCalls: number };
-  model?: { provider?: string; modelId?: string };
-  thinkingLevel?: string;
+  view: TranscriptModel;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
   const { t } = useLocale();
 
-  const { turns, orphanAnnotations } = useMemo(() => buildTurns(branch), [branch]);
+  const { turns, orphanAnnotations } = view;
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -42,7 +35,7 @@ export function Transcript({
     const el = scrollRef.current;
     if (!el || !nearBottomRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [branch]);
+  }, [view]);
 
   const jumpToLatest = useCallback(() => {
     const el = scrollRef.current;
@@ -78,9 +71,9 @@ export function Transcript({
       )}
 
       <Composer
-        model={model?.modelId}
-        thinkingLevel={thinkingLevel}
-        toolCount={stats.toolCalls}
+        model={view.model?.modelId}
+        thinkingLevel={view.thinkingLevel}
+        toolCount={view.toolCallCount}
       />
     </div>
   );

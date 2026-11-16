@@ -1,9 +1,6 @@
-/** Session Bar（ADR-0009）：内容区标题栏——session 标题 + branched 徽标
-    （SessionView 经 session-badge 推送）+ 动作区（浏览器全屏、主题切换）。 */
+/** Session Bar（ADR-0009）：内容区标题栏的纯展示——title / branched 徽标由 MainShell 派生下发；
+    动作区（浏览器全屏、主题切换）自持状态。 */
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router";
-import type { SessionsState } from "../../state/sessions";
-import { useSessionBadge } from "../../state/session-badge";
 import { useTheme } from "../../state/useTheme";
 import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
@@ -13,15 +10,17 @@ import nav from "../../ui/nav.module.css";
 import styles from "./session-bar.module.css";
 
 export function SessionBar({
-  sessions,
+  title,
+  branched,
   collapsed,
 }: {
-  sessions: SessionsState;
+  /** 当前 session 标题（无 session 时为产品名） */
+  title: string;
+  /** 当前 session 存在被弃分支（MainShell 从 TranscriptModel 派生） */
+  branched: boolean;
   /** 侧栏收起时 Brand Float 压在本栏左端，需要让位 */
   collapsed: boolean;
 }) {
-  const { pathname } = useLocation();
-  const badge = useSessionBadge();
   const [theme, setTheme] = useTheme();
   const { t } = useLocale();
   const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement));
@@ -42,15 +41,11 @@ export function SessionBar({
     }
   };
 
-  const id = /^\/session\/([^/]+)/.exec(pathname)?.[1];
-  const session = sessions.sessions.find((candidate) => candidate.id === id);
-  const title = session ? (session.name ?? session.title ?? t("untitledSession")) : "Pi Studio";
-
   return (
     <header className={cx(styles.bar, collapsed && styles.clearFloat)}>
       <div className={styles.titleGroup}>
         <span className={`ellipsis ${nav.barTitle}`}>{title}</span>
-        {badge.branched && (
+        {branched && (
           <span className={styles.branchedBadge} title={t("branchedTitle")}>
             <Icon name="branch" size={11} />
             {t("branched")}

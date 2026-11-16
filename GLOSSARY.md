@@ -56,6 +56,10 @@ _Avoid_: 轮次、回合、session（与 Session 混淆）
 Turn 内以 assistant text 回答为分隔符的一段连续非文本内容（thinking、toolCall+toolResult、bashExecution，可跨多条 assistant 消息）；Turn 的中层折叠单元。
 _Avoid_: 工具批、步骤组、batch
 
+**TranscriptModel**:
+Transcript 渲染所需的完整派生数据，Session 视图的唯一派生出口：`buildTranscriptModel(entries)` 从 Entry 列表一次算出 Turn 列表、孤儿注解、被弃分支计数、最后模型声明、思考等级与工具调用数；Entry 树本身不对外暴露。
+_Avoid_: 派生数据、视图状态、session 状态
+
 **Preview**:
 设计验收用的组件清单页（图标全网格、控件、色板、字阶与消息样张），挂在 Settings 侧栏导航下（/settings/preview）；样式直接引用各组件 module.css 源头。
 _Avoid_: 组件库、Gallery（作为页面名时）

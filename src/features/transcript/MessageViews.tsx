@@ -1,13 +1,11 @@
 /** 用户消息渲染（iMessage 式右侧气泡）；assistant 文本已并入 Turn 结构（ADR-0006） */
-import type { ContentBlock, MessageEntry, UserMessage } from "../../../shared/pi-types";
+import type { MessageEntry, UserMessage } from "../../../shared/pi-types";
+import { contentBlocks } from "../../../shared/message-text";
 import styles from "./transcript.module.css";
 
 export function UserMessageView({ entry }: { entry: MessageEntry }) {
   const message = entry.message as UserMessage;
-  const blocks: ContentBlock[] =
-    typeof message.content === "string"
-      ? [{ type: "text", text: message.content }]
-      : message.content;
+  const blocks = contentBlocks(message.content);
   return (
     <div className={styles.userRow}>
       <div className={styles.userBubble}>

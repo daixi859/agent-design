@@ -8,6 +8,7 @@ import { join, basename } from "node:path";
 import { stat, readdir, readFile, open } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { firstUserText } from "../shared/message-text";
 import type {
   SessionEntry,
   SessionHeaderEntry,
@@ -103,27 +104,6 @@ async function readPrefix(file: string, bytes: number): Promise<string> {
   }
 }
 
-function firstUserText(entries: SessionEntry[]): string | undefined {
-  for (const entry of entries) {
-    if (entry.type !== "message") continue;
-    const message = (entry as { message?: { role?: string; content?: unknown } }).message;
-    if (message?.role !== "user") continue;
-    const content = message.content;
-    const text =
-      typeof content === "string"
-        ? content
-        : Array.isArray(content)
-          ? content
-              .filter((b) => b?.type === "text")
-              .map((b) => (b as { text?: string }).text ?? "")
-              .join(" ")
-          : "";
-    const clean = text.replace(/\s+/g, " ").trim();
-    if (clean) return clean.slice(0, 80);
-  }
-  return undefined;
-}
-
 // ---------- 列表（带 mtime+size 缓存） ----------
 
 interface ListMeta {
@@ -193,6 +173,15 @@ async function listSessions(): Promise<{ rootExists: boolean; sessions: SessionS
 
 // ---------- 详情与增量 tail ----------
 
+/** 从读取块中只消费完整行，末尾半行留给下轮轮询（Live Tail 契约的 server 半边，纯函数便于锁定测试）。
+    返回 undefined 表示块内无完整行。 */
+export function consumeCompleteLines(chunk: string): { text: string; entries: SessionEntry[]; consumedBytes: number } | undefined {
+  const lastNewline = chunk.lastIndexOf("\n");
+  if (lastNewline === -1) return undefined;
+  const text = chunk.slice(0, lastNewline + 1);
+  return { text, entries: parseEntries(text), consumedBytes: Buffer.byteLength(text) };
+}
+
 async function readSession(id: string) {
   const ref = await findFileById(id);
   const text = await readFile(ref.file, "utf8");
@@ -222,16 +211,13 @@ async function tailSession(id: string, offset: number) {
     const length = ref.sizeBytes - safeOffset;
     const buffer = Buffer.alloc(length);
     await handle.read(buffer, 0, length, safeOffset);
-    let text = buffer.toString("utf8");
-    // 只消费完整行：最后一个 \n 之后的内容留给下一次轮询
-    const lastNewline = text.lastIndexOf("\n");
-    if (lastNewline === -1) return empty;
-    text = text.slice(0, lastNewline + 1);
+    const consumed = consumeCompleteLines(buffer.toString("utf8"));
+    if (!consumed) return empty;
     return {
       sizeBytes: ref.sizeBytes,
       mtimeMs: ref.mtimeMs,
-      offset: safeOffset + Buffer.byteLength(text),
-      entries: parseEntries(text),
+      offset: safeOffset + consumed.consumedBytes,
+      entries: consumed.entries,
     };
   } finally {
     await handle.close();

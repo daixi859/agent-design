@@ -1,7 +1,7 @@
-/** Turn 渲染（ADR-0006 三层）：轮聚合条 → Tool Group 条 → 单条目；回答平铺 */
+/** Turn 渲染（ADR-0006 三层）：轮聚合条 → Tool Group 条 → 单条目；回答平铺。
+    消费的 GroupItem 已是模型层归一化的显示形状，本文件零伪造。 */
 import { Fragment, useState } from "react";
-import type { BashExecutionMessage, ToolResultMessage } from "../../../shared/pi-types";
-import type { GroupItem, Turn, TurnItem } from "../../lib/session-model";
+import type { GroupItem, Turn, TurnItem } from "../../lib/transcript-model";
 import { cx } from "../../lib/cx";
 import { Icon } from "../../ui/Icon";
 import { Markdown } from "./Markdown";
@@ -21,27 +21,10 @@ function stepsLabel(stepCount: number, thoughtCount: number): string {
   return parts.join(" · ");
 }
 
-function BashExecutionItem({ id, bash }: { id: string; bash: BashExecutionMessage }) {
-  return (
-    <ToolCallCard
-      call={{ type: "toolCall", id, name: "bash", arguments: { command: bash.command } }}
-      result={
-        {
-          role: "toolResult",
-          toolCallId: id,
-          toolName: "bash",
-          content: [{ type: "text", text: bash.output ?? "" }],
-          isError: bash.cancelled || (bash.exitCode !== undefined && bash.exitCode !== 0),
-        } as ToolResultMessage
-      }
-    />
-  );
-}
-
 /** 层 2：分组条（默认折叠）+ 层 3 单条目 */
 function GroupSection({ group }: { group: GroupItem[] }) {
   const [open, setOpen] = useState(false);
-  const toolCount = group.filter((item) => item.kind !== "thinking").length;
+  const toolCount = group.filter((item) => item.kind === "toolCall").length;
   const thoughtCount = group.filter((item) => item.kind === "thinking").length;
 
   return (
@@ -71,9 +54,7 @@ function GroupSection({ group }: { group: GroupItem[] }) {
                   />
                 );
               case "toolCall":
-                return <ToolCallCard key={item.id} call={item.call} result={item.result} />;
-              case "bashExecution":
-                return <BashExecutionItem key={item.id} id={item.id} bash={item.bash} />;
+                return <ToolCallCard key={item.id} item={item} />;
             }
           })}
         </div>

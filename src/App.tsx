@@ -1,8 +1,11 @@
 /** App shell 与路由（ADR-0009：无全局顶栏——Brand Float 常驻 + 各区头部分担职责；
-    Q11：URL 路由；设置壳为独立整页双栏，预览路由并入其侧栏） */
+    Q11：URL 路由；设置壳为独立整页双栏，预览路由并入其侧栏。
+    MainShell：主壳布局路由——useSessionDetail 单订阅，SessionBar 纯展示，detail 经 outlet 下发） */
 import { useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useSessions, type SessionsState } from "./state/sessions";
+import { useSessionDetail, type SessionDetailState } from "./state/useSessionDetail";
+import { currentSessionId } from "./state/current-session";
 import { useLocale } from "./state/useLocale";
 import { BrandFloat } from "./features/shell/BrandFloat";
 import { Sidebar } from "./features/sidebar/Sidebar";
@@ -37,6 +40,27 @@ function Home({ sessions }: { sessions: SessionsState }) {
   );
 }
 
+/** 主壳布局路由：当前 Session 的 URL 契约、详情订阅与 SessionBar 派生的唯一归属 */
+function MainShell({ sessions, collapsed }: { sessions: SessionsState; collapsed: boolean }) {
+  const { pathname } = useLocation();
+  const { t } = useLocale();
+  const id = currentSessionId(pathname);
+  const detail = useSessionDetail(id);
+  const session = id ? sessions.sessions.find((candidate) => candidate.id === id) : undefined;
+  const title = session
+    ? (session.name ?? session.title ?? t("untitledSession"))
+    : "Pi Studio";
+
+  return (
+    <>
+      <SessionBar title={title} branched={detail.view.abandonedCount > 0} collapsed={collapsed} />
+      <div className={styles.mainContent}>
+        <Outlet context={detail satisfies SessionDetailState} />
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   const sessions = useSessions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -67,9 +91,8 @@ export default function App() {
           {/* 侧栏常驻，收起用宽度动画（ADR-0009） */}
           <Sidebar {...sessions} collapsed={sidebarCollapsed} />
           <main className={styles.main}>
-            <SessionBar sessions={sessions} collapsed={sidebarCollapsed} />
-            <div className={styles.mainContent}>
-              <Routes>
+            <Routes>
+              <Route element={<MainShell sessions={sessions} collapsed={sidebarCollapsed} />}>
                 <Route path="/" element={<Home sessions={sessions} />} />
                 {/* 旧组件总览路由并入设置壳的 Preview 分区 */}
                 <Route
@@ -78,8 +101,8 @@ export default function App() {
                 />
                 <Route path="/session/:id" element={<SessionView />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
+              </Route>
+            </Routes>
           </main>
         </div>
       )}
