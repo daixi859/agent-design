@@ -7,6 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@pi-studio/shared": "workspace:*"
+    "@pi-studio/core": "workspace:*",
+    "@pi-studio/shared": "workspace:*",
+    "ws": "^8.23.0"
   }
 }

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @pi-studio/app dev",
+    "server": "node packages/server/src/main.ts",
     "build": "pnpm --filter @pi-studio/app build",
     "preview": "pnpm --filter @pi-studio/app preview",
     "typecheck": "node node_modules/typescript/bin/tsc -b",
@@ -14,6 +15,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.9.0",
     "vite": "^7.0.0",

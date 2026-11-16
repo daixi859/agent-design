@@ -6,14 +6,17 @@ import type { SessionEntry } from "./pi-types";
 /** 运行状态：由 agent_start / agent_settled / auto_retry 驱动的权威生命周期 */
 export type DriveStatus = "idle" | "running" | "retrying";
 
-/** 客户端 → 内核命令（sessionId 在信封上，WS 按其多路复用） */
+/** 客户端 → 内核命令体（sessionId 在信封上，WS 按其多路复用） */
+export type DriveCommandBody =
+  | { type: "prompt"; text: string }
+  | { type: "steer"; text: string }
+  | { type: "followUp"; text: string }
+  | { type: "abort" };
+
+/** 领域层命令（core SessionHost 与 WS 帧共用） */
 export interface DriveCommand {
   sessionId: string;
-  body:
-    | { type: "prompt"; text: string }
-    | { type: "steer"; text: string }
-    | { type: "followUp"; text: string }
-    | { type: "abort" };
+  body: DriveCommandBody;
 }
 
 /** 内核 → 客户端事件体 */
@@ -39,3 +42,22 @@ export interface DriveEvent {
   sessionId: string;
   body: DriveEventBody;
 }
+
+// ===== WS 信封（阶段三）：协议比领域层多出会话生命周期管理（attach / create / release） =====
+
+/** 客户端帧 */
+export type ClientFrame =
+  | { type: "attach"; file: string }
+  | { type: "create"; cwd: string }
+  | { type: "release"; sessionId: string }
+  | { type: "drive"; command: DriveCommand };
+
+/** 服务端帧；attach / create 被拒、坏帧、未知类型均走 error，连接不断 */
+export type ServerFrame =
+  | { type: "attached"; sessionId: string }
+  | { type: "released"; sessionId: string }
+  | { type: "commandFailed"; sessionId: string; message: string }
+  /** steer / followUp 的排队应答（prompt / abort 靠事件流反馈，无应答帧） */
+  | { type: "disposition"; sessionId: string; command: "steer" | "followUp"; disposition: "queued" | "handled" }
+  | { type: "error"; message: string }
+  | { type: "event"; event: DriveEvent };

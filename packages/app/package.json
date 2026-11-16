@@ -17,8 +17,5 @@
     "react-router": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "shiki": "^3.0.0"
-  },
-  "devDependencies": {
-    "@pi-studio/server": "workspace:*"
   }
 }
