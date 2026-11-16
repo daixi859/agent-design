@@ -22,6 +22,7 @@ export function useSessionDetail(id: string | undefined): SessionDetailState {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
+    tailRef.current = null; // 清空旧 session 的状态机：新详情未决期间轮询空转，防串档
     setState({ loading: true, view: EMPTY_VIEW });
     fetchSession(id)
       .then((detail) => {
