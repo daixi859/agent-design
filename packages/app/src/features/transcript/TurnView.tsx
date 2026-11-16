@@ -1,6 +1,6 @@
 /** Turn 渲染（ADR-0006 三层）：轮聚合条 → Tool Group 条 → 单条目；回答平铺。
     消费的 GroupItem 已是模型层归一化的显示形状，本文件零伪造。 */
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { GroupItem, Turn, TurnItem } from "../../lib/transcript-model";
 import { cx } from "../../lib/cx";
 import { Icon } from "../../ui/Icon";
@@ -21,9 +21,13 @@ function stepsLabel(stepCount: number, thoughtCount: number): string {
   return parts.join(" · ");
 }
 
-/** 层 2：分组条（默认折叠）+ 层 3 单条目 */
-function GroupSection({ group }: { group: GroupItem[] }) {
+/** 层 2：分组条（默认折叠）+ 层 3 单条目。生成中的那一轮强制展开：工具在跑却被折叠，
+    看着就像卡住——这正是「白屏一阵、然后一次性全冒出来」的来源之一。 */
+function GroupSection({ group, live = false }: { group: GroupItem[]; live?: boolean }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (live) setOpen(true);
+  }, [live]);
   const toolCount = group.filter((item) => item.kind === "toolCall").length;
   const thoughtCount = group.filter((item) => item.kind === "thinking").length;
 
@@ -70,6 +74,7 @@ function TurnItemView({
   onToggleOpen,
   stepCount,
   thoughtCount,
+  live,
 }: {
   item: TurnItem;
   isFirstGroup: boolean;
@@ -77,6 +82,7 @@ function TurnItemView({
   onToggleOpen: () => void;
   stepCount: number;
   thoughtCount: number;
+  live: boolean;
 }) {
   switch (item.kind) {
     case "text":
@@ -124,15 +130,20 @@ function TurnItemView({
               {stepsLabel(stepCount, thoughtCount)}
             </button>
           )}
-          <GroupSection group={item.group} />
+          <GroupSection group={item.group} live={live} />
         </Fragment>
       );
     }
   }
 }
 
-export function TurnView({ turn }: { turn: Turn }) {
+export function TurnView({ turn, live = false }: { turn: Turn; live?: boolean }) {
   const [open, setOpen] = useState(false);
+  // 当前正在生成的那一轮默认展开：折叠条在生成中看着像卡住，
+  // 也是「白屏之后一次性全冒出来」的观感来源之一。历史轮保持默认折叠。
+  useEffect(() => {
+    if (live) setOpen(true);
+  }, [live]);
   const groups = turn.items.filter((item): item is Extract<TurnItem, { kind: "group" }> => item.kind === "group");
   const stepCount = groups.reduce((count, g) => count + g.group.length, 0);
   const thoughtCount = groups.reduce(
@@ -153,6 +164,7 @@ export function TurnView({ turn }: { turn: Turn }) {
           onToggleOpen={() => setOpen((value) => !value)}
           stepCount={stepCount}
           thoughtCount={thoughtCount}
+          live={live}
         />
       ))}
     </div>

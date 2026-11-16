@@ -156,6 +156,14 @@ export interface SessionSnapshot {
   entries: SessionEntry[];
 }
 
+/** 流式草稿：内核已生成、但尚未落盘成条目的那一段消息内容（协议 delta 帧的累积形状）。
+ * 它是瞬态的（ADR-0012）：整段可由内核重发复现，帧本身可丢；
+ * 渲染时临时合成一条条目挂在活动分支尾部，权威条目一落盘即整体让位。 */
+export interface StreamingDraft {
+  text?: string;
+  thinking?: string;
+}
+
 export interface ModelChangeEntry extends EntryBase {
   type: "model_change";
   provider: string;

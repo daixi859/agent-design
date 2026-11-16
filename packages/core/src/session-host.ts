@@ -79,8 +79,20 @@ export class SessionHost {
       this.emit({ sessionId: this.sessionId, body });
     }
     // pi 只在部分路径发 entry_appended（custom / context_edit / 边界草稿），普通消息落盘不发；
-    // 因此在轮次边界与结算时刻主动拉取权威条目，补齐消息与工具结果（ADR-0012 条目为中心）
-    if (event.type === "turn_end" || event.type === "agent_settled") this.flushEntries();
+    // 因此在这些边界主动拉取权威条目，补齐消息与工具结果（ADR-0012 条目为中心）。
+    //
+    // 为什么是这几个点：pi 的 message_end 监听器先于持久化被调用（列表先看到、条目后落盘），
+    // 所以「某个消息已落盘」最早在下一个 message_start 才可观测——用户消息就在此刻首次回显；
+    // 否则整轮生成期间用户看到的是一动不动的旧画面（实测白屏约 6.8 秒）。
+    // 每轮拉取次数与轮内的助手消息数同阶，不是每帧拉取。
+    if (
+      event.type === "message_start" ||
+      event.type === "message_end" ||
+      event.type === "turn_end" ||
+      event.type === "agent_settled"
+    ) {
+      this.flushEntries();
+    }
   }
 
   /** 把内核新落盘的条目逐一推给客户端（按 id 幂等，可重复推送） */

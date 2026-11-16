@@ -95,6 +95,30 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     expect(state).toBe(before);
   });
 
+  // 红证据（实测）：一轮 152 个 delta 帧搬运了 376 字的正文，而 transcript 文本长度全程不变，
+  // 全部内容在 turn_end 边界一次性爆出 → 用户看到「回车后白屏，然后一起展示」。
+  it("delta 事件：正文增量累积为瞬态叠加（此前整条丢弃 → 整轮白屏）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "status", status: "running" }));
+    state = applyServerFrame(state, event({ type: "delta", field: "text", delta: "春" }));
+    state = applyServerFrame(state, event({ type: "delta", field: "text", delta: "天" }));
+    expect(state?.streaming?.text).toBe("春天");
+  });
+
+  it("delta 的 text 与 thinking 分量各走各的，互不覆盖", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "想" }));
+    state = applyServerFrame(state, event({ type: "delta", field: "text", delta: "答" }));
+    expect(state?.streaming).toEqual({ thinking: "想", text: "答" });
+  });
+
+  it("权威条目到达：瞬态叠加整体让位（entry 是权威，ADR-0012）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "delta", field: "text", delta: "春" }));
+    state = applyServerFrame(state, event({ type: "entry", entry: entry("e1") }));
+    expect(state?.streaming).toBeUndefined();
+  });
+
   it("released → 状态移除（undefined）", () => {
     let state: DriveSession | undefined = applyServerFrame(undefined, attached);
     state = applyServerFrame(state, { type: "released", sessionId: "s1" });

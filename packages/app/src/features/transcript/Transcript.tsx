@@ -13,11 +13,14 @@ export function Transcript({
   projectPath,
   view,
   drive,
+  live = false,
 }: {
   projectPath?: string;
   view: TranscriptModel;
   /** 会话被驱动时由 SessionView 下发：输入区激活、状态徽标与中止 */
   drive?: ComposerDrive;
+  /** 会话正在运行（驱动中且非 idle） */
+  live?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
@@ -25,6 +28,8 @@ export function Transcript({
   const { t } = useLocale();
 
   const { turns, orphanAnnotations } = view;
+  // 末轮即当前生成中的那一轮：只有它值得默认展开（历史轮展开会撑开整篇对话）
+  const lastTurnId = turns.at(-1)?.id;
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -62,7 +67,10 @@ export function Transcript({
               <span>{t("emptyBranchHint")}</span>
             </div>
           ) : (
-            turns.map((turn) => <TurnView key={turn.id} turn={turn} />)
+            turns.map((turn) => (
+              // 驱动中且是末轮才视为「生成中」：REST/Live Tail 浏览路径不改变既有折叠行为
+              <TurnView key={turn.id} turn={turn} live={live && turn.id === lastTurnId} />
+            ))
           )}
         </div>
       </div>

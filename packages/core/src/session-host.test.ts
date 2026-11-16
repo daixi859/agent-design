@@ -65,6 +65,20 @@ describe("SessionHost · 单会话驱动语义", () => {
     expect(emitted.map((e) => e.body.type)).toEqual(["status", "entry"]);
   });
 
+  // 用户消息的落盘发生在 pi 的 message_end 分支，而监听器先于持久化被调用；
+  // 因此「文件上最早能看到该用户消息」的时刻是紧接着的 assistant message_start。
+  it("message_start 拉取条目：用户消息在第一个 token 之前就回显", () => {
+    const { session, emitted } = makeHost();
+    session.pendingEntries = [
+      { type: "message", id: "u1", parentId: null, timestamp: "T0", message: { role: "user", content: "回车即回显" } },
+    ];
+    session.emitEvent({
+      type: "message_start",
+      message: { role: "assistant", content: [] },
+    } as unknown as AgentSessionEvent);
+    expect(emitted.map((e) => e.body.type)).toEqual(["entry"]);
+  });
+
   it("未到边界事件不产出条目（不刷屏）", () => {
     const { session, emitted } = makeHost();
     session.pendingEntries = [

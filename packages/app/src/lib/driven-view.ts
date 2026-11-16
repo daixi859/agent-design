@@ -7,12 +7,15 @@
     任何一参数引用变了就重算，调用侧根本没有依赖数组可漏。 */
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import type { DriveSession } from "./drive-client";
-import { mergeEntries } from "./drive-client";
+import { mergeEntries, streamingEntries } from "./drive-client";
 import { buildTranscriptModel, type TranscriptModel } from "./transcript-model";
+
+/** baseline 为 null 时给缓存槽的占位：undefined 已被「尚未计算」占用 */
+const NO_BASELINE = Symbol("no-baseline");
 
 /** 单槽缓存：同时挂载多个 session 时只影响命中率，不影响正确性 */
 let lastDriveSession: DriveSession | undefined;
-let lastBaseline: SessionSnapshot | null = null;
+let lastBaseline: SessionSnapshot | null | typeof NO_BASELINE = NO_BASELINE;
 let lastView: TranscriptModel | undefined;
 
 /** 有基线且有驱动会话时才产出；否则返回 undefined（调用方回落到 REST/Live Tail 视图） */
@@ -25,7 +28,11 @@ export function resolveDrivenView(
   lastBaseline = baseline;
   lastView =
     driveSession && baseline
-      ? buildTranscriptModel([...mergeEntries(baseline.entries, driveSession.entries)])
+      ? // 主分支以真实条目结尾；流式草稿只作末尾瞬态叠加，随权威条目落盘自动退场
+        buildTranscriptModel([
+          ...mergeEntries(baseline.entries, driveSession.entries),
+          ...streamingEntries(driveSession.streaming),
+        ])
       : undefined;
   return lastView;
 }

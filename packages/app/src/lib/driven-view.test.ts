@@ -49,6 +49,26 @@ describe("resolveDrivenView", () => {
     expect(view!.turns).toHaveLength(1);
   });
 
+  // 红证据（实测）：回车后 4 秒内 44 个 delta 帧到达，DOM 文本长度一动不动。
+  it("权威条目到达前，流式增量已进入视图（不再白屏等整轮结束）", () => {
+    const session: DriveSession = { ...driven([]), status: "running", streaming: { text: "正在生成" } };
+    const view = resolveDrivenView(session, snap([entry("m1", "问：")]));
+    expect(view).toBeDefined();
+    expect(JSON.stringify(view)).toContain("正在生成");
+  });
+
+  it("权威条目到达后瞬态叠加消失：同一句只出现一次（不重复渲染）", () => {
+    const partial: DriveSession = { ...driven([]), status: "running", streaming: { text: "回答" } };
+    const before = JSON.stringify(resolveDrivenView(partial, snap([entry("m1", "问：")])));
+    expect(before.split("回答")).toHaveLength(2); // 仅瞬态叠加一份
+
+    // 条目落盘、streaming 已清 → 只剩权威条目那份
+    const after = JSON.stringify(
+      resolveDrivenView(driven([]), snap([entry("m1", "问："), entry("m2", "回答")])),
+    );
+    expect(after.split("回答")).toHaveLength(2);
+  });
+
   it("驱动增量追加在基线之后（先见顺序）", () => {
     const view = resolveDrivenView(driven([entry("m2", "第二句")]), snap([entry("m1", "第一句")]));
     expect(view!.turns).toHaveLength(1);

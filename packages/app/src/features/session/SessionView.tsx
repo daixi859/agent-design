@@ -58,7 +58,12 @@ export function SessionView() {
           <span>{errorText}</span>
         </div>
       )}
-      <Transcript projectPath={data.header?.cwd} view={data.view} drive={composerDrive} />
+      <Transcript
+        projectPath={data.header?.cwd}
+        view={data.view}
+        drive={composerDrive}
+        live={data.drive?.status === "running" || data.drive?.status === "retrying"}
+      />
     </>
   );
 }
