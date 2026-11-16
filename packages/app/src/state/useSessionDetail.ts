@@ -5,16 +5,17 @@
     增量来源唯一：WS 驱动事件流；被驱动的 session 停用 Live Tail。
     两源条目按 id 幂等归并后经同一 buildTranscriptModel 出口。
 
-    基线与驱动视图都放在 state 里（而非 ref）：memo 的依赖必须是响应式值，
-    否则 attached 先于 REST 落地时 drivenView 会被永久缓存为 undefined（ADR-0012 补记第 3 条）。 */
-import { useEffect, useMemo, useRef, useState } from "react";
+    基线放 state（而非 ref）：它必须引发重渲染，否则 attached 先于 REST 落地时
+    drivenView 会被永久缓存为 undefined（ADR-0012 补记第 3 条）。
+    驱动视图的合成与记忆化在 lib/driven-view.ts（按参数身份缓存，调用侧没有依赖数组可写错）。 */
+import { useEffect, useRef, useState } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { errorMessage } from "@pi-studio/shared/errors";
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { fetchSession, tailSession } from "../lib/pi-client";
 import { createSessionTail, type SessionTail } from "../lib/session-tail";
 import { buildTranscriptModel, type TranscriptModel } from "../lib/transcript-model";
-import { mergeEntries } from "../lib/drive-client";
+import { resolveDrivenView } from "../lib/driven-view";
 import { drive, useDriveSession } from "./use-drive";
 
 export interface SessionDetailState {
@@ -93,11 +94,8 @@ export function useSessionDetail(id: string | undefined): SessionDetailState {
     return () => window.clearInterval(timer);
   }, [id]);
 
-  // 驱动覆盖视图：基线 × 驱动条目按 id 幂等归并
-  const drivenView = useMemo(() => {
-    if (!driveSession || !baseline) return undefined;
-    return buildTranscriptModel([...mergeEntries(baseline.entries, driveSession.entries)]);
-  }, [driveSession, baseline]);
+  // 驱动覆盖视图：基线 × 驱动条目按 id 幂等归并（记忆化在 lib 内按参数身份，见 driven-view.ts）
+  const drivenView = resolveDrivenView(driveSession, baseline);
 
   if (driveSession && baseline && drivenView) {
     return {

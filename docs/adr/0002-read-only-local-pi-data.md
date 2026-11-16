@@ -1,5 +1,7 @@
 # 高保真阶段为只读客户端，直读本机 pi session 数据
 
+> **部分修订**：[ADR-0012](0012-pi-kernel-drive-integration.md) 已解除驱动方向的只读边界——被 Attach 的 session 可被驱动，输入区成为功能件。本文的只读约束现仅适用于**浏览路径**（REST 列表/读取 + Live Tail）；中间件写法与字节偏移增量读取的设计仍然有效。
+
 用户要求不经 mock、直接读取本机 pi 内核的真实数据（session 列表与 JSONL 内容）。我们决定高保真阶段客户端**只读**：列出 session、读取并渲染 JSONL；输入区仅作高保真静态视觉态，不实现发送；对最近活跃的 session 做轮询 Live Tail 以呈现进行中的流式效果。驱动 pi agent loop（发送、执行工具）留待下一阶段。数据访问通过 Vite dev-server middleware 实现，API 处理器写成独立模块（只暴露读操作），将来可原样迁入独立服务或真实 agent 接入层。
 
 ## 考虑过的选项

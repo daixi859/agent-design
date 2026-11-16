@@ -38,7 +38,9 @@ export function applyServerFrame(
       const base = prev ?? { sessionId: frame.sessionId, status: "idle" as const, entries: [] };
       const merged = mergeEntries(base.entries, frame.entries ?? []);
       const header = frame.header ?? base.header;
-      if (merged === base.entries && header === base.header) return prev;
+      // attach（无快照）时 merged/header 都不变，但 prev 可能是 undefined——
+      // 此时仍得登记这个 session，否则驱动表里永远没有它
+      if (prev && merged === base.entries && header === base.header) return prev;
       return { ...base, entries: merged, header };
     }
     case "released":

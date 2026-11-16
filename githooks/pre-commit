@@ -3,3 +3,4 @@
 # 本目录需每 clone 配置一次：git config core.hooksPath githooks
 node node_modules/typescript/bin/tsc -b || exit 1
 node node_modules/vitest/vitest.mjs run || exit 1
+node scripts/check-css-tokens.mjs || exit 1

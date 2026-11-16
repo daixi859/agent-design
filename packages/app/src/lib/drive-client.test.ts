@@ -17,6 +17,8 @@ const event = (body: DriveEvent["body"]): ServerFrame => ({ type: "event", event
 
 const header: SessionHeaderEntry = { type: "session", version: 3, id: "s1", parentId: null, timestamp: "T0", cwd: "/p" };
 const attached: ServerFrame = { type: "attached", sessionId: "s1", file: "f1.jsonl", header, entries: [] };
+// attach 路径不带快照（快照只随 create 下发，ADR-0012 补记二）
+const attachedBare: ServerFrame = { type: "attached", sessionId: "s1", file: "f1.jsonl" };
 
 describe("mergeEntries · 双源幂等归并", () => {
   it("按 id 去重、先见顺序保留（REST 全量在前，驱动增量在后）", () => {
@@ -32,6 +34,21 @@ describe("mergeEntries · 双源幂等归并", () => {
 });
 
 describe("applyServerFrame · 帧到客户端状态", () => {
+  // 回归点：attach 路径不带快照时，首个 attached 帧仍必须登记 session——
+  // 否则驱动表里没有它，Composer 永远禁用（attach 已有会话的默认路径）
+  it("无快照的 attached 也登记 session（attach 路径，非 create）", () => {
+    const state = applyServerFrame(undefined, attachedBare);
+    expect(state).toBeDefined();
+    expect(state!.status).toBe("idle");
+    expect(state!.entries).toEqual([]);
+    expect(state!.header).toBeUndefined();
+  });
+
+  it("无快照的 attached 重放仍幂等（不新建对象）", () => {
+    const first = applyServerFrame(undefined, attachedBare);
+    expect(applyServerFrame(first, attachedBare)).toBe(first);
+  });
+
   it("attached → 建 idle 空态；重复 attached 幂等保留已有条目", () => {
     const created = applyServerFrame(undefined, attached);
     expect(created).toEqual({ sessionId: "s1", status: "idle", entries: [], header });

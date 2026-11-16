@@ -9,7 +9,8 @@
     "build": "pnpm --filter @pi-studio/app build",
     "preview": "pnpm --filter @pi-studio/app preview",
     "typecheck": "node node_modules/typescript/bin/tsc -b",
-    "test": "node node_modules/vitest/vitest.mjs run"
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "check:css": "node scripts/check-css-tokens.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

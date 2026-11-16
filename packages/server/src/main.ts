@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { SessionRegistry, openPiSession } from "@pi-studio/core";
 import type { DriveCommand } from "@pi-studio/shared/protocol";
 import { createPiDataApi } from "./pi-data.ts";
+import { staticRelPath, stripApiPrefix } from "./http-routing.ts";
 import { createWsGateway, type DriveOutcome } from "./ws-gateway.ts";
 
 const PORT = Number(process.env.PI_STUDIO_PORT ?? "3001");
@@ -63,7 +64,7 @@ async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
 const piDataApi = createPiDataApi();
 
 function serveStatic(res: ServerResponse, pathname: string): void {
-  const rel = pathname === "/" ? "/index.html" : pathname;
+  const rel = staticRelPath(pathname);
   const file = join(APP_DIST, rel);
   if (!file.startsWith(APP_DIST + sep) && file !== APP_DIST) {
     res.writeHead(403).end();
@@ -90,15 +91,17 @@ function serveStatic(res: ServerResponse, pathname: string): void {
 }
 
 const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-  const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname.startsWith("/api/")) {
-    // pi-data 按 connect 语义写成「已剥前缀」的路由；剥 /api 时必须保留 query
-    // （Live Tail 的 ?offset= 在此，丢了就从文件头全量重放）
-    req.url = url.pathname.slice(4) + url.search;
-    void piDataApi(req, res, () => serveStatic(res, url.pathname));
+  // 路由重写规则在 http-routing.ts（纯函数，有单测）：剥前缀必须保留 query
+  const raw = req.url ?? "/";
+  const pathname = new URL(raw, "http://localhost").pathname;
+  const apiUrl = stripApiPrefix(raw);
+  if (apiUrl !== undefined) {
+    req.url = apiUrl;
+    // pi-data 的 fallthrough 仍按原 pathname 走静态：别拿已重写的 req.url 再算一次
+    void piDataApi(req, res, () => serveStatic(res, pathname));
     return;
   }
-  serveStatic(res, url.pathname);
+  serveStatic(res, pathname);
 });
 gateway.bind(server);
 
