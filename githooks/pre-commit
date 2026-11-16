@@ -1,0 +1,5 @@
+#!/bin/sh
+# 提交守门：类型检查 + 全量测试（判据见 AGENTS.md「环境与验收」）
+# 本目录需每 clone 配置一次：git config core.hooksPath githooks
+node node_modules/typescript/bin/tsc -b || exit 1
+node node_modules/vitest/vitest.mjs run || exit 1

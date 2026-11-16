@@ -25,7 +25,10 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 
 ```
 node node_modules/typescript/bin/tsc -b   # 类型检查（package.json 的 typecheck）
+node node_modules/vitest/vitest.mjs run   # 测试（package.json 的 test）
 node node_modules/vite/bin/vite.js        # dev server，只读 API 挂在 /api 前缀
 ```
 
-完成判据：任何改动交付前 `tsc -b` 干净；视觉改动另加 dev server 截图自检浅、深两主题通过。
+依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 同判据）。
+
+完成判据：任何改动交付前 typecheck 与 test 全绿；视觉改动另加 dev server 截图自检浅、深两主题通过。
