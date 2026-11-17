@@ -9,7 +9,7 @@ import { useMemo, type ReactNode } from "react";
 import type { SessionEntry } from "@pi-studio/shared/pi-types";
 import { buildTranscriptModel } from "../../../lib/transcript-model";
 import { useLocale } from "../../../state/useLocale";
-import { Icon } from "../../../ui/Icon";
+import { Icon } from "../../../components/Icon";
 import { AnnotationRow } from "../AnnotationRow";
 import { Markdown } from "../Markdown";
 import { TuiGroup } from "../TuiGroup";
@@ -102,7 +102,8 @@ export function TranscriptLab() {
         },
       },
       // t2 无配对结果：running；其后追加一条思考流式中——
-      // 紧凑态亮「最后一个活动条目」，活跃思考行只报 spinner 与流逝秒数（ADR-0014 迭代）
+      // 紧凑态亮「最后一个活动条目」，活跃思考行亮 spinner + 秒数 + 尾部滚动
+      // （ADR-0014）；文本含段间空行，覆盖尾部滚动的多段与空行滤除路径
       {
         type: "message",
         id: "a2",
@@ -114,7 +115,7 @@ export function TranscriptLab() {
             {
               type: "thinking",
               thinking:
-                "测试都过了，接下来汇总结论。先检查一下 web_search 的结果是否覆盖了今天的头条新闻，再决定要不要补充一轮检索确认时间线没有遗漏。",
+                "测试都过了，接下来汇总结论。\n\n先检查一下 web_search 的结果是否覆盖了今天的头条新闻，重点看 AI 工具类项目的排名变化；再决定要不要补充一轮检索确认时间线没有遗漏，尤其是今天新上榜的项目与热度曲线的口径是否一致。",
             },
           ],
         },

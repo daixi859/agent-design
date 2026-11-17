@@ -11,8 +11,8 @@
  *  spinner 的旋转是 CSS 动画，不占挂钟帧。运行中组默认紧凑态：槽位区只亮最后一个
  *  活动条目，点开头部才全量；活跃思考只有最后一条（其前的早已完成），只报流逝秒数。
  *  本组件只读 TranscriptModel 派生量，不读内核字段。 */
-import { useEffect, useRef, useState } from "react";
-import { Icon } from "../../ui/Icon";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Icon } from "../../components/Icon";
 import { cx } from "../../lib/cx";
 import { useLocale } from "../../state/useLocale";
 import { translateVars } from "../../lib/i18n";
@@ -239,7 +239,7 @@ function TuiSlot({ item, now, locale }: { item: ToolCallItem; now: number | unde
 
 /** 思考行：静止 = 单行首行摘要（字色与工具名同档最强，可点击展开全文）+
     请求耗时（内核 durationMs，思考占其主体）；活跃（流式中）= spinner + 思考中标签 +
-    流逝秒数 + 尾部滚动末 N 行（行数可配置；内容置于标签行下方） */
+    流逝秒数 + 尾部滚动折行后的末 N 个视觉行（行数可配置；内容置于标签行下方） */
 function TuiThinking({
   item,
   active,
@@ -281,9 +281,18 @@ function TuiThinking({
       </>
     );
   }
-  // 尾部滚动：只展示末 N 行非空行，thinking delta 推进时自然上滚（cc-style 的活动思考）
-  const lines = item.thinking.split("\n").filter((line) => line.trim());
-  const tail = lines.slice(-Math.max(1, tailLines));
+  // 尾部滚动（cc-style 的活动思考）：DOM 只装末 N 个源码行（滤空后），
+  // 交给一个 pre-wrap 元素自然折行——折行结果至少 N 个视觉行，
+  // CSS 端（.thinkBody 的 max-height + flex-end）再裁出末 N 个视觉行。
+  // 视觉行窗口必落在末 N 源码行内：每源码行至少占 1 视觉行，更早的行
+  // 早已把窗口推出界外，故截断版与全量渲染逐行同像，但 DOM 文本量
+  // 与思考总长无关（delta 推进时新行自底部进入、旧行上滚出顶，tail -f 语义）。
+  // 源码行仍滤空，段间空行不占视觉行配额
+  const text = item.thinking
+    .split("\n")
+    .filter((line) => line.trim())
+    .slice(-Math.max(1, tailLines))
+    .join("\n");
   const elapsed =
     now !== undefined && item.startedAt !== undefined
       ? formatDuration(Math.max(0, now - item.startedAt), locale)
@@ -299,12 +308,11 @@ function TuiThinking({
         <span className={styles.thinkLabel}>{t("tuiThinkingRunning")}</span>
         {elapsed && <span className={styles.elapsed}>· {elapsed}</span>}
       </div>
-      <div className={styles.thinkBody}>
-        {tail.map((line, index) => (
-          <div key={index} className={styles.thinkLine}>
-            {line}
-          </div>
-        ))}
+      <div
+        className={styles.thinkBody}
+        style={{ "--think-tail-lines": tailLines } as CSSProperties}
+      >
+        {text}
       </div>
     </div>
   );

@@ -200,16 +200,24 @@
   min-width: 0;
 }
 
+/* 尾部滚动（视觉行语义）：整段 pre-wrap 自然折行，容器钉在 N 个行高
+   （--think-tail-lines，1/3/5）且内容贴底——flex-end 不带 safe（子项超高时
+   溢出必须留在顶部被裁掉，safe 会退回首行对齐），永远展示折行后的末 N 个
+   视觉行。行高显式 1.7（与 TUI 根同档），max-height 的 em 数学依赖它；
+   未满 N 行时容器随内容生长，不预留空白 */
 .thinkBody {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(var(--think-tail-lines, 3) * 1.7em);
+  overflow: hidden;
   margin: var(--space-05) 0 var(--space-1) 37.2px;
   color: var(--tui-dim);
-}
-
-/* 每行不折行，超出宽度截断为 …（终端行语义：一行就是一行） */
-.thinkLine {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  /* anywhere 而非弃用的 word-break: break-word；flex 行内 min-width:0 场景
+     下 anywhere 同时收紧 min-content，长串不撑破容器 */
+  overflow-wrap: anywhere;
 }
 
 /* cc 风格展开体（迭代）：竖线与状态字形槽中心齐平（24.6px），内容与字形后的工具名齐平
@@ -220,7 +228,7 @@
   border-inline-start: 1px solid var(--separator-strong);
   color: var(--tui-dim);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Input/Output 标签：字色走 .name（与工具名同档），这里只管布局 */
@@ -237,7 +245,7 @@
   margin: var(--space-05) 0;
   font: inherit;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .subCall {

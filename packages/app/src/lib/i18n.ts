@@ -100,14 +100,21 @@ const en = {
   // 组件清单页
   iconography: "Iconography",
   iconographyNote:
-    "SF Symbols-style stroked icons (20×20 · 1.6 stroke · currentColor) — see ui/Icon.tsx",
+    "SF Symbols-style stroked icons (20×20 · 1.6 stroke · currentColor) — see components/Icon.tsx",
   controlsBadge: "Controls & badge",
   controlsNote:
-    "IconButton / SearchField (ui/controls.module.css) · branched badge (Session Bar) · segmented control (Appearance)",
+    "Button (icon-only / icon+text / text) and Input (leading icon slot) — components/Button.tsx · components/Input.tsx · branched badge (Session Bar) · segmented control (Appearance)",
   surfaces: "Surfaces & accents",
   surfacesNote: "Semantic surfaces and accents (ADR-0001: themes switch only at the semantic tier)",
   typeRamp: "Type ramp",
   typeRampNote: "Type scale --text-*, paired line heights --leading-*",
+  disclosureRow: "Disclosure row",
+  disclosureRowNote:
+    'Interaction primitive (role="button", Enter/Space, aria-expanded) shared by recap and tool row headers (ADR-0013) — row visuals come from the consumer',
+  disclosureSampleTitle: "Sample section",
+  disclosureSampleBody:
+    "Expanded body copy. The primitive owns only the header behavior; content is arbitrary children.",
+  buttonSample: "Button",
   // Transcript 过程组与工具行（ADR-0013）
   toolCount: "tool",
   toolCountPlural: "tools",
@@ -161,7 +168,8 @@ const en = {
   tuiPending: "Pending...",
   tuiOutputGrowing: "{n} chars…",
   thinkLines: "Thinking tail lines",
-  thinkLinesHint: "Lines of the streaming thinking tail shown while a thought is running.",
+  thinkLinesHint:
+    "Visual lines (after wrapping) of the streaming thinking tail shown while a thought is running.",
   linesSuffix: "lines",
   linesOne: "line",
 } as const;
@@ -248,13 +256,20 @@ const zh: Record<keyof typeof en, string> = {
   data: "数据",
   dataValue: "本地会话 JSONL · 浏览只读，驱动可写",
   iconography: "图标",
-  iconographyNote: "SF Symbols 风格描边图标（20×20 · 1.6 描边 · currentColor），见 ui/Icon.tsx",
+  iconographyNote: "SF Symbols 风格描边图标（20×20 · 1.6 描边 · currentColor），见 components/Icon.tsx",
   controlsBadge: "控件与徽标",
-  controlsNote: "IconButton / SearchField（ui/controls.module.css）· branched 徽标（Session Bar）· 分段控件（Appearance）",
+  controlsNote: "Button（纯图标 / 图标+文字 / 纯文字）· Input（前置图标槽位）——components/Button.tsx · components/Input.tsx · branched 徽标（Session Bar）· 分段控件（Appearance）",
   surfaces: "表面与强调色",
   surfacesNote: "语义层表面与强调色（ADR-0001：主题只在语义层切换）",
   typeRamp: "字阶",
   typeRampNote: "字号刻度 --text-*，行高配对 --leading-*",
+  disclosureRow: "可展开行",
+  disclosureRowNote:
+    "交互原语（role=button · Enter/Space · aria-expanded），Recap 行与工具行头共用（ADR-0013）；行头视觉由消费方提供",
+  disclosureSampleTitle: "示例分组",
+  disclosureSampleBody:
+    "展开后的正文样张。原语只管行头交互行为，children 任由消费方填充。",
+  buttonSample: "按钮",
   toolCount: "个工具",
   toolCountPlural: "个工具",
   thoughtCount: "次思考",
@@ -302,7 +317,7 @@ const zh: Record<keyof typeof en, string> = {
   tuiPending: "Pending...",
   tuiOutputGrowing: "已输出 {n} 字符…",
   thinkLines: "思考尾部行数",
-  thinkLinesHint: "TUI 模式下思考进行中时尾部滚动展示的行数。",
+  thinkLinesHint: "TUI 模式下思考进行中时尾部滚动展示的行数（按折行后的视觉行计）。",
   linesSuffix: "行",
   linesOne: "行",
 };
