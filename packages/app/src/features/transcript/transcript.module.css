@@ -105,12 +105,15 @@
   gap: var(--space-2);
 }
 
+/* Recap 行：整行贯穿、左缘与正文齐平（迭代修订）；内边距一律不设——
+   6px 左缩进正是「行头比正文内缩一格」的来处，改为无内边距后
+   chevron 与下方回答的左缘落同一条竖线上。 */
 .recap {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
-  align-self: flex-start;
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1h);
+  inline-size: 100%;
+  padding: 0;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -175,6 +178,9 @@
   display: flex;
   flex-direction: column;
   min-inline-size: 0;
+  /* 行头文字左缘（图标盒 16px + gap 8px）：展开体要对齐到这里，
+     故定义在 .row（行头与展开体的共同祖先）上，两个子节点都读得到 */
+  --row-text-inset: calc(16px + var(--space-2));
 }
 
 .rowHead {
@@ -182,8 +188,8 @@
   align-items: center;
   gap: var(--space-2);
   inline-size: 100%;
-  padding: var(--space-05) 0 var(--space-05) var(--space-1h);
-  --row-text-inset: calc(var(--space-1h) + 16px + var(--space-2));
+  /* 无横向内边距（迭代修订）：行头左缘与正文齐平，展开体缩进由 --row-text-inset 派生 */
+  padding: var(--space-05) 0;
   border: none;
   background: transparent;
   color: var(--text-2);
@@ -301,7 +307,7 @@
 
 /* 思考正文：tertiary 灰、无斜体、无左边框；左内边距使正文与标题左缘对齐 */
 .thinkingBody {
-  padding-inline-start: calc(var(--row-text-inset, 30px) - var(--space-1));
+  padding-inline-start: calc(var(--row-text-inset, 24px) - var(--space-1));
   font-size: var(--content-font-size-secondary);
   line-height: calc(20px + var(--content-font-delta-secondary));
   color: var(--text-3);

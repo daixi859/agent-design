@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { Icon } from "../../ui/Icon";
+import { DisclosureRow } from "../../ui/DisclosureRow";
 import { cx } from "../../lib/cx";
 import { translateVars, type MessageKey } from "../../lib/i18n";
 import { formatDuration } from "../../lib/format";
@@ -35,10 +36,9 @@ function ThinkingRow({ item, defaultOpen = false }: { item: Extract<GroupItem, {
   const { t } = useLocale();
   return (
     <div className={styles.row}>
-      <button
-        type="button"
+      <DisclosureRow
         className={styles.rowHead}
-        aria-expanded={open}
+        open={open}
         onClick={() => setOpen((value) => !value)}
       >
         <span className={styles.rowLead}>
@@ -54,7 +54,7 @@ function ThinkingRow({ item, defaultOpen = false }: { item: Extract<GroupItem, {
         </span>
         <span className={styles.dot} aria-hidden="true" />
         <span className={styles.rowSummary}>{item.thinking.split("\n")[0]}</span>
-      </button>
+      </DisclosureRow>
       {open && <div className={cx(styles.rowBody, styles.thinkingBody)}>{item.thinking}</div>}
     </div>
   );
@@ -92,10 +92,9 @@ function ProcessGroup({
   return (
     <div className={styles.groupWrap}>
       <div className={styles.recapRow}>
-        <button
-          type="button"
+        <DisclosureRow
           className={styles.recap}
-          aria-expanded={open}
+          open={open}
           onClick={() => setOpen((value) => !value)}
         >
           <span className={styles.recapLead}>
@@ -128,7 +127,7 @@ function ProcessGroup({
               )}
             </span>
           )}
-        </button>
+        </DisclosureRow>
       </div>
       {open && (
         <div className={styles.strip}>

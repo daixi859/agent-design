@@ -9,6 +9,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { Icon } from "../../ui/Icon";
+import { DisclosureRow } from "../../ui/DisclosureRow";
 import { cx } from "../../lib/cx";
 import { useLocale } from "../../state/useLocale";
 import { parseToolDiff } from "../../lib/edit-diff";
@@ -57,10 +58,9 @@ function SubCallRow({ call }: { call: SubCallItem }) {
 
   return (
     <div className={styles.row}>
-      <button
-        type="button"
+      <DisclosureRow
         className={styles.rowHead}
-        aria-expanded={open}
+        open={open}
         onClick={() => setOpen((value) => !value)}
         title={view ? t(view.label) : undefined}
       >
@@ -78,7 +78,7 @@ function SubCallRow({ call }: { call: SubCallItem }) {
         {state && state !== "ok" && (
           <span className={cx(styles.rowState, view?.className)}>{view?.glyph}</span>
         )}
-      </button>
+      </DisclosureRow>
       {open && (
         <div className={styles.rowBody}>
           {pretty && <pre className={styles.codeBody}>{pretty}</pre>}
@@ -127,10 +127,9 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
 
   return (
     <div className={styles.row}>
-      <button
-        type="button"
+      <DisclosureRow
         className={styles.rowHead}
-        aria-expanded={open}
+        open={open}
         title={t(STATE_VIEW[item.state].label)}
         onClick={() => setOpen((value) => !value)}
       >
@@ -150,7 +149,7 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
             {STATE_VIEW[item.state].glyph}
           </span>
         )}
-      </button>
+      </DisclosureRow>
 
       {open && (
         <div className={styles.rowBody}>
