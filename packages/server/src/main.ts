@@ -12,7 +12,9 @@ import { createPiDataApi } from "./pi-data.ts";
 import { staticRelPath, stripApiPrefix } from "./http-routing.ts";
 import { createWsGateway, type DriveOutcome } from "./ws-gateway.ts";
 
-const PORT = Number(process.env.PI_STUDIO_PORT ?? "3001");
+// 默认 3141（π）：3001 与本机常用代理/工具端口相撞（EADDRINUSE）；
+// dev 代理端 packages/app/vite.config.ts 读同一变量联动，改端口只改这一处
+const PORT = Number(process.env.PI_STUDIO_PORT ?? "3141");
 // 生产模式托管 app 构建产物；dev 下 dist 不存在时静态层直接 404（vite 另行供页）
 const APP_DIST = fileURLToPath(new URL("../../app/dist", import.meta.url));
 
