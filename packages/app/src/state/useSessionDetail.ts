@@ -54,7 +54,7 @@ export function useSessionDetail(id: string | undefined): SessionDetailState {
       .catch((error: unknown) => {
         if (cancelled) return;
         // 未落盘的 create 会话：REST 404 属预期，基线等 attached 回包（下方 effect 兜底）
-        const attached = drive.getSnapshot().get(id);
+        const attached = drive.session(id);
         if (attached?.header) {
           setBaseline({ header: attached.header, entries: [...attached.entries] });
           setState({ loading: false, header: attached.header, view: EMPTY_VIEW });

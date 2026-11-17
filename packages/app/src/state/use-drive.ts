@@ -2,21 +2,27 @@
 // 帧到状态的纯逻辑在 lib/drive-client（已测），WS 半边由 server 侧集成测试覆盖。
 // 连接管理：断线指数退避重连；重连后按 file 表 re-attach（create 出的会话无 file，
 // 由附着回包的快照支撑渲染，断线后从侧栏重新接管）。
-import { useSyncExternalStore } from "react";
+// 状态壳（ADR-0015）：会话快照表与连接错误住 zustand vanilla store，React 端
+// 经 useStore + selector 取切片（组件级更新）；本类只管 WS 生命周期与状态归约。
+import { useStore } from "zustand";
+import { createStore } from "zustand/vanilla";
 import { applyServerFrame, type DriveSession } from "../lib/drive-client";
 import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
+/** 驱动状态切片：会话快照表 + 连接级错误（无 sessionId 归属） */
+interface DriveState {
+  sessions: ReadonlyMap<string, DriveSession>;
+  connectionError: { message: string; code?: DriveErrorCode } | undefined;
+}
+
 class DriveClient {
-  private sessions = new Map<string, DriveSession>();
+  /** 状态壳（ADR-0015）：UI 订阅端一律 useStore(drive.store, selector) 取切片 */
+  readonly store = createStore<DriveState>(() => ({ sessions: new Map(), connectionError: undefined }));
   /** sessionId → attach 时的 file（重连 re-attach 依据；create 会话不登记） */
   private files = new Map<string, string>();
-  private snapshot = new Map(this.sessions);
-  private listeners = new Set<() => void>();
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private reconnectDelay = 500;
-  /** 连接级错误（无 sessionId 归属）：当前路由的会话页把它渲染成错误条 */
-  private lastConnectionError: { message: string; code?: DriveErrorCode } | undefined;
 
   constructor() {
     this.connect();
@@ -56,12 +62,14 @@ class DriveClient {
     if (frame.type === "error") {
       // 连接级错误（attach/create 被拒、坏帧）：落错误位并兑付待定 create；
       // 错误文案走 i18n（服务端只给 code），无 code 时退回服务端原文
-      this.lastConnectionError = { message: frame.message, code: frame.code };
+      this.store.setState({ connectionError: { message: frame.message, code: frame.code } });
       this.settleCreates({ ok: false, message: frame.message });
-      this.publish();
       return;
     }
-    this.lastConnectionError = undefined;
+    // 非错误帧到达即连接恢复：仅在错误位挂起时清位，避免同值通知
+    if (this.store.getState().connectionError !== undefined) {
+      this.store.setState({ connectionError: undefined });
+    }
     switch (frame.type) {
       case "attached":
         if (frame.file) this.files.set(frame.sessionId, frame.file);
@@ -73,16 +81,15 @@ class DriveClient {
         break;
     }
     const sessionId = "event" in frame ? frame.event.sessionId : frame.sessionId;
-    const next = applyServerFrame(this.sessions.get(sessionId), frame);
-    if (next === this.sessions.get(sessionId)) return;
-    if (next) this.sessions.set(sessionId, next);
-    else this.sessions.delete(sessionId);
-    this.publish();
-  }
-
-  private publish(): void {
-    this.snapshot = new Map(this.sessions);
-    for (const listener of this.listeners) listener();
+    const current = this.store.getState().sessions.get(sessionId);
+    const next = applyServerFrame(current, frame);
+    if (next === current) return;
+    this.store.setState((state) => {
+      const sessions = new Map(state.sessions);
+      if (next) sessions.set(sessionId, next);
+      else sessions.delete(sessionId);
+      return { sessions };
+    });
   }
 
   // —— 新建会话的待定应答（create 无 file，靠 attached/error 帧兑付；断线也要兑付） ——
@@ -105,11 +112,16 @@ class DriveClient {
 
   /** 该 session 当前是否被驱动（Live Tail 停用判定、Composer 活性判定共用） */
   isDriven(sessionId: string): boolean {
-    return this.sessions.has(sessionId);
+    return this.store.getState().sessions.has(sessionId);
+  }
+
+  /** 非响应读取单个会话快照（effect 里的一次性取值；响应式消费走 useDriveSession） */
+  session(sessionId: string): DriveSession | undefined {
+    return this.store.getState().sessions.get(sessionId);
   }
 
   get connectionError(): { message: string; code?: DriveErrorCode } | undefined {
-    return this.lastConnectionError;
+    return this.store.getState().connectionError;
   }
 
   /** 接管已有 session（GLOSSARY: Attach） */
@@ -132,8 +144,12 @@ class DriveClient {
 
   release(sessionId: string): void {
     this.files.delete(sessionId);
-    this.sessions.delete(sessionId);
-    this.publish();
+    this.store.setState((state) => {
+      if (!state.sessions.has(sessionId)) return state;
+      const sessions = new Map(state.sessions);
+      sessions.delete(sessionId);
+      return { sessions };
+    });
     this.send({ type: "release", sessionId });
   }
 
@@ -146,7 +162,7 @@ class DriveClient {
    * 内核会直接 throw，带上则转为排队（idle 下该字段无作用，不影响正常 prompt）。
    */
   sendText(sessionId: string, text: string): void {
-    const session = this.sessions.get(sessionId);
+    const session = this.store.getState().sessions.get(sessionId);
     const body: DriveCommandBody =
       session?.status === "running" || session?.status === "retrying"
         ? { type: "steer", text }
@@ -155,8 +171,9 @@ class DriveClient {
     // 才回传（ADR-0012 补记四），这期间由本地气泡顶住内容区。只在实际会发出的帧上挂——
     // 连接未就绪时 send 会静默丢弃，气泡不能先亮。
     if (body.type === "prompt" && session && this.ws?.readyState === WebSocket.OPEN) {
-      this.sessions.set(sessionId, { ...session, pendingPrompt: text });
-      this.publish();
+      this.store.setState((state) => ({
+        sessions: new Map(state.sessions).set(sessionId, { ...session, pendingPrompt: text }),
+      }));
     }
     this.send({ type: "drive", command: { sessionId, body } });
   }
@@ -169,27 +186,13 @@ class DriveClient {
   followUp(sessionId: string, text: string): void {
     this.send({ type: "drive", command: { sessionId, body: { type: "followUp", text } } });
   }
-
-  // —— 订阅面（useSyncExternalStore） ——
-
-  getSnapshot(): ReadonlyMap<string, DriveSession> {
-    return this.snapshot;
-  }
-
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
 }
 
 /** 模块级单例：驱动状态跨组件共享，一个页一条 WS 连接 */
 export const drive = new DriveClient();
 
 export function useDriveSessions(): ReadonlyMap<string, DriveSession> {
-  return useSyncExternalStore(
-    (cb) => drive.subscribe(cb),
-    () => drive.getSnapshot(),
-  );
+  return useStore(drive.store, (s) => s.sessions);
 }
 
 export function useDriveSession(id: string | undefined): DriveSession | undefined {
@@ -197,12 +200,19 @@ export function useDriveSession(id: string | undefined): DriveSession | undefine
   return id ? sessions.get(id) : undefined;
 }
 
+/** 运行指示的订阅原语（GLOSSARY: Running Indicator）：该 session 是否 live（running / retrying）。
+    selector 出原始布尔：流式 delta 不改 DriveStatus，条目只在状态翻转时重渲（ADR-0015）。
+    未驱动的 session 与 idle 同为 false——无运行指示。 */
+export function useDriveLive(id: string | undefined): boolean {
+  return useStore(drive.store, (s) => {
+    const status = id ? s.sessions.get(id)?.status : undefined;
+    return status === "running" || status === "retrying";
+  });
+}
+
 /** 连接级错误（无 sessionId 归属）：订阅式读取，SessionView 顶部错误条消费 */
 export function useConnectionError(): { message: string; code?: DriveErrorCode } | undefined {
-  return useSyncExternalStore(
-    (cb) => drive.subscribe(cb),
-    () => drive.connectionError,
-  );
+  return useStore(drive.store, (s) => s.connectionError);
 }
 
 export type { DriveSession, DriveStatus };

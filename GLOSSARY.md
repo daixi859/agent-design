@@ -48,6 +48,10 @@ _Avoid_: 返回值、ack
 把一个已有 Session 载入内核继续 Drive；接管后该 Session 走驱动事件流，Live Tail 对其失效。
 _Avoid_: 打开、载入、恢复会话
 
+**Running Indicator**:
+Sidebar 条目上的运行状态点：仅运行中（`live`，即 DriveStatus 为 running / retrying）的 Session 亮起（呼吸动画），权威来源是驱动事件流；被驱动但 idle、未被驱动的 Session 均不亮。`live` 一词全应用专指运行态；旧 liveDot 的「全库最近活跃」语义作废，不与运行指示混用。
+_Avoid_: 呼吸灯（视觉手法，不作术语）、最近活跃指示
+
 **Entry**:
 session JSONL 中的一行记录，是条目树的节点（含 `id` 与 `parentId`）。
 _Avoid_: 行、记录、event（与运行时事件流区分）
