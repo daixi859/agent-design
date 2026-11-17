@@ -163,8 +163,9 @@
   font-weight: var(--weight-regular);
 }
 
-/* Live Tail 呼吸圆点（Q17）——设计签名单上的一件 */
-.liveDot {
+/* 运行指示点（GLOSSARY: Running Indicator）——仅被驱动（Drive）的 Session 亮起；
+   灰点为布局占位，亮灭切换不引起条目回流 */
+.runningDot {
   inline-size: var(--size-dot);
   block-size: var(--size-dot);
   min-inline-size: var(--size-dot);
@@ -172,7 +173,7 @@
   background: var(--separator-strong);
 }
 
-.liveDotOn {
+.runningDotOn {
   background: var(--success);
   animation: breathe 2s var(--ease-standard) infinite;
 }

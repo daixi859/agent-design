@@ -1,9 +1,10 @@
 /** App shell 与路由（ADR-0009：无全局顶栏——Brand Float 常驻 + 各区头部分担职责；
     Q11：URL 路由；设置壳为独立整页双栏，预览路由并入其侧栏。
-    MainShell：主壳布局路由——useSessionDetail 单订阅，SessionBar 纯展示，detail 经 outlet 下发） */
+    MainShell：主壳布局路由——useSessionDetail 单订阅，SessionBar 纯展示，detail 经 outlet 下发；
+    Session 列表与驱动状态由消费端直订 store（ADR-0015），App 不再经 props 中转 */
 import { useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
-import { useSessions, type SessionsState } from "./state/sessions";
+import { useSessions, useSessionSummary } from "./state/sessions";
 import { useSessionDetail, type SessionDetailState } from "./state/useSessionDetail";
 import { currentSessionId } from "./state/current-session";
 import { drive, useDriveSession } from "./state/use-drive";
@@ -21,8 +22,9 @@ import { Icon } from "./components/Icon";
 import styles from "./app.module.css";
 import transcriptStyles from "./features/transcript/transcript.module.css";
 
-function Home({ sessions }: { sessions: SessionsState }) {
+function Home() {
   const { t } = useLocale();
+  const sessions = useSessions();
   if (sessions.loading) {
     return (
       <div className={transcriptStyles.emptyState}>
@@ -43,13 +45,13 @@ function Home({ sessions }: { sessions: SessionsState }) {
 }
 
 /** 主壳布局路由：当前 Session 的 URL 契约、详情订阅与 SessionBar 派生的唯一归属 */
-function MainShell({ sessions, collapsed }: { sessions: SessionsState; collapsed: boolean }) {
+function MainShell({ collapsed }: { collapsed: boolean }) {
   const { pathname } = useLocation();
   const { t } = useLocale();
   const id = currentSessionId(pathname);
   const detail = useSessionDetail(id);
   const driveSession = useDriveSession(id);
-  const session = id ? sessions.sessions.find((candidate) => candidate.id === id) : undefined;
+  const session = useSessionSummary(id);
   const title = session
     ? (session.name ?? session.title ?? t("untitledSession"))
     : "Pi Studio";
@@ -85,7 +87,6 @@ function MainShell({ sessions, collapsed }: { sessions: SessionsState; collapsed
 }
 
 export default function App() {
-  const sessions = useSessions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { pathname } = useLocation();
   // 设置壳（ADR-0009）替换主壳；Brand Float 两种壳下都常驻
@@ -113,11 +114,11 @@ export default function App() {
       ) : (
         <div className={styles.body}>
           {/* 侧栏常驻，收起用宽度动画（ADR-0009） */}
-          <Sidebar {...sessions} collapsed={sidebarCollapsed} />
+          <Sidebar collapsed={sidebarCollapsed} />
           <main className={styles.main}>
             <Routes>
-              <Route element={<MainShell sessions={sessions} collapsed={sidebarCollapsed} />}>
-                <Route path="/" element={<Home sessions={sessions} />} />
+              <Route element={<MainShell collapsed={sidebarCollapsed} />}>
+                <Route path="/" element={<Home />} />
                 {/* 旧组件总览路由并入设置壳的 Preview 分区 */}
                 <Route
                   path="/overview"

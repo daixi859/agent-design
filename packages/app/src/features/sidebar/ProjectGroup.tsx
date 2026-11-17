@@ -10,15 +10,7 @@ import styles from "./sidebar.module.css";
 import { cx } from "../../lib/cx";
 import { useLocale } from "../../state/useLocale";
 
-export function ProjectGroupView({
-  group,
-  activeSessionId,
-  filter,
-}: {
-  group: ProjectGroup;
-  activeSessionId?: string;
-  filter: string;
-}) {
+export function ProjectGroupView({ group, filter }: { group: ProjectGroup; filter: string }) {
   const [collapsed, setCollapsed] = useState(false);
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -68,11 +60,7 @@ export function ProjectGroupView({
       {!collapsed && (
         <div className={styles.items}>
           {sessions.map((session) => (
-            <SessionItem
-              key={session.id}
-              session={session}
-              live={session.id === activeSessionId}
-            />
+            <SessionItem key={session.id} session={session} />
           ))}
         </div>
       )}

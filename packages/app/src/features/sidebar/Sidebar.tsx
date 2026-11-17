@@ -1,7 +1,8 @@
-/** Sidebar：左栏本体（Q9 术语；两栏骨架，ADR-0003） */
+/** Sidebar：左栏本体（Q9 术语；两栏骨架，ADR-0003）。
+    Session 列表自订 store（ADR-0015）：App 只传 collapsed，列表数据不再经 props 中转 */
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import type { SessionsState } from "../../state/sessions";
+import { useSessions, useProjectGroups } from "../../state/sessions";
 import { cx } from "../../lib/cx";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
@@ -10,10 +11,12 @@ import { useLocale } from "../../state/useLocale";
 import { ProjectGroupView } from "./ProjectGroup";
 import styles from "./sidebar.module.css";
 
-export function Sidebar({ collapsed, ...state }: SessionsState & { collapsed: boolean }) {
+export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const [filter, setFilter] = useState("");
   const navigate = useNavigate();
   const { t } = useLocale();
+  const sessions = useSessions();
+  const groups = useProjectGroups();
 
   return (
     /* 收起 = 宽度动画到 0（ADR-0009）；inner 固定宽，动画过程中内容不回流 */
@@ -32,30 +35,25 @@ export function Sidebar({ collapsed, ...state }: SessionsState & { collapsed: bo
       </div>
 
         <nav className={`scroll-y ${styles.list}`}>
-        {!state.rootExists && (
+        {!sessions.rootExists && (
           <p className={styles.empty}>
             <strong>{t("emptyNoPiTitle")}</strong>
             {t("emptyNoPiBefore")} <code>~/.pi/agent/sessions</code> {t("emptyNoPiAfter")}
           </p>
         )}
-        {state.rootExists && !state.loading && state.groups.length === 0 && (
+        {sessions.rootExists && !sessions.loading && groups.length === 0 && (
           <p className={styles.empty}>
             <strong>{t("emptyNothingTitle")}</strong>
             {t("emptyNothingBefore")} <code>pi</code> {t("emptyNothingAfter")}
           </p>
         )}
-        {state.groups.map((group) => (
-          <ProjectGroupView
-            key={group.projectPath}
-            group={group}
-            activeSessionId={state.activeSessionId}
-            filter={filter}
-          />
+        {groups.map((group) => (
+          <ProjectGroupView key={group.projectPath} group={group} filter={filter} />
         ))}
         </nav>
 
         <footer className={styles.footer}>
-          <span>{state.sessions.length} {t("sessionsSuffix")}</span>
+          <span>{sessions.sessions.length} {t("sessionsSuffix")}</span>
           {/* 设置入口（ADR-0009）：右下角固定位置，进独立设置壳 */}
           <Button
             icon="gear"
