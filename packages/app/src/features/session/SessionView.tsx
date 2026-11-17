@@ -66,7 +66,7 @@ export function SessionView() {
         projectPath={data.header?.cwd}
         view={data.view}
         drive={composerDrive}
-        live={data.drive?.status === "running" || data.drive?.status === "retrying"}
+        sessionId={id}
       />
     </>
   );

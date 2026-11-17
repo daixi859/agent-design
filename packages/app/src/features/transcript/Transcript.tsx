@@ -10,24 +10,29 @@ import { TurnView } from "./TurnView";
 import { useLocale } from "../../state/useLocale";
 import { useViewMode } from "../../state/useViewMode";
 import { useStickToBottom } from "../../state/useStickToBottom";
+import { useDriveLive } from "../../state/use-drive";
 import styles from "./transcript.module.css";
 
 export function Transcript({
   projectPath,
   view,
   drive,
-  live = false,
+  sessionId,
 }: {
   projectPath?: string;
   view: TranscriptModel;
   /** 会话被驱动时由 SessionView 下发：输入区激活、状态徽标与中止 */
   drive?: ComposerDrive;
-  /** 会话正在运行（驱动中且非 idle） */
-  live?: boolean;
+  /** 路由 session id：运行态由本组件 selector 直订（ADR-0015），不再经 props 下传；
+      下游 TurnView / TuiGroup 收到的是本处派生的布尔（数据走 props、状态走订阅） */
+  sessionId?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
   const { t } = useLocale();
+  // 运行态（GLOSSARY live = running / retrying）：selector 出原始布尔，
+  // 流式 delta 不改 DriveStatus，订阅本身不触发重渲（重渲来自 view 数据推进）
+  const live = useDriveLive(sessionId);
 
   // 滚动区贴底跟随（useStickToBottom，阈值放宽到 80px）：跟随解除与 jump 按钮显隐同源判定
   const { nearBottomRef, stick: stickBottom, onScroll: onScrollBase } =
