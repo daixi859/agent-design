@@ -16,7 +16,7 @@
 - **展开体 cc 风格（迭代补充）**：槽位点击展开为 `Input` / `Output` 标签分区（终端标识文案，两语言同形）——Input 是 args 键值行式（`command: ls …`；字符串值直书、结构化值 JSON），Output 承载 diff 与输出（运行中实时尾巴，无尾巴 `Pending...` 占位）；展开体竖线与状态字形槽中心齐平、内容与工具名齐平，标签亮（`--tui-text`）、正文 dim。思考行同样可点击展开全文，活跃思考行的尾部滚动即其展开态。初版展开体是 args JSON 块 + 输出平铺，验收后按 cc-extensions 的详情样式重做。行内秒数（槽位与活跃思考）紧跟摘要、不推到行尾，色为字色阶梯第四枚 `--tui-faint`（初版「opacity 派生不另立令牌」被字色三档阶梯的迭代推翻，见前文字色四枚）。展开体以无底无框承载 args/输出/diff 代码面——对 [ADR-0007](0007-light-code-surfaces-with-header.md)「统一表面语言（同底色/圆角/hairline）」的 **TUI 专属修订**：表面让位于融入画布的文本形态，Standard 侧不受影响。
 - **计时口径**：锚点 = 条目时间戳（槽位行取调用所在 assistant 条目、组头部取组首条目），渲染时 `Date.now()` 挂钟现场求值，不依赖客户端起表——Drive 与 Live Tail 两路径天然一致；声明到执行的 <1s 间隔视为可接受误差。结算槽位/思考行内秒取内核 `durationMs`（权威落盘），不涉及挂钟校准。
 - **自动收起**：组 `live` true→false 边沿 + 250ms 静默期收起；仅收「因 live 强制展开」的组，用户手动开过的不收。（这是与 cc-extensions 对齐的取舍：Web 有滚动空间、自动跳变打断阅读，但「读完即收、界面整洁」胜出——明示记录，推翻时不必考古。）
-- **切换配置**（与主题切换同构）：Settings/Appearance 存默认（localStorage，前端偏好不入 session），Session Bar 动作区快切；默认 Standard。
+- **切换配置**（与主题切换同构）：Settings/Appearance 存默认（localStorage，前端偏好不入 session），Session Bar 动作区快切；默认 TUI（迭代修订：初版默认 Standard，后被推翻——运行态是驾驶场景的高频主视角，默认即所见，免一次手动切换；显式存 standard 才回 standard）。
 
 ## 考虑过的选项
 

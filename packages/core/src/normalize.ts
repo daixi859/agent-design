@@ -17,12 +17,24 @@ export function normalizeSessionEvent(event: AgentSessionEvent): DriveEventBody[
       // 思考定稿（ADR-0012 补记九）：thinking 块的权威闭合信号。redacted thinking
       // 无 delta 直接 start→end，客户端需容忍「无 thinking 增量先到」的 thinkingEnd
       if (ae.type === "thinking_end") return [{ type: "thinkingEnd" }];
-      // 工具调用参数开始流式：亮起「调用中」指示。id/name 取自 partial 的对应内容块
-      // （与上游 json-event.ts 的 JSON 协议同一取法）；形状不符则吞，绝不猜测。
-      if (ae.type === "toolcall_start") {
+      // 工具调用流式声明与参数增量（ADR-0012 补记十）：id/name 取自 partial 的对应
+      // 内容块（与上游 json-event.ts 的 JSON 协议同一取法）——start 是亮起帧，delta
+      // 的 arguments 是渐进 JSON 解析的累积快照（pi-ai StreamingJsonParser），随流
+      // 重发、客户端同 id 覆盖，参数从「执行开始才可见」提前到「声明流即可见」。
+      // 无已完成键时空对象由 toolCallStart 统一滤掉；形状不符则吞，绝不猜测。
+      if (ae.type === "toolcall_start" || ae.type === "toolcall_delta") {
         const block = ae.partial?.content?.[ae.contentIndex];
         if (block?.type === "toolCall") {
           return [toolCallStart(block.id, block.name, block.arguments)];
+        }
+        return [];
+      }
+      // 参数定稿：工具声明的参数 JSON 流结束，先于执行开始送达完整参数；
+      // 守卫沿同一「形状不符则吞」口径（类型上 toolCall 恒在，防传输畸形）
+      if (ae.type === "toolcall_end") {
+        const call = ae.toolCall;
+        if (call?.type === "toolCall") {
+          return [toolCallStart(call.id, call.name, call.arguments)];
         }
         return [];
       }

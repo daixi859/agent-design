@@ -231,15 +231,22 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       const body = event.body;
       const calls = prev.streamingToolCalls ?? [];
       if (body.phase === "start") {
-        // start：追加（重复 start 幂等——流式声明与执行开始会同 id 双发，参数以后到者为准）
-        const next = [...calls.filter((call) => call.id !== body.id)];
-        const previous = calls.find((call) => call.id === body.id);
-        next.push({
-          id: body.id,
-          name: body.name,
-          ...(body.args ? { args: body.args } : previous?.args ? { args: previous.args } : {}),
-        });
-        return { ...prev, streamingToolCalls: next };
+        // start：同 id 原位覆盖——流式声明 → 参数流 → 执行开始会连发多帧（ADR-0012
+        // 补记十），参数以后到者为准；原位更新保源序（挪尾会让活跃调用挤到队尾，
+        // 运行行顺序抖动）。名称与参数均无变化时返回原引用，参数流密发帧不触发重渲染
+        const index = calls.findIndex((call) => call.id === body.id);
+        if (index >= 0) {
+          const current = calls[index];
+          const args = body.args ?? current.args;
+          if (current.name === body.name && sameJson(current.args, args)) return prev;
+          const next = [...calls];
+          next[index] = { id: body.id, name: body.name, ...(args ? { args } : {}) };
+          return { ...prev, streamingToolCalls: next };
+        }
+        return {
+          ...prev,
+          streamingToolCalls: [...calls, { id: body.id, name: body.name, ...(body.args ? { args: body.args } : {}) }],
+        };
       }
       if (body.phase === "update") {
         // update：按 id 覆盖输出尾巴；start 丢失（帧乱序/丢失）时忽略——瞬态帧可丢
@@ -269,6 +276,14 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
 /** 是否 user 消息条目（待回显让位的判定依据） */
 function isUserEntry(entry: SessionEntry): boolean {
   return entry.type === "message" && (entry as MessageEntry).message.role === "user";
+}
+
+/** JSON 同形比较（null/undefined 同义）：参数流密发帧的去重判据——键序敏感，
+ *  序异值同只会多一次重渲染，无害 */
+function sameJson(a: unknown, b: unknown): boolean {
+  const ta = a == null ? "null" : JSON.stringify(a);
+  const tb = b == null ? "null" : JSON.stringify(b);
+  return ta === tb;
 }
 
 /** 条目是否引用了某次工具调用：assistant 条目含该调用块，或 toolResult 与之配对 */

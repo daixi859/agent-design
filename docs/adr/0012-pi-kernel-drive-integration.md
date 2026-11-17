@@ -136,3 +136,13 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 **后果**：Live Tail 路径无 delta 流（拿不到 thinking_end），思考行在浏览路径仍靠正文 flush 的间接判定收起——两路径能力差异沿袭补记八的口径，是明示的而非缺陷；测试侧 delta 分量的互不覆盖断言随新语义更新（text 到达即带 `thinkingComplete`），并补 thinkingEnd 帧与 normalize 放行断言。
 
 
+
+## 补记十（参数流式可见）：toolcall_delta / toolcall_end 放行与 start 帧三源覆盖
+
+**问题**：工具调用的参数在流式声明期恒为空对象（`toolcall_start` 时 arguments 尚未流出），运行行摘要只能显示 `{}`，要等 `tool_execution_start` 才第一次见到参数——pi-ai 的声明流其实是三段式 `toolcall_start → toolcall_delta × N → toolcall_end`，`toolcall_delta` 的 partial 块携带渐进 JSON 解析的**累积快照**（StreamingJsonParser），`toolcall_end` 携带定稿完整参数，两者都被 normalize 吞掉了（补记九明确「`toolcall_delta` 照旧吞掉」，本补记修订该口径）。
+
+**决定**：协议帧不扩，仍复用 `toolCall` start 帧；normalize 的 `message_update` 分支放行 `toolcall_delta`（取 partial 对应 toolCall 块，重发带渐进快照 args 的 start 帧）与 `toolcall_end`（重发带完整 args 的 start 帧）。start 帧的 args 由此成为**三源依次覆盖**：声明期预填（toolcall_start）→ 参数流渐进快照（toolcall_delta，帧随流密发）→ 执行开始完整参数（tool_execution_start），同 id 后到者为准；快照无已完成键（空对象）时沿 toolCallStart 既有过滤不带 args。客户端 start 分支相应改为同 id **原位覆盖**（不再挪尾——连发多帧下挪尾会把活跃调用挤到队尾，运行行顺序抖动），名称与参数 JSON 同形时返回原引用，密发帧不触发重渲染。
+
+**边界**：沿袭「瞬态帧可丢」——delta 帧丢了只是参数可见性晚几帧，权威参数仍以落盘条目为准；执行开始的完整参数是兜底来源，参数流整个丢失也不影响正确性。空参数调用（无参工具）三源均为空对象，运行行继续显示不带参数的裸工具名。
+
+**后果**：Live Tail 路径无声明流（轮询拿不到未落盘参数），参数可见性差异沿补记八口径是明示的；客户端参数摘要随流逐步成形（`{}` → 部分键 → 完整 JSON），与真实终端体验对齐。

@@ -221,6 +221,25 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     expect(state?.streamingToolCalls).toEqual([{ id: "tc1", name: "bash", args: { command: "pnpm build" } }]);
   });
 
+  it("toolCall 帧：start 同 id 原位覆盖保源序（多帧连发不抖动，ADR-0012 补记十）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc2", name: "edit" }));
+    // tc1 的参数流帧到达：原位更新，不挪到队尾
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "ls" } }));
+    expect(state?.streamingToolCalls).toEqual([
+      { id: "tc1", name: "bash", args: { command: "ls" } },
+      { id: "tc2", name: "edit" },
+    ]);
+  });
+
+  it("toolCall 帧：start 名称与参数均无变化时返回原引用（密发帧不触发重渲染）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "ls" } }));
+    const stable = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "ls" } }));
+    expect(stable).toBe(state);
+  });
+
   it("toolCall 帧：update 按 id 覆盖输出尾巴；start 丢失时忽略（瞬态帧可丢）", () => {
     let state = applyServerFrame(undefined, attached);
     state = applyServerFrame(state, event({ type: "toolCall", phase: "update", id: "ghost", name: "bash", outputTail: "x", totalLen: 1 }));

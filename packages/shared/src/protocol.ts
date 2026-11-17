@@ -45,7 +45,9 @@ export type DriveEventBody =
    *  此后 thinking 不再增长，正文/工具块接续。瞬态帧可丢：首个 text delta 兜底同义 */
   | { type: "thinkingEnd" }
   /** 瞬态工具调用指示：参数流式/执行期间亮起，配对的 end 或权威条目到达即灭。
-   *  start 带 args（tool_execution_start，参数摘要用）；update 带 outputTail
+   *  start 带 args，三源依次覆盖：声明期预填（toolcall_start）、参数流渐进快照
+   *  （toolcall_delta，帧随流密发，ADR-0012 补记十）、执行开始完整参数
+   *  （tool_execution_start），同 id 后到者为准；update 带 outputTail
    *  （tool_execution_update.partialResult 文本尾部截断 + totalLen，ADR-0012 补记八）；
    *  end 不扩（耗时从落盘 toolResult 的 durationMs 取）。瞬态帧可丢：权威内容仍以条目为准 */
   | {
@@ -53,7 +55,7 @@ export type DriveEventBody =
       phase: "start" | "update" | "end";
       id: string;
       name: string;
-      /** 仅 start：执行参数（tool_execution_start.args） */
+      /** 仅 start：调用参数（声明/参数流/执行开始三源覆盖，后到者为准） */
       args?: Record<string, unknown>;
       /** 仅 update：已流出输出的文本尾部（截断推送，非数据缺损） */
       outputTail?: string;

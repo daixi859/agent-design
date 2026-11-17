@@ -44,9 +44,10 @@ describe("normalizeSessionEvent · pi 事件到协议事件体", () => {
     ).toEqual([{ type: "thinkingEnd" }]);
   });
 
-  it("其余 assistantMessageEvent（start / end / delta / done…）不产出", () => {
+  it("其余 assistantMessageEvent（start / end / done…）不产出", () => {
     expect(normalizeSessionEvent(msgUpdate({ type: "text_start", contentIndex: 0 }))).toEqual([]);
     expect(normalizeSessionEvent(msgUpdate({ type: "text_end", contentIndex: 0, content: "完" }))).toEqual([]);
+    // 无 partial 的 toolcall_delta 形状不符吞掉（见下方形状不符用例）
     expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_delta", contentIndex: 0, delta: "{" }))).toEqual([]);
     expect(normalizeSessionEvent(msgUpdate({ type: "done", reason: "stop" }))).toEqual([]);
   });
@@ -80,6 +81,53 @@ describe("normalizeSessionEvent · pi 事件到协议事件体", () => {
       [],
     );
     expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_start", contentIndex: 0 }))).toEqual([]);
+  });
+
+  it("toolcall_delta → toolCall(start) 带渐进参数快照（参数流即可见，ADR-0012 补记十）", () => {
+    expect(
+      normalizeSessionEvent(
+        msgUpdate({
+          type: "toolcall_delta",
+          contentIndex: 0,
+          partial: { content: [{ type: "toolCall", id: "tc1", name: "bash", arguments: { command: "pnpm bu" } }] },
+        }),
+      ),
+    ).toEqual([{ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "pnpm bu" } }]);
+  });
+
+  it("toolcall_delta 快照无已完成键时不带 args（空对象沿 toolCallStart 过滤）", () => {
+    expect(
+      normalizeSessionEvent(
+        msgUpdate({
+          type: "toolcall_delta",
+          contentIndex: 0,
+          partial: { content: [{ type: "toolCall", id: "tc1", name: "bash", arguments: {} }] },
+        }),
+      ),
+    ).toEqual([{ type: "toolCall", phase: "start", id: "tc1", name: "bash" }]);
+  });
+
+  it("toolcall_delta 的 partial 形状不符时吞掉（不猜测）", () => {
+    expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_delta", contentIndex: 3, partial: { content: [] } }))).toEqual(
+      [],
+    );
+    expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_delta", contentIndex: 0 }))).toEqual([]);
+  });
+
+  it("toolcall_end → toolCall(start) 带定稿完整参数（先于执行开始）", () => {
+    expect(
+      normalizeSessionEvent(
+        msgUpdate({
+          type: "toolcall_end",
+          contentIndex: 0,
+          toolCall: { type: "toolCall", id: "tc1", name: "bash", arguments: { command: "pnpm build" } },
+        }),
+      ),
+    ).toEqual([{ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "pnpm build" } }]);
+  });
+
+  it("toolcall_end 的 toolCall 缺失时吞掉（形状不符，不猜测）", () => {
+    expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_end", contentIndex: 0 }))).toEqual([]);
   });
 
   it("tool_execution_start → toolCall(start) 带完整参数（ADR-0012 补记八）", () => {
