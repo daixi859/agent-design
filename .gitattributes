@@ -1,0 +1,5 @@
+# 行尾策略（跨平台）：文本文件一律 LF 入库、LF 检出，不随各机全局
+# core.autocrlf 漂移——否则 Windows 全局 autocrlf=true 会把工作副本为
+# LF 的文件永久标为伪修改（status 标 M 而 diff 恒空）。二进制由 git
+# 自动判定（text=auto 不碰非文本）。
+* text=auto eol=lf
