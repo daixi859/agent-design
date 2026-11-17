@@ -84,7 +84,7 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 - **被驱动的会话里没有任何内置扩展**。`packages/core/src/pi-session-source.ts` 调 `createAgentSession({ sessionManager })` 不传 `resourceLoader`，落回 `DefaultResourceLoader` 而 `extensionFactories` 默认为空；`builtInExtensions`（codemode / tool-search / mcp / llama.cpp）只由 pi CLI 自己注入。实测 create 与 attach 均为 10 个工具、无 codemode —— **全量 780 个 session 里那 63 个真有 codemode 调用的会话，都是 pi CLI 跑的，与 pi-studio 无关**。
 - **实时嵌套状态到不了客户端**。嵌套调用状态只挂在顶层 codemode 的 `tool_execution_update.partialResult.details.calls` 上（子调用自己带 `parentToolCallId` 的事件不带 aggregate details），而 `normalize.ts` 丢弃全部 `tool_execution_*`。落盘后的 `details.calls` 只有终态（残留 `running` 在脚本收尾时已被改写成 `cancelled`），所以**不存在「卡在 running」，只是看不到过程**。
 
-两条都**尚未实施**——是本轮主动的范围切分，不是缺陷。修复路线与实证见 [pi-kernel-notes.md §5.4](research/pi-kernel-notes.md)（注入 `resourceLoader` 的代码已在本机验证：工具数 11、含 codemode）。
+两条原为主动的范围切分。第一条（内置扩展注入）已于 2026-11-17 实施：`packages/core/src/pi-session-source.ts` 构造 `DefaultResourceLoader` 注入 codemode / tool-search / mcp 三个工厂（与 CLI 对齐），`createAgentSession({ sessionManager, resourceLoader })` 后 `bindExtensions({})` 触发 session_start（MCP 后台连接）；冒烟验证激活工具含 codemode / tool_search。第二条（嵌套调用实时通道）仍未实施。修复路线与实证见 [pi-kernel-notes.md §5.4](research/pi-kernel-notes.md)。
 
 ## 补记六（上游对齐轮）：prompt 的 streamingBehavior 竞态兜底
 

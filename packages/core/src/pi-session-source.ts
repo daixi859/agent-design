@@ -1,14 +1,43 @@
 // 真 pi SDK 适配器：把 AgentSession 包装成 PiSessionLike（ADR-0012）。
 // 薄层不单测（fake 已覆盖宿主语义），由阶段四真内核冒烟兜底。
-import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
+import {
+  createAgentSession,
+  createCodemodeExtension,
+  createMcpExtension,
+  createToolSearchExtension,
+  DefaultResourceLoader,
+  getAgentDir,
+  SessionManager,
+  type AgentSession,
+} from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
 import type { PiSessionLike, PiSessionRequest } from "./types.ts";
+
+/**
+ * 注入与 pi CLI 相同的内置扩展（codemode / tool-search / mcp）。
+ * SDK 会话默认不带 builtInExtensions：不注入则 defaultTools 里的 +codemode
+ * 解析到未注册的工具名，静默无效（ADR-0012 补记五；
+ * 修复路线实证见 docs/research/pi-kernel-notes.md §5.4）。
+ */
+async function createPiResourceLoader(cwd: string) {
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir: getAgentDir(),
+    // settings 的 defaultTools 已含 +codemode / +tool_search，工厂注册后即激活
+    extensionFactories: [createCodemodeExtension(), createToolSearchExtension(), createMcpExtension()],
+  });
+  await loader.reload();
+  return loader;
+}
 
 /** 按请求打开真实内核会话：attach = open(file)；create = 在 cwd 新建持久会话 */
 export async function openPiSession(request: PiSessionRequest): Promise<PiSessionLike> {
   const sessionManager =
     request.kind === "attach" ? SessionManager.open(request.file) : SessionManager.create(request.cwd);
-  const { session } = await createAgentSession({ sessionManager });
+  const resourceLoader = await createPiResourceLoader(sessionManager.getCwd());
+  const { session } = await createAgentSession({ sessionManager, resourceLoader });
+  // session_start 触发扩展初始化（含 MCP 服务器后台连接），与 CLI 启动时序对齐
+  await session.bindExtensions({});
   return adaptAgentSession(session);
 }
 
