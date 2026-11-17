@@ -331,6 +331,68 @@ describe("applyServerFrame · 帧到客户端状态", () => {
   it("未 attach 先收到事件：防御性忽略", () => {
     expect(applyServerFrame(undefined, event({ type: "status", status: "running" }))).toBeUndefined();
   });
+
+  // ===== ADR-0016/0017 扩展：目录、用量、待确认队列、重试计数 =====
+
+  const catalog: ServerFrame = {
+    type: "attached",
+    sessionId: "s1",
+    file: "f1.jsonl",
+    catalog: {
+      model: {
+        models: [{ provider: "p", modelId: "m1", thinkingLevels: ["off", "medium"], contextWindow: 200000 }],
+        current: { provider: "p", modelId: "m1" },
+        thinkingLevel: "medium",
+      },
+      commands: [{ name: "commit", trigger: "/commit", source: "skill" }],
+    },
+  };
+
+  it("attached 带 catalog：登记目录（Model Seat / Trigger Menu 数据源）", () => {
+    const state = applyServerFrame(undefined, catalog);
+    expect(state?.catalog?.model?.models).toHaveLength(1);
+    expect(state?.catalog?.commands?.[0].trigger).toBe("/commit");
+    // 不带 catalog 的 attached 重放不冲掉已登记目录
+    expect(applyServerFrame(state, attachedBare)?.catalog).toEqual(state?.catalog);
+  });
+
+  it("usage 事件：登记快照；字段级同值引用不变（消息边界高频重推不触发重渲染）", () => {
+    let state = applyServerFrame(undefined, catalog);
+    const usageFrame = event({ type: "usage", usage: { tokens: 1000, contextWindow: 200000, percent: 0.5 } });
+    state = applyServerFrame(state, usageFrame);
+    expect(state?.usage?.tokens).toBe(1000);
+    const before = state;
+    state = applyServerFrame(state, usageFrame);
+    expect(state).toBe(before);
+  });
+
+  it("usage 的 tokens 可为 null（刚压缩完内核暂不知），Context Ring 自行降级", () => {
+    let state = applyServerFrame(undefined, catalog);
+    state = applyServerFrame(state, event({ type: "usage", usage: { tokens: null, contextWindow: 200000, percent: null } }));
+    expect(state?.usage?.tokens).toBeNull();
+  });
+
+  it("queue 帧：内核快照（权威）到达，本地 pendingQueue 让位", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "status", status: "running" }));
+    const pending: DriveSession = { ...state!, pendingQueue: ["本地待确认"] };
+    const next = applyServerFrame(pending, event({ type: "queue", steering: [], followUp: ["内核已收"] }))!;
+    expect(next.queued).toEqual({ steering: [], followUp: ["内核已收"] });
+    expect(next.pendingQueue).toBeUndefined();
+  });
+
+  it("status retrying：记录第 n 次尝试；离开 retrying 清零；回到 idle 连 pendingQueue 一并清空", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "status", status: "retrying", attempt: 2, detail: "超时" }));
+    expect(state?.retryAttempt).toBe(2);
+    state = applyServerFrame(state, event({ type: "status", status: "running" }));
+    expect(state?.retryAttempt).toBeUndefined();
+    state = applyServerFrame(state, event({ type: "status", status: "retrying", attempt: 3 }));
+    const queued: DriveSession = { ...state!, pendingQueue: ["排队中"] };
+    const settled = applyServerFrame(queued, event({ type: "status", status: "idle" }))!;
+    expect(settled.pendingQueue).toBeUndefined();
+    expect(settled.retryAttempt).toBeUndefined();
+  });
 });
 
 describe("瞬态条目合成 · 喂给同一 buildTranscriptModel 出口（ADR-0012 补记七）", () => {

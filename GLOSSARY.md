@@ -41,8 +41,36 @@ _Avoid_: 实时模式、streaming 模式
 _Avoid_: 聊天、发送消息（作为能力名）、跑 agent
 
 **Disposition**:
-内核对一个排队输入的应答：`queued`（已入队）或 `handled`（已被扩展处理）；仅 steer / followUp 有，不落盘。
+内核对一个排队输入的应答：`queued`（已入队）或 `handled`（已被扩展处理）；仅 Steer / Follow-up 有，不落盘。
 _Avoid_: 返回值、ack
+
+**Steer**:
+运行中把一条输入并入当前对话的通道：在当前 assistant 回合及其工具调用结束的边界投递，抢占下一轮。与 Follow-up 相对，差别只在投递时机。
+_Avoid_: 插队、打断（中断是另一件事）、追加（已退役）
+
+**Follow-up**:
+运行中把一条输入排入等待队列的通道：本轮 run 自然停下的时机才投递，是运行中发送的默认通道，也是 Queue Dock 的内容主体。
+_Avoid_: 追问（已退役）、排队消息
+
+**Queue Dock**:
+输入框上方的队列区：Follow-up 队列与本地待确认发送混排的单一列表，行内动作仅编辑、删除、插话三种；多条折叠为计数头，编辑时自动展开。
+_Avoid_: 追加区、待发送列表、消息队列
+
+**Trigger Menu**:
+行首 `/` 触发的输入菜单：列扩展命令、prompt 模板、skills 与少量客户端映射的内建动作；选中命令在输入框内落定为 Command Chip。
+_Avoid_: 斜杠菜单、命令面板、自动补全
+
+**Command Chip**:
+命令经 Trigger Menu 选中后在输入框内落定的原子片段：命令名不可编辑，后随参数与 ghost 提示；删除 chip 是唯一退出，存在期间 Trigger Menu 不再因 `/` 打开。
+_Avoid_: 标签、badge、token
+
+**Model Seat**:
+输入框底栏的模型与 thinking 档位选择控件对（两粒按钮）；输入被冻结的时段保持可用——卡住时换模型再发是它的恢复手势语义。
+_Avoid_: 模型选择器（作为控件对名时）、模型下拉
+
+**Context Ring**:
+输入框底栏右端的上下文用量环：SVG 圆环随用量百分比按阈值变色（>70% 警告、>90% 危险），hover 展开详情（已用、窗口、百分比、当前模型、压缩状态）。
+_Avoid_: 进度条、token 环、用量饼图
 
 **Attach**:
 把一个已有 Session 载入内核继续 Drive；接管后该 Session 走驱动事件流，Live Tail 对其失效。

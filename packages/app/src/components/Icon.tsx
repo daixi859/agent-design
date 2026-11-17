@@ -28,6 +28,7 @@ export type IconName =
   | "play"
   | "pause"
   | "xmark"
+  | "stop"
   | "check"
   | "spinner"
   | "gear"
@@ -130,6 +131,8 @@ const glyphs: Record<IconName, JSX.Element> = {
     </>
   ),
   xmark: <path d="m5.5 5.5 9 9m0-9-9 9" />,
+  /* 中断（GLOSSARY「Stop 按钮」）：圆角实心方块，pi TUI 的 Esc-to-interrupt 按钮化身 */
+  stop: <rect x="6.25" y="6.25" width="7.5" height="7.5" rx="1.5" fill="currentColor" stroke="none" />,
   /* ADR-0014 TUI 状态字形：对勾（槽位完成态）；spinner 是 270° 圆弧，
      旋转动画由使用方的 CSS 驱动（图标集保持纯静态字形） */
   check: <path d="m4.75 10.75 3.75 3.75 6.75-8" />,

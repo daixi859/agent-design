@@ -147,10 +147,10 @@ export function Transcript({
       )}
 
       <Composer
-        model={view.model?.modelId}
+        model={view.model}
         thinkingLevel={view.thinkingLevel}
-        toolCount={view.toolCallCount}
         drive={drive}
+        sessionId={sessionId}
       />
     </div>
   );

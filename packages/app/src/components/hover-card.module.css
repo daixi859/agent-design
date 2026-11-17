@@ -1,0 +1,15 @@
+/* HoverCard：富内容悬浮卡（Context Ring 详情）。与 Tooltip 的差别是内容可承载
+   结构化节点、指针可进卡（进卡续命），表面用浮层标准面 */
+
+.anchor {
+  display: inline-flex;
+}
+
+.card {
+  position: fixed;
+  z-index: var(--z-popover);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+}

@@ -27,7 +27,70 @@ export type DriveCommandBody =
   | { type: "prompt"; text: string; /** 运行中被拒时的排队策略；idle 下无作用 */ streamingBehavior?: StreamingBehavior }
   | { type: "steer"; text: string }
   | { type: "followUp"; text: string }
-  | { type: "abort" };
+  | { type: "abort" }
+  /** 切换模型（ADR-0016）：仅会话级（落 model_change entry），不暴露持久化选项；
+   *  内核无推送事件，core 在返回后主动 drain 条目 */
+  | { type: "setModel"; provider: string; modelId: string }
+  /** 调整 thinking 档位（ADR-0016）：档位取值来自目录中该模型的 thinkingLevels */
+  | { type: "setThinkingLevel"; level: string }
+  /** 清空两条队列（ADR-0016 整批重编第一步）：队列变化经既有 queue 事件回推 */
+  | { type: "clearQueue" }
+  /** 手动压缩上下文（内核 compact()）：生命周期经既有 compaction 事件回推 */
+  | { type: "compact" };
+
+/** 上下文用量（内核 getContextUsage 投影）：Context Ring 的数据源。
+ *  tokens 为 null 表示内核暂不知（刚压缩完、下个回复前）——环退化为仅窗口已知 */
+export interface ContextUsageInfo {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+}
+
+// ===== 目录（ADR-0016）：随 attached 帧一次性下发，重 attach 即刷新 =====
+
+/** thinking 档位的正典顺序（内核 ThinkingLevel 全集）：core 的目录映射与
+ *  Model Seat 的档位列表共用这一份，不许两边各排各的 */
+export const THINKING_LEVEL_ORDER = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+/** 模型目录条目：Model Seat 列表与 Context Ring 分母（contextWindow）的数据源 */
+export interface ModelCatalogEntry {
+  provider: string;
+  modelId: string;
+  /** 展示名；缺省回落 modelId */
+  name?: string;
+  /** 该模型可用的 thinking 档位（内核 getAvailableThinkingLevels 口径） */
+  thinkingLevels: string[];
+  /** 上下文窗口 token 数；内核未告知时缺省（此时环不渲染） */
+  contextWindow?: number;
+}
+
+/** 模型目录 + 当前选中 */
+export interface ModelCatalog {
+  models: ModelCatalogEntry[];
+  /** 当前选中（内核 session.model 投影）；目录为空时可缺省 */
+  current?: { provider: string; modelId: string };
+  /** 当前 thinking 档位 */
+  thinkingLevel?: string;
+}
+
+/** Trigger Menu 命令目录条目（ADR-0016）：三类透传命令，客户端另置少量内建映射不经协议 */
+export interface CommandCatalogItem {
+  /** 菜单显示名 */
+  name: string;
+  /** 落定/提交的触发文本前缀（内核 prompt() 的解释形态）：
+   *  扩展命令与 prompt 模板为 "/name"，skill 为 "/skill:name" */
+  trigger: string;
+  description?: string;
+  /** 参数提示（prompt 模板的 argumentHint）：Command Chip 的 ghost 提示文案 */
+  argumentHint?: string;
+  source: "extension" | "prompt" | "skill";
+}
+
+/** 单个被驱动会话的目录包：attached 帧一次性携带 */
+export interface SessionCatalog {
+  model?: ModelCatalog;
+  commands?: CommandCatalogItem[];
+}
 
 /** 领域层命令（core SessionHost 与 WS 帧共用） */
 export interface DriveCommand {
@@ -64,6 +127,9 @@ export type DriveEventBody =
     }
   /** 瞬态排队快照（pi queue_update）：steer / followUp 待送达的内容全量覆盖 */
   | { type: "queue"; steering: string[]; followUp: string[] }
+  /** 上下文用量快照（内核 getContextUsage，ADR-0016）：宿主在条目边界随 drain 一并推送；
+   *  无事件驱动（内核是拉取式 API），瞬态可丢、下个边界自愈 */
+  | { type: "usage"; usage: ContextUsageInfo }
   /** 压缩生命周期（pi compaction_start/end）：期间内核拒绝新 prompt */
   | {
       type: "compaction";
@@ -102,13 +168,17 @@ export type ClientFrame =
 /** 服务端帧；attach / create 被拒、坏帧、未知类型均走 error，连接不断 */
 export type ServerFrame =
   /** file 回带供客户端断线重连 re-attach；
-   *  header / entries 为内核当前快照（create 出的会话尚未落盘，客户端只能靠它渲染） */
+   *  header / entries 为内核当前快照（create 出的会话尚未落盘，客户端只能靠它渲染）；
+   *  catalog 与 usage 为模型/命令目录与用量快照（ADR-0016，attach / create 均带）——
+   *  两者都随 attach 帧走：宿主构造期无订阅者，事件会丢（同补记二的时序坑） */
   | {
       type: "attached";
       sessionId: string;
       file?: string;
       header?: SessionHeaderEntry;
       entries?: SessionEntry[];
+      catalog?: SessionCatalog;
+      usage?: ContextUsageInfo;
     }
   | { type: "released"; sessionId: string }
   | { type: "commandFailed"; sessionId: string; message: string; code?: DriveErrorCode }

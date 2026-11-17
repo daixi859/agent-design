@@ -5,7 +5,16 @@
 import type { Server } from "node:http";
 import { errorMessage } from "@pi-studio/shared/errors";
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
-import type { ClientFrame, DriveCommand, DriveErrorCode, DriveEvent, InputDisposition, ServerFrame } from "@pi-studio/shared/protocol";
+import type {
+  ClientFrame,
+  ContextUsageInfo,
+  DriveCommand,
+  DriveErrorCode,
+  DriveEvent,
+  InputDisposition,
+  ServerFrame,
+  SessionCatalog,
+} from "@pi-studio/shared/protocol";
 import { WebSocket, WebSocketServer, type WebSocket as WsSocket } from "ws";
 
 /** drive 命令的处理结果（组装层产出）：ok 时 steer/followUp 携带 disposition；
@@ -14,10 +23,13 @@ export type DriveOutcome =
   | { ok: true; disposition?: InputDisposition }
   | { ok: false; message: string; code?: DriveErrorCode };
 
-/** 打开会话的返回值：sessionId + 内核当前快照（attach 回包用，create 的会话文件尚未落盘） */
+/** 打开会话的返回值：sessionId + 内核当前快照 + 模型/命令目录与用量快照（ADR-0016）。
+ *  快照只随 create 下发（attach 的会话已落盘，基线走 REST），目录与用量则两边都带 */
 export interface OpenedSession {
   sessionId: string;
   snapshot(): SessionSnapshot;
+  catalog(): SessionCatalog;
+  usage(): ContextUsageInfo | undefined;
 }
 
 export interface WsGatewayDeps {
@@ -73,9 +85,20 @@ export function createWsGateway(deps: WsGatewayDeps): WsGateway {
       owned.add(sessionId);
       subscribe(sessionId, socket);
       // 快照只随 create 下发：attach 的会话已落盘，基线走 REST（ADR-0012：读路径不变）；
-      // 且断线重连的 attach 不应全量重放（那是 Live Tail 的活儿，用字节偏移）
+      // 且断线重连的 attach 不应全量重放（那是 Live Tail 的活儿，用字节偏移）。
+      // 目录与用量（ADR-0016）轻量，attach / create 均带——宿主构造期无订阅者，
+      // 这两份初始状态只能随 attached 帧走，不能靠事件（同补记二的时序坑）
       const snapshot = file === undefined ? opened.snapshot() : undefined;
-      send(socket, snapshot ? { type: "attached", sessionId, header: snapshot.header, entries: snapshot.entries } : { type: "attached", sessionId, file });
+      const catalog = opened.catalog();
+      const usage = opened.usage();
+      send(socket, {
+        type: "attached",
+        sessionId,
+        ...(snapshot ? { header: snapshot.header, entries: snapshot.entries } : {}),
+        ...(file ? { file } : {}),
+        ...(catalog.model || catalog.commands ? { catalog } : {}),
+        ...(usage ? { usage } : {}),
+      });
     } catch (err) {
       // 机器码供客户端走 i18n（ADR-0011）；服务端文案仅作调试兜底
       const code = (err as { code?: DriveErrorCode }).code;

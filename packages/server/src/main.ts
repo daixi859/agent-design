@@ -61,6 +61,21 @@ async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
       const disposition = await host.followUp(body.text);
       return disposition === "failed" ? { ok: false, message: "followUp 被拒，详见事件流 error" } : { ok: true, disposition };
     }
+    case "setModel":
+      // await：拒绝要走 commandFailed 帧（模型名无效 / 凭据缺失），事件流只兜底
+      await host.setModel(body.provider, body.modelId);
+      return { ok: true };
+    case "setThinkingLevel":
+      await host.setThinkingLevel(body.level);
+      return { ok: true };
+    case "clearQueue":
+      // 清空结果经内核 queue_update 事件回推（ADR-0016 整批重编第一步）
+      host.clearQueue();
+      return { ok: true };
+    case "compact":
+      // 压缩是长任务：不等结束（compaction 事件负责反馈生命周期）
+      void host.compact();
+      return { ok: true };
   }
 }
 // ===== HTTP：/api（剥前缀转 pi-data）→ 静态托管 → 404 =====

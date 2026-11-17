@@ -6,7 +6,7 @@
 // 经 useStore + selector 取切片（组件级更新）；本类只管 WS 生命周期与状态归约。
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import { applyServerFrame, type DriveSession } from "../lib/drive-client";
+import { applyServerFrame, isBusyStatus, type DriveSession } from "../lib/drive-client";
 import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
 /** 驱动状态切片：会话快照表 + 连接级错误（无 sessionId 归属） */
@@ -154,38 +154,94 @@ class DriveClient {
   }
 
   /**
-   * 语义化发送（与 pi TUI 输入语义一致）：
-   * 运行中 → steer（插话，本轮工具调用后送达）；运行结束后 → followUp / prompt。
+   * 语义化发送（ADR-0017 排队语义）：idle → prompt（兜底 "followUp"）；运行中 → followUp 排队。
+   * 插话走显式的 steerText（Ctrl/Cmd+Enter 或 Queue Dock 行内「插话」）。
    *
-   * prompt 始终带 streamingBehavior: "steer" 兜底竞态（ADR-0012 补记六）：内核
-   * agent_start 的广播有窗口期，本地看似 idle 时内核可能已在流式——无此字段
-   * 内核会直接 throw，带上则转为排队（idle 下该字段无作用，不影响正常 prompt）。
+   * 兜底理由（修订 ADR-0012 补记六）：内核 agent_start 的广播有窗口期，本地看似 idle
+   * 时内核可能已在流式——无此字段内核会直接 throw，带 "followUp" 则转为排队（与新默认
+   * 通道一致；idle 下该字段无作用，不影响正常 prompt）。
    */
   sendText(sessionId: string, text: string): void {
     const session = this.store.getState().sessions.get(sessionId);
-    const body: DriveCommandBody =
-      session?.status === "running" || session?.status === "retrying"
-        ? { type: "steer", text }
-        : { type: "prompt", text, streamingBehavior: "steer" };
+    if (isBusyStatus(session?.status)) {
+      // 排队（GLOSSARY Queue Dock）：本地待确认 echo 顶住发送→快照回推间的空窗，
+      // 内核 queue 帧到达即让位。连接未就绪时 send 静默丢弃，echo 不能先亮
+      if (session && this.ws?.readyState === WebSocket.OPEN) {
+        this.store.setState((state) => {
+          const current = state.sessions.get(sessionId);
+          if (!current) return state;
+          return {
+            sessions: new Map(state.sessions).set(sessionId, {
+              ...current,
+              pendingQueue: [...(current.pendingQueue ?? []), text],
+            }),
+          };
+        });
+      }
+      this.send({ type: "drive", command: { sessionId, body: { type: "followUp", text } } });
+      return;
+    }
     // 待回显（GLOSSARY「Pending Echo」）：权威 user 条目要等内核 assistant 的 message_start
-    // 才回传（ADR-0012 补记四），这期间由本地气泡顶住内容区。只在实际会发出的帧上挂——
-    // 连接未就绪时 send 会静默丢弃，气泡不能先亮。
-    if (body.type === "prompt" && session && this.ws?.readyState === WebSocket.OPEN) {
+    // 才回传（ADR-0012 补记四），这期间由本地气泡顶住内容区。
+    if (session && this.ws?.readyState === WebSocket.OPEN) {
       this.store.setState((state) => ({
         sessions: new Map(state.sessions).set(sessionId, { ...session, pendingPrompt: text }),
       }));
     }
-    this.send({ type: "drive", command: { sessionId, body } });
+    this.send({
+      type: "drive",
+      command: { sessionId, body: { type: "prompt", text, streamingBehavior: "followUp" } },
+    });
+  }
+
+  /** 显式插话（GLOSSARY「Steer」）：当前 assistant 轮边界即并入。idle 下无插话语义，
+   *  回落为普通发送（Ctrl+Enter 空闲时=发送） */
+  steerText(sessionId: string, text: string): void {
+    const session = this.store.getState().sessions.get(sessionId);
+    if (!isBusyStatus(session?.status)) {
+      this.sendText(sessionId, text);
+      return;
+    }
+    this.send({ type: "drive", command: { sessionId, body: { type: "steer", text } } });
+  }
+
+  /** 整批重编（ADR-0016）：Queue Dock 行内编辑/删除/插话的唯一落点——
+   *  clearQueue 后按新列表逐条重入队，通道随条目保留。idle 下队列本已清空，忽略 */
+  rebuildQueue(sessionId: string, items: QueuedItem[]): void {
+    const session = this.store.getState().sessions.get(sessionId);
+    if (!isBusyStatus(session?.status)) return;
+    this.send({ type: "drive", command: { sessionId, body: { type: "clearQueue" } } });
+    for (const item of items) {
+      const body: DriveCommandBody =
+        item.channel === "steer" ? { type: "steer", text: item.text } : { type: "followUp", text: item.text };
+      this.send({ type: "drive", command: { sessionId, body } });
+    }
+  }
+
+  /** 切换模型（仅会话级，ADR-0016）：拒绝走 commandFailed 帧，错误条落在 lastError */
+  setModel(sessionId: string, provider: string, modelId: string): void {
+    this.send({ type: "drive", command: { sessionId, body: { type: "setModel", provider, modelId } } });
+  }
+
+  /** 调整 thinking 档位（仅会话级，ADR-0016） */
+  setThinkingLevel(sessionId: string, level: string): void {
+    this.send({ type: "drive", command: { sessionId, body: { type: "setThinkingLevel", level } } });
+  }
+
+  /** 手动压缩上下文（Trigger Menu 内建映射，ADR-0016）：生命周期经 compaction 事件回推 */
+  compact(sessionId: string): void {
+    this.send({ type: "drive", command: { sessionId, body: { type: "compact" } } });
   }
 
   abort(sessionId: string): void {
     this.send({ type: "drive", command: { sessionId, body: { type: "abort" } } });
   }
+}
 
-  /** 队列式追问：本轮运行彻底结束（含工具与插话）后才送达 */
-  followUp(sessionId: string, text: string): void {
-    this.send({ type: "drive", command: { sessionId, body: { type: "followUp", text } } });
-  }
+/** Queue Dock 行内操作的重编输入：文本 + 通道（GLOSSARY「Steer」/「Follow-up」） */
+export interface QueuedItem {
+  text: string;
+  channel: "steer" | "followUp";
 }
 
 /** 模块级单例：驱动状态跨组件共享，一个页一条 WS 连接 */

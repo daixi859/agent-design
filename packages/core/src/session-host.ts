@@ -3,7 +3,7 @@
 // steer/followUp 失败不动状态（运行中会话不受影响）。
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { errorMessage } from "@pi-studio/shared/errors";
-import type { DriveEvent, DriveStatus } from "@pi-studio/shared/protocol";
+import type { ContextUsageInfo, DriveEvent, DriveStatus, SessionCatalog } from "@pi-studio/shared/protocol";
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { normalizeSessionEvent } from "./normalize.ts";
 import type { InputDisposition, PiSessionLike, PromptOptions } from "./types.ts";
@@ -69,6 +69,52 @@ export class SessionHost {
     });
   }
 
+  /** 模型与命令目录（ADR-0016）：attach 回包用；失败落事件流、回空目录 */
+  catalog(): SessionCatalog {
+    try {
+      return this.session.catalog();
+    } catch (err) {
+      this.fail(err);
+      return {};
+    }
+  }
+
+  /** 用量快照（ADR-0016）：随 attached 帧走——宿主构造期无订阅者，事件发即丢。
+   *  此后的刷新走条目边界的 usage 事件（handle 内）。 */
+  usage(): ContextUsageInfo | undefined {
+    return this.session.contextUsage();
+  }
+
+  /** 切换模型（ADR-0016）：resolve 后主动拉条目——内核只落 model_change entry、
+   *  不发 session 事件，不 drain 则 UI 要等下一轮边界才能看到新模型 */
+  async setModel(provider: string, modelId: string): Promise<void> {
+    await this.session.setModel(provider, modelId);
+    this.flushEntries();
+  }
+
+  /** 调整 thinking 档位（ADR-0016）：内核有 thinking_level_changed 事件（宿主已在该
+   *  边界 drain），这里再 drain 一次是幂等的（条目按计数水位，无新条目零开销） */
+  async setThinkingLevel(level: string): Promise<void> {
+    await this.session.setThinkingLevel(level);
+    this.flushEntries();
+  }
+
+  /** 清空两条队列（ADR-0016 整批重编第一步）：清空结果经内核 queue_update 回推 */
+  clearQueue(): void {
+    try {
+      this.session.clearQueue();
+    } catch (err) {
+      this.fail(err);
+    }
+  }
+
+  /** 手动压缩上下文（ADR-0016）：生命周期经 compaction 事件回推；被拒落 error 事件 */
+  compact(): Promise<void> {
+    return this.session.compact().catch((err: unknown) => {
+      this.fail(err);
+    });
+  }
+
   dispose(): void {
     this.unsubscribe();
     this.session.dispose();
@@ -96,6 +142,10 @@ export class SessionHost {
       event.type === "thinking_level_changed"
     ) {
       this.flushEntries();
+      // 用量与条目同边界推送（ADR-0016）：内核 getContextUsage 是拉取式 API，
+      // 在这些点上值刚被最新回复/压缩刷新；Context Ring 无事件可订，靠快照自愈
+      const usage = this.usage();
+      if (usage) this.emit({ sessionId: this.sessionId, body: { type: "usage", usage } });
     }
   }
 

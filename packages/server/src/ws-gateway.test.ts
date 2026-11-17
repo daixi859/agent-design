@@ -18,6 +18,8 @@ function fakeDeps() {
       header: { type: "session", version: 3, id: sessionId, parentId: null, timestamp: "T0", cwd: "/p" },
       entries: [{ type: "message", id: `${sessionId}-m1`, parentId: null, timestamp: "T0", message: { role: "user", content: "hi" } }],
     }),
+    catalog: () => ({}),
+    usage: () => undefined,
   });
   const deps: WsGatewayDeps = {
     attach: async (file) => {

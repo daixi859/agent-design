@@ -1,0 +1,109 @@
+/* MenuSurface：锚定浮层表面 + 通用菜单行（Trigger Menu / Model Seat 共用） */
+
+.surface {
+  position: fixed;
+  z-index: var(--z-popover);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+  padding: var(--space-1);
+}
+
+.scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.search {
+  display: block;
+  inline-size: calc(100% - var(--space-2));
+  margin: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-1);
+  font-size: var(--text-footnote);
+
+  &:focus {
+    outline: none;
+  }
+  &::placeholder {
+    color: var(--text-3);
+  }
+}
+
+.groupLabel {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding: var(--space-1h) var(--space-2);
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: var(--text-footnote);
+  line-height: var(--leading-footnote);
+  text-align: start;
+  cursor: pointer;
+
+  &[aria-selected="true"],
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.itemIcon {
+  flex: none;
+  color: var(--text-3);
+  margin-block-start: 1px;
+}
+
+.itemBody {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.itemTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1h);
+  font-weight: var(--weight-medium);
+}
+
+.itemHint {
+  color: var(--text-4);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+}
+
+.itemDesc {
+  margin-block-start: 1px;
+  color: var(--text-3);
+  font-size: var(--text-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemCheck {
+  flex: none;
+  color: var(--accent-text);
+  margin-block-start: 1px;
+}
+
+.empty {
+  padding: var(--space-3) var(--space-2);
+  color: var(--text-3);
+  font-size: var(--text-caption);
+}

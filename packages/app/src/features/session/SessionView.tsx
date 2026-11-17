@@ -1,10 +1,9 @@
 /** Session 视图：加载/错误态 + Transcript（detail 经 outlet context 由 MainShell 下发）。
-    被驱动时把驱动状态与动作接进 Transcript（输入区激活）。
+    被驱动时把驱动状态与动作接进 Transcript（输入区激活，ADR-0017 语义）。
     错误出口：详情加载失败、驱动会话错误（lastError）与连接级错误都渲染为顶部错误条。 */
 import { useOutletContext, useParams } from "react-router";
 import { useLocale } from "../../state/useLocale";
-import { drive, useConnectionError, useDriveSession } from "../../state/use-drive";
-import { queuedCountOf } from "../../lib/drive-client";
+import { drive, useConnectionError, useDriveSession, type QueuedItem } from "../../state/use-drive";
 import { driveErrorText } from "../../lib/drive-errors";
 import type { SessionDetailState } from "../../state/useSessionDetail";
 import { Icon } from "../../components/Icon";
@@ -46,11 +45,18 @@ export function SessionView() {
       ? {
           status: data.drive.status,
           onSend: (text: string) => drive.sendText(id, text),
-          onFollowUp: (text: string) => drive.followUp(id, text),
+          onSteer: (text: string) => drive.steerText(id, text),
+          onRebuildQueue: (items: QueuedItem[]) => drive.rebuildQueue(id, items),
           onAbort: () => drive.abort(id),
-          callingTool: data.drive.streamingToolCalls?.at(-1)?.name,
-          queuedCount: queuedCountOf(data.drive),
+          onCompact: () => drive.compact(id),
+          onSetModel: (provider: string, modelId: string) => drive.setModel(id, provider, modelId),
+          onSetThinkingLevel: (level: string) => drive.setThinkingLevel(id, level),
+          queued: data.drive.queued,
+          pendingQueue: data.drive.pendingQueue,
+          catalog: data.drive.catalog,
+          usage: data.drive.usage,
           compacting: data.drive.compacting,
+          retryAttempt: data.drive.retryAttempt,
         }
       : undefined;
 

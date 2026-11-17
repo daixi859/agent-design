@@ -10,7 +10,7 @@ import type {
   StreamingDraft,
   ToolResultMessage,
 } from "@pi-studio/shared/pi-types";
-import type { DriveEvent, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
+import type { ContextUsageInfo, DriveEvent, DriveStatus, ServerFrame, SessionCatalog } from "@pi-studio/shared/protocol";
 
 /** 「调用中」指示的形状（协议 toolCall 帧的字段子集，状态与消费方共用同名形状）。
  *  args / outputTail 为执行期数据（ADR-0012 补记八）：并行调用各占集合一项 */
@@ -44,14 +44,25 @@ export interface DriveSession {
       message_start 才回传权威 user 条目（ADR-0012 补记四），这段窗口由客户端先挂气泡，
       权威条目到达 / 回 idle / 出错即让位 */
   readonly pendingPrompt?: string;
+  /** 模型与命令目录（ADR-0016）：attached 帧一次性下发，Model Seat / Trigger Menu 数据源 */
+  readonly catalog?: SessionCatalog;
+  /** 上下文用量快照（ADR-0016）：Context Ring 数据源；usage 帧在条目边界覆盖。
+   *  tokens 为 null = 内核暂不知（刚压缩完）；字段级同值时引用不变（消息边界高频） */
+  readonly usage?: ContextUsageInfo;
+  /** 本地待确认的排队发送（GLOSSARY「Queue Dock」混排）：sendText 运行中提交即挂，
+   *  内核 queue 快照（权威）到达或回 idle 即让位 */
+  readonly pendingQueue?: readonly string[];
+  /** 仅 retrying 携带：第几次自动重试（status 帧透传），占位符文案用 */
+  readonly retryAttempt?: number;
   /** create 出的会话在首条消息前不落盘，header 只能来自 attach 回包 */
   readonly header?: SessionHeaderEntry;
   readonly lastError?: string;
 }
 
-/** 待送达插话/追问的总数（Composer 徽标等消费方的唯一派生点） */
-export function queuedCountOf(session: DriveSession | undefined): number {
-  return (session?.queued?.steering.length ?? 0) + (session?.queued?.followUp.length ?? 0);
+/** 忙碌判定（GLOSSARY「Running Indicator」同口径）：running / retrying 都算忙——
+    排队、插话、中断动作的可用性共用这一个口径，不再四处展开条件 */
+export function isBusyStatus(status: DriveStatus | undefined): boolean {
+  return status === "running" || status === "retrying";
 }
 
 /** 叠加条目的合成 id：只活在客户端内存里，绝不与内核条目 id 相撞（内核 id 为随机串） */
@@ -131,22 +142,31 @@ export function applyServerFrame(
 ): DriveSession | undefined {
   switch (frame.type) {
     case "attached": {
-      // 重连 re-attach 会重复到达：条目按 id 幂等，header 后到者为准
+      // 重连 re-attach 会重复到达：条目按 id 幂等，header / catalog / usage 后到者为准
       const base = prev ?? { sessionId: frame.sessionId, status: "idle" as const, entries: [] };
       const merged = mergeEntries(base.entries, frame.entries ?? []);
       const header = frame.header ?? base.header;
-      // attach（无快照）时 merged/header 都不变，但 prev 可能是 undefined——
+      const catalog = frame.catalog ?? base.catalog;
+      const usage = frame.usage ?? base.usage;
+      // attach（无快照）时引用都不变，但 prev 可能是 undefined——
       // 此时仍得登记这个 session，否则驱动表里永远没有它
-      if (prev && merged === base.entries && header === base.header) return prev;
-      return { ...base, entries: merged, header };
+      if (
+        prev &&
+        merged === base.entries &&
+        header === base.header &&
+        catalog === base.catalog &&
+        usage === base.usage
+      )
+        return prev;
+      return { ...base, entries: merged, header, catalog, usage };
     }
     case "released":
       return undefined;
     case "event":
       return applyEvent(prev, frame.event);
     case "commandFailed":
-      // 命令被拒（未接管 / 坏帧等）：prompt 不会再有权威回显，待回显一并让位
-      return prev && { ...prev, lastError: frame.message, pendingPrompt: undefined };
+      // 命令被拒（未接管 / 坏帧等）：prompt 不会再有权威回显，待回显与待确认队列一并让位
+      return prev && { ...prev, lastError: frame.message, pendingPrompt: undefined, pendingQueue: undefined };
     case "disposition":
       // 瞬态排队应答：不入状态
       return prev;
@@ -190,8 +210,15 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
             queued: undefined,
             compacting: undefined,
             pendingPrompt: undefined,
+            pendingQueue: undefined,
+            retryAttempt: undefined,
           }
-        : { ...prev, status };
+        : {
+            ...prev,
+            status,
+            retryAttempt:
+              status === "retrying" ? (event.body.attempt ?? prev.retryAttempt) : undefined,
+          };
     }
     case "error":
       // prompt 被内核拒绝等：不会再有权威回显，待回显一并让位
@@ -264,7 +291,25 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       return { ...prev, streamingToolCalls: next.length > 0 ? next : undefined };
     }
     case "queue":
-      return { ...prev, queued: { steering: event.body.steering, followUp: event.body.followUp } };
+      // 内核快照（权威）到达：本地待确认的排队发送随之让位
+      return {
+        ...prev,
+        queued: { steering: event.body.steering, followUp: event.body.followUp },
+        pendingQueue: undefined,
+      };
+    case "usage": {
+      // 字段级同值即引用不变：usage 在消息边界高频重推，避免无谓重渲染
+      const next = event.body.usage;
+      const current = prev.usage;
+      if (
+        current &&
+        current.tokens === next.tokens &&
+        current.contextWindow === next.contextWindow &&
+        current.percent === next.percent
+      )
+        return prev;
+      return { ...prev, usage: next };
+    }
     case "compaction":
       // 仅运行期为 true，结束回到缺省（与 idle 清口一致，「无压缩」只有一种表示）
       return { ...prev, compacting: event.body.phase === "start" ? true : undefined };

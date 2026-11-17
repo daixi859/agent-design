@@ -1,7 +1,7 @@
 // 测试夹具：最小 PiSessionLike fake（不 import pi SDK 运行时），脚本化应答与事件注入
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionSnapshot } from "@pi-studio/shared/pi-types";
-import type { DriveEvent } from "@pi-studio/shared/protocol";
+import type { ContextUsageInfo, DriveEvent, SessionCatalog } from "@pi-studio/shared/protocol";
 import { SessionHost } from "../session-host.ts";
 import type { InputDisposition, PiSessionLike, PromptOptions } from "../types.ts";
 
@@ -11,6 +11,9 @@ export class FakeSession implements PiSessionLike {
   calls: string[] = [];
   failPromptWith: Error | null = null;
   failSteerWith: Error | null = null;
+  /** 脚本化：目录与用量（ADR-0016）；缺省为空目录 / 无用量 */
+  catalogValue: SessionCatalog = {};
+  usageValue: ContextUsageInfo | undefined;
 
   constructor(id = "s1") {
     this.sessionId = id;
@@ -45,6 +48,33 @@ export class FakeSession implements PiSessionLike {
   abort(): Promise<void> {
     this.calls.push("abort");
     return Promise.resolve();
+  }
+
+  catalog(): SessionCatalog {
+    return this.catalogValue;
+  }
+
+  setModel(provider: string, modelId: string): Promise<void> {
+    this.calls.push(`setModel:${provider}/${modelId}`);
+    return Promise.resolve();
+  }
+
+  setThinkingLevel(level: string): Promise<void> {
+    this.calls.push(`setThinkingLevel:${level}`);
+    return Promise.resolve();
+  }
+
+  clearQueue(): void {
+    this.calls.push("clearQueue");
+  }
+
+  compact(): Promise<void> {
+    this.calls.push("compact");
+    return Promise.resolve();
+  }
+
+  contextUsage(): ContextUsageInfo | undefined {
+    return this.usageValue;
   }
 
   /** 脚本化：snapshot 返回的基线（attach 回包用） */
