@@ -45,9 +45,17 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** 耗时：不足一秒报毫秒，否则报秒（数字走 locale，不手拼）——
+/** 耗时：不足一秒报毫秒；秒制固定一位小数（20.0s，读秒的展示精度，整秒也补 .0）；
+    满一分钟（按秒四舍五入后进位，避免闪现 60.0s）报分秒且秒取整（1m14s）——
     TurnView（Standard）与 TuiGroup（TUI）同口径消费的唯一实现 */
 export function formatDuration(ms: number, locale: string): string {
   if (ms < 1000) return `${ms}ms`;
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 1000)}s`;
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) {
+    return `${new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(ms / 1000)}s`;
+  }
+  return `${Math.floor(totalSeconds / 60)}m${totalSeconds % 60}s`;
 }

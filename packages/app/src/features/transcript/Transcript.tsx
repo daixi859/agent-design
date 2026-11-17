@@ -9,6 +9,7 @@ import { TuiGroup } from "./TuiGroup";
 import { TurnView } from "./TurnView";
 import { useLocale } from "../../state/useLocale";
 import { useViewMode } from "../../state/useViewMode";
+import { useStickToBottom } from "../../state/useStickToBottom";
 import styles from "./transcript.module.css";
 
 export function Transcript({
@@ -25,9 +26,24 @@ export function Transcript({
   live?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const nearBottomRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
   const { t } = useLocale();
+
+  // 滚动区贴底跟随（useStickToBottom，阈值放宽到 80px）：跟随解除与 jump 按钮显隐同源判定
+  const { nearBottomRef, stick: stickBottom, onScroll: onScrollBase } =
+    useStickToBottom(scrollRef, 80);
+
+  const handleScroll = useCallback(() => {
+    onScrollBase();
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowJump(!nearBottomRef.current && el.scrollHeight > el.clientHeight + 120);
+  }, [onScrollBase, nearBottomRef]);
+
+  // Live Tail 追新时自动跟随（Q17：仅在用户贴底时）
+  useEffect(() => {
+    stickBottom();
+  }, [view, stickBottom]);
 
   // 单一列宽轴（ADR-0013）：把容器实际宽度发布成 --pane-width，
   // 内容列宽由 clamp(680px, pane × 0.64, 920px) 派生；未发布时退回 760px 等效值。
@@ -63,21 +79,6 @@ export function Transcript({
     viewMode === "tui" && lastTurn && (live || lastTurn.draft) && !lastTurn.tailGroupId
       ? lastTurn.userAt
       : undefined;
-
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    nearBottomRef.current = nearBottom;
-    setShowJump(!nearBottom && el.scrollHeight > el.clientHeight + 120);
-  }, []);
-
-  // Live Tail 追新时自动跟随（Q17：仅在用户贴底时）
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !nearBottomRef.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [view]);
 
   const jumpToLatest = useCallback(() => {
     const el = scrollRef.current;

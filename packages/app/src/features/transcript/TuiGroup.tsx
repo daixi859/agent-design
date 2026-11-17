@@ -18,6 +18,7 @@ import { useLocale } from "../../state/useLocale";
 import { translateVars } from "../../lib/i18n";
 import { formatDuration } from "../../lib/format";
 import { useTuiThinkLines } from "../../state/useTuiThinkLines";
+import { useStickToBottom } from "../../state/useStickToBottom";
 import type {
   GroupItem,
   GroupRecap,
@@ -32,14 +33,6 @@ const REDRAW_INTERVAL_MS = 100;
 const COUNTS_SHOWN = 3;
 /** 运行结束 → 自动收起的静默期（与 cc-extensions 的 FOLD_SETTLE_MS 对齐） */
 const FOLD_SETTLE_MS = 250;
-
-/** 汇总行耗时（cc-style 分段）：满一分钟进位为 `Xm Ys`，不足沿用 formatDuration */
-function formatDurationSpan(ms: number, locale: string): string {
-  if (ms < 60_000) return formatDuration(ms, locale);
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
-  return `${minutes}m ${seconds}s`;
-}
 
 /** 汇总行时刻：本轮完成时刻的本地短时间（cc-style 的 `1:56 PM`） */
 function formatClock(at: number, locale: string): string {
@@ -92,7 +85,7 @@ export function TuiTurnSummary({
       </span>
       {lead && <span className={styles.dim}>{lead}</span>}
       {durationMs !== undefined && (
-        <span className={styles.dim}>· {formatDurationSpan(durationMs, locale)}</span>
+        <span className={styles.dim}>· {formatDuration(durationMs, locale)}</span>
       )}
       {endAt !== undefined && (
         <span className={styles.dim}>
@@ -371,13 +364,19 @@ export function TuiGroup({
           : item.id === activeThinkingId,
       ) ?? lastItem;
   const slotsRef = useRef<HTMLDivElement | null>(null);
+  // 槽位区贴底跟随（useStickToBottom）：展开即贴底（用户点开要的是末尾的活动条目）；
+  // 新槽位追加与思考内容增长（重绘 tick）只近底跟随——上滑越过阈值即放手，
+  // 不与用户抢滚动条（ref 赋值即时生效，不参与渲染）
+  const { stick: stickSlots, snap: snapSlots, onScroll: onSlotsScroll } =
+    useStickToBottom(slotsRef);
 
-  // 槽位区限高 40vh，展开与新槽位追加（含活跃思考内容增长的重绘）都贴底——
-  // 当前活动条目在末尾，跟随就是跟随运行（迭代反馈；ref 赋值即时生效，不参与渲染）
   useEffect(() => {
-    const el = slotsRef.current;
-    if (open && el) el.scrollTop = el.scrollHeight;
-  }, [open, group.length, now]);
+    if (open) snapSlots();
+  }, [open, snapSlots]);
+
+  useEffect(() => {
+    stickSlots();
+  }, [group.length, now, stickSlots]);
 
   useEffect(() => {
     // 运行中保持紧凑态（不强制展开）；live→false 边沿收起，用户手动开过的不收
@@ -447,7 +446,7 @@ export function TuiGroup({
           它的产出会体现在后续回答里，结算后恢复完整）；运行中未点开 = 紧凑态只亮
           最后一个活动条目（spinner 态）；结算未展开 = 不渲染 */}
       {(open || (liveHeader && compactItem !== undefined)) && (
-        <div className={styles.slots} ref={slotsRef}>
+        <div className={styles.slots} ref={slotsRef} onScroll={onSlotsScroll}>
           {(open
             ? liveHeader
               ? group.filter((item) => item.kind !== "thinking" || item.id === activeThinkingId)
