@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import type { ProjectGroup } from "../../state/sessions";
 import { drive } from "../../state/use-drive";
-import { Icon } from "../../ui/Icon";
-import { IconButton } from "../../ui/IconButton";
+import { Icon } from "../../components/Icon";
+import { Button } from "../../components/Button";
 import { SessionItem } from "./SessionItem";
 import styles from "./sidebar.module.css";
 import { cx } from "../../lib/cx";
@@ -49,7 +49,7 @@ export function ProjectGroupView({
           </span>
         </button>
         {/* 组级新建：在该项目 cwd 触发 new_session（ADR-0012 阶段四接线）；hover 显现 */}
-        <IconButton
+        <Button
           icon="plus"
           title={t("createInProject")}
           aria-label={t("createInProject")}

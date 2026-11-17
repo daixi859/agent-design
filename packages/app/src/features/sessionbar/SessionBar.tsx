@@ -7,9 +7,9 @@ import { useLocale } from "../../state/useLocale";
 import { useViewMode } from "../../state/useViewMode";
 import { cx } from "../../lib/cx";
 import { driveBadgeKey } from "../../lib/drive-labels";
-import { Icon } from "../../ui/Icon";
-import { IconButton } from "../../ui/IconButton";
-import nav from "../../ui/nav.module.css";
+import { Icon } from "../../components/Icon";
+import { Button } from "../../components/Button";
+import nav from "../../components/nav.module.css";
 import styles from "./session-bar.module.css";
 
 export interface SessionBarAttach {
@@ -82,27 +82,27 @@ export function SessionBar({
                 {badgeText}
               </span>
             )}
-            <IconButton
+            <Button
               icon={attach.attached ? "xmark" : "play"}
               title={attach.attached ? t("detach") : t("attach")}
               onClick={attach.attached ? attach.onRelease : attach.onAttach}
             />
           </>
         )}
-        <IconButton
+        <Button
           icon={fullscreen ? "contract" : "expand"}
           title={fullscreen ? t("exitFullScreen") : t("fullScreen")}
           onClick={toggleFullscreen}
         />
         {/* TUI 渲染模式快切（ADR-0014）：与主题切换同构的单钮循环；激活态 accent-subtle 底 */}
-        <IconButton
+        <Button
           icon="terminal"
           title={t("toggleViewMode")}
           aria-pressed={viewMode === "tui"}
           className={cx(viewMode === "tui" && styles.modeActive)}
           onClick={() => setViewMode(viewMode === "tui" ? "standard" : "tui")}
         />
-        <IconButton
+        <Button
           icon={theme === "dark" ? "sun" : "moon"}
           title={t("toggleTheme")}
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

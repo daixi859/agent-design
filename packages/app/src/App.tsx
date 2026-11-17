@@ -17,7 +17,7 @@ import { TranscriptLab } from "./features/transcript/lab/TranscriptLab";
 import { SettingsShell } from "./features/settings/SettingsShell";
 import { AppearanceSection } from "./features/settings/AppearanceSection";
 import { AboutSection } from "./features/settings/AboutSection";
-import { Icon } from "./ui/Icon";
+import { Icon } from "./components/Icon";
 import styles from "./app.module.css";
 import transcriptStyles from "./features/transcript/transcript.module.css";
 

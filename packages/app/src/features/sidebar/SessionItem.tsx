@@ -4,7 +4,7 @@ import type { SessionSummary } from "@pi-studio/shared/pi-types";
 import { formatRelativeCompact } from "../../lib/format";
 import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
-import nav from "../../ui/nav.module.css";
+import nav from "../../components/nav.module.css";
 import styles from "./sidebar.module.css";
 
 export function SessionItem({

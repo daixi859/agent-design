@@ -114,7 +114,7 @@
 }
 /* 添加按钮：hover 分组行显现，替换原计数徽标 */
 .groupAdd {
-  /* 与 IconButton 原语同比例（图标 16 / 按钮 28 = 4:7）：图标 14px → 按钮 24.5px */
+  /* 与 Button 原语的 icon-only 形态同比例（图标 16 / 按钮 28 = 4:7）：图标 14px → 按钮 24.5px */
   inline-size: calc(14px * 7 / 4);
   block-size: calc(14px * 7 / 4);
   border-radius: var(--radius-xs);

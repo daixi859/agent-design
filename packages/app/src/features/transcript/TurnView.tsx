@@ -6,8 +6,8 @@
  * 生成中的那一轮强制展开：工具在跑却被折叠，看着就像卡住。
  */
 import { useEffect, useState } from "react";
-import { Icon } from "../../ui/Icon";
-import { DisclosureRow } from "../../ui/DisclosureRow";
+import { Icon } from "../../components/Icon";
+import { DisclosureRow } from "../../components/DisclosureRow";
 import { cx } from "../../lib/cx";
 import { translateVars, type MessageKey } from "../../lib/i18n";
 import { formatDuration } from "../../lib/format";

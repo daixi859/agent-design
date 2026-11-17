@@ -1,10 +1,11 @@
 /** Preview（组件清单，ADR-0009 并入设置壳）：本项目的全部 UI 资产验收页——
-    图标全网格、控件与徽标、色板、字阶、消息样张。样式直接引用各组件的
-    module.css 源头，保证预览即真实组件而非复刻。 */
+    基础组件展厅（图标全网格、Button 三形态、Input、DisclosureRow）、色板、字阶。
+    样式直接引用各组件的 module.css 源头，保证预览即真实组件而非复刻。 */
 import { useState } from "react";
-import { IconButton } from "../ui/IconButton";
-import { SearchField } from "../ui/SearchField";
-import { Icon, ICON_NAMES } from "../ui/Icon";
+import { Button } from "../components/Button";
+import { DisclosureRow } from "../components/DisclosureRow";
+import { Icon, ICON_NAMES } from "../components/Icon";
+import { Input } from "../components/Input";
 import { cx } from "../lib/cx";
 import { useLocale } from "../state/useLocale";
 import sessionBar from "../features/sessionbar/session-bar.module.css";
@@ -41,6 +42,7 @@ const TYPE_SAMPLES: Array<[string, string, string]> = [
 
 export function ComponentGallery() {
   const [search, setSearch] = useState("");
+  const [disclosureOpen, setDisclosureOpen] = useState(true);
   const { t } = useLocale();
 
   return (
@@ -63,11 +65,21 @@ export function ComponentGallery() {
           <h2 className={styles.sectionTitle}>{t("controlsBadge")}</h2>
           <p className={styles.sectionNote}>{t("controlsNote")}</p>
           <div className={styles.row}>
-            <IconButton icon="panel-left" title={t("toggleSidebar")} />
-            <IconButton icon="plus" title={t("newSession")} />
-            <IconButton icon="gear" title={t("settings")} />
-            <IconButton icon="sun" title={t("toggleTheme")} />
-            <SearchField value={search} onChange={setSearch} placeholder={t("search")} />
+            {/* Button icon-only 形态：icon 槽位 + 无 children 自动方形（原 IconButton） */}
+            <Button icon="panel-left" title={t("toggleSidebar")} />
+            <Button icon="plus" title={t("newSession")} />
+            <Button icon="gear" title={t("settings")} />
+            <Button icon="sun" title={t("toggleTheme")} />
+            {/* 图标+文字 / 纯文字形态：同一 ghost 配方 */}
+            <Button icon="plus">{t("newSession")}</Button>
+            <Button>{t("buttonSample")}</Button>
+            <Input
+              leading={<Icon name="search" size={13} />}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("search")}
+            />
             <span
               className={sessionBar.branchedBadge}
               title={t("branchedTitle")}
@@ -88,6 +100,28 @@ export function ComponentGallery() {
                 </button>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* 基础件样张：DisclosureRow 只管行头交互（role=button · Enter/Space · aria-expanded），
+            行头视觉由本页样张提供；chevron 旋转沿用 TuiGroup 的 data-open 惯用法 */}
+        <section>
+          <h2 className={styles.sectionTitle}>{t("disclosureRow")}</h2>
+          <p className={styles.sectionNote}>{t("disclosureRowNote")}</p>
+          <div className={styles.disclosureDemo}>
+            <DisclosureRow
+              className={styles.disclosureHeader}
+              open={disclosureOpen}
+              onClick={() => setDisclosureOpen((open) => !open)}
+            >
+              <span className={styles.disclosureChevron} data-open={disclosureOpen || undefined}>
+                <Icon name="chevron-right" size={12} />
+              </span>
+              <span className={styles.disclosureTitle}>{t("disclosureSampleTitle")}</span>
+            </DisclosureRow>
+            {disclosureOpen && (
+              <p className={styles.disclosureBody}>{t("disclosureSampleBody")}</p>
+            )}
           </div>
         </section>
 

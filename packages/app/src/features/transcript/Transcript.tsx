@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TranscriptModel, TurnItem } from "../../lib/transcript-model";
 import type { ComposerDrive } from "./Composer";
-import { Icon } from "../../ui/Icon";
+import { Icon } from "../../components/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
 import { TuiGroup } from "./TuiGroup";

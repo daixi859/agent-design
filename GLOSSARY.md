@@ -113,3 +113,7 @@ _Avoid_: 本地气泡、乐观回显、optimistic echo
 **Preview**:
 设计验收用的组件清单页（图标全网格、控件、色板、字阶与消息样张），挂在 Settings 侧栏导航下（/settings/preview）；样式直接引用各组件 module.css 源头。
 _Avoid_: 组件库、Gallery（作为页面名时）
+
+**Base Component**:
+`components/` 目录下的可复用件，判据是无业务语义（Icon、Button、Input、DisclosureRow 及其样式原语）；与 features/ 下的业务复合件相对。专用形态用组合表达（icon 槽位、leading 槽位），不为单一消费点造特化组件。
+_Avoid_: UI 库、通用组件、IconButton / SearchField（已被 Button / Input 吸收）、ui/ 目录（旧称）

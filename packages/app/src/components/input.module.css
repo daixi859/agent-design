@@ -1,30 +1,8 @@
-/* UI 原语：IconButton / SearchField（组件层变量就地定义，引用语义层） */
+/* UI 原语：Input（组件层变量就地定义，引用语义层）。
+   容器管视觉（inset 底 + hairline + 聚焦描边），原生 input 只管输入；
+   前置图标经 leading 槽位进入 flex 行。 */
 
-.iconButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: var(--control-size);
-  block-size: var(--control-size);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-2);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-
-  &:hover {
-    background: var(--bg-hover);
-    color: var(--text-1);
-  }
-  &:active {
-    background: var(--bg-active);
-  }
-}
-
-.searchField {
+.input {
   display: flex;
   align-items: center;
   gap: var(--space-1h);

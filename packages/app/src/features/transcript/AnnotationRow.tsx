@@ -15,8 +15,8 @@ import { formatTokens } from "../../lib/format";
 import { translate, translateVars, type Locale } from "../../lib/i18n";
 import { useLocale } from "../../state/useLocale";
 import { cx } from "../../lib/cx";
-import { Icon, type IconName } from "../../ui/Icon";
-import { DisclosureRow } from "../../ui/DisclosureRow";
+import { Icon, type IconName } from "../../components/Icon";
+import { DisclosureRow } from "../../components/DisclosureRow";
 import styles from "./transcript.module.css";
 
 function annotationFor(entry: SessionEntry, locale: Locale): { icon: IconName; text: string } | undefined {

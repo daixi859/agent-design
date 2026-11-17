@@ -2,7 +2,7 @@
     entry.timestamp 是 ISO 字符串（pi 语义：entry 级时间戳），这里渲染为时钟。 */
 import type { MessageEntry, UserMessage } from "@pi-studio/shared/pi-types";
 import { contentBlocks } from "@pi-studio/shared/message-text";
-import { Icon } from "../../ui/Icon";
+import { Icon } from "../../components/Icon";
 import { formatClock } from "../../lib/format";
 import { useLocale } from "../../state/useLocale";
 import styles from "./transcript.module.css";

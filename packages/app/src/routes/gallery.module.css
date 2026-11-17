@@ -113,3 +113,50 @@
   gap: var(--space-3);
   background: var(--bg-canvas);
 }
+
+/* 基础件样张：DisclosureRow（原语只管行头交互，行头视觉由本页样张提供） */
+.disclosureDemo {
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  box-shadow: var(--shadow-hairline);
+  padding: var(--space-1);
+}
+
+.disclosureHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: var(--text-footnote);
+  font-weight: var(--weight-medium);
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-1);
+  }
+}
+
+.disclosureChevron {
+  display: inline-flex;
+  color: var(--text-3);
+  transition: transform var(--duration-fast) var(--ease-standard);
+
+  &[data-open] {
+    transform: rotate(90deg);
+  }
+}
+
+.disclosureTitle {
+  color: inherit;
+}
+
+.disclosureBody {
+  margin: 0;
+  /* 12px = 样张 chevron 图标的 size，使正文与标题文字对齐（标题行 chevron 后接 gap） */
+  padding: var(--space-1) var(--space-2) var(--space-2) calc(12px + var(--space-2));
+  color: var(--text-2);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}

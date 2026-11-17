@@ -7,7 +7,7 @@ import { drive, useConnectionError, useDriveSession } from "../../state/use-driv
 import { queuedCountOf } from "../../lib/drive-client";
 import { driveErrorText } from "../../lib/drive-errors";
 import type { SessionDetailState } from "../../state/useSessionDetail";
-import { Icon } from "../../ui/Icon";
+import { Icon } from "../../components/Icon";
 import { Transcript } from "../transcript/Transcript";
 import styles from "../transcript/transcript.module.css";
 

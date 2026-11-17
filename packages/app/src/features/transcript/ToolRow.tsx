@@ -8,8 +8,8 @@
  * 状态只走文字色，无彩色徽标；耗时不在行内（DSH 同款取舍）。
  */
 import { useState, type ReactNode } from "react";
-import { Icon } from "../../ui/Icon";
-import { DisclosureRow } from "../../ui/DisclosureRow";
+import { Icon } from "../../components/Icon";
+import { DisclosureRow } from "../../components/DisclosureRow";
 import { cx } from "../../lib/cx";
 import { useLocale } from "../../state/useLocale";
 import { parseToolDiff } from "../../lib/edit-diff";

@@ -2,7 +2,7 @@
     驱动中：idle 发 prompt、running 输入转 steer（与 pi TUI 输入语义一致），可中止。 */
 import { useState, type KeyboardEvent } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
-import { Icon } from "../../ui/Icon";
+import { Icon } from "../../components/Icon";
 import { useLocale } from "../../state/useLocale";
 import { translateVars } from "../../lib/i18n";
 import { cx } from "../../lib/cx";

@@ -1,5 +1,5 @@
 /** Thinking 块：签名元素（Q12 点睛）——紫色发丝线 + 淡紫底，默认折叠 */
-import { Icon } from "../../ui/Icon";
+import { Icon } from "../../components/Icon";
 import { useLocale } from "../../state/useLocale";
 import styles from "./transcript.module.css";
 

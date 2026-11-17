@@ -9,7 +9,7 @@
  * （哪些是终端类、四态如何归）——那些一律在模型层（`TERMINAL_TOOLS` / `stateOf`）。
  * 这里只做名字到**图标**的呈现映射，不产出任何语义，故留在视图层。
  */
-import type { IconName } from "../../ui/Icon";
+import type { IconName } from "../../components/Icon";
 
 const TOOL_ICONS: Record<string, IconName> = {
   // 内核内置
