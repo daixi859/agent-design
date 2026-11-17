@@ -97,4 +97,19 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 - prompt 与 steer 的区别只剩送达时机语义（本轮 vs 插话），不再承担「拒绝运行中发送」的守门职责——守门移交给内核的排队机制。
 - 协议字段为可选，旧客户端不带该字段时行为与从前一致（命中窗口仍会报错），无破坏性。
 
+## 补记七（验收修复轮）：瞬态条目必须挂活动分支叶子 + 首条消息的待回显
+
+两条验收反馈，根源都在驱动视图的合成层（`driven-view`）：
+
+- **「运行中思考/工具跑到文本下方」**：草稿合成条目的 `parentId` 写死 `null`。活动分支的叶子扫描按「未被引用为父的末条」取叶子，`parentId: null` 的草稿俨然一棵新树——**流式期间整条真实分支被误判为被弃**（实测：`abandonedCount: 2`，turns 只剩草稿一条，历史与用户气泡全部塌缩消失）。草稿必须挂到活动分支叶子（现由 `transcript-model` 导出 `activeLeafId`，与 `buildActiveBranch` 同一规则）；待回显条目同理，且草稿要接在待回显之后（链式挂叶，否则待回显自己变成新叶子把草稿挤成被弃分支）。
+- **「回车后首 token 前内容区空白」**：补记四已实证 user 条目最早在 assistant 的 `message_start` 才回传——模型开口之前客户端没有任何「已发出」的凭证。决定：`DriveSession` 增加 `pendingPrompt`（GLOSSARY「Pending Echo」），客户端发 prompt 时即时合成一条瞬态 user 条目挂叶子，四个让位点——权威 user 条目落盘、`error`、`commandFailed`、回 idle；连接未就绪时不挂（帧会被静默丢弃，凭证不能先亮）。
+
+同轮顺手修正两处草稿保真：内容块改按**流序**排列（思考先行、正文随后——原 text 在前，运行中思考出现在正文下方，权威条目落盘后又翻回去）；`toolcall_start` 的「调用中」指示合成 `toolCall` 内容块进草稿（原只亮 Composer 徽标，transcript 里没有运行中的工具行）。草稿时间戳从纪元占位改为真实当前时刻（草稿挂叶子后参与本轮结算，占位时间戳会把耗时撑成天文数字）。
+
+**后果**：
+
+- `streamingEntries(draft, calling, parentId)` / `pendingPromptEntries(text, parentId)` 签名即契约：瞬态条目的挂靠点由调用方（合成层）给定，合成器不再自作主张。
+- 视图层零改动：两种瞬态条目仍喂同一个 `buildTranscriptModel` 出口，Transcript 不知道「流式」「待回显」存在。
+- 草稿丢了仍只是少一帧画面；待回显的兜底是 idle 清口——最坏情形气泡随轮次结束消失，权威历史永远完整。
+
 

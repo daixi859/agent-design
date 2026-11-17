@@ -28,26 +28,29 @@ interface ActiveBranch {
 }
 
 /**
- * 活动分支 = 最新叶子沿 parentId 回溯到根的路径（ADR-0004）。
- * 叶子取追加顺序中最后一个未被其它条目引用为父的条目——
+ * 活动分支的叶子 id（ADR-0004）：追加顺序中最后一个未被其它条目引用为父的非 session 条目——
  * 与 pi 沿活动叶子取上下文的思路一致，但不做 compaction 投影。
+ * 导出给驱动视图的合成层：瞬态条目（待回显 / 流式草稿）必须挂到这个叶子上，
+ * 挂空（parentId null）会被这里的叶子扫描当成新根，整条真实分支反被判成「被弃」。
  */
-function buildActiveBranch(entries: SessionEntry[]): ActiveBranch {
+export function activeLeafId(entries: readonly SessionEntry[]): string | null {
   const referenced = new Set<string>();
   for (const entry of entries) {
     if (entry.parentId) referenced.add(entry.parentId);
   }
-
-  let leaf: SessionEntry | undefined;
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
     if (entry.type === "session") continue;
-    if (!referenced.has(entry.id)) {
-      leaf = entry;
-      break;
-    }
+    if (!referenced.has(entry.id)) return entry.id;
   }
-  if (!leaf) return { entries: [], abandonedCount: 0 };
+  return null;
+}
+
+/** 活动分支 = 叶子沿 parentId 回溯到根的路径（ADR-0004） */
+function buildActiveBranch(entries: SessionEntry[]): ActiveBranch {
+  const leafId = activeLeafId(entries);
+  if (!leafId) return { entries: [], abandonedCount: 0 };
+  const leaf = entries.find((e) => e.id === leafId);
 
   const byId = new Map(entries.map((e) => [e.id, e]));
   const chain: SessionEntry[] = [];

@@ -8,7 +8,7 @@ import type {
   SessionEntry,
   SessionHeaderEntry,
 } from "@pi-studio/shared/pi-types";
-import { buildTranscriptModel } from "./transcript-model";
+import { activeLeafId, buildTranscriptModel } from "./transcript-model";
 
 // ---------- 合成 Entry 构造器 ----------
 
@@ -94,6 +94,23 @@ describe("buildTranscriptModel · Active Branch 回溯", () => {
     const model = buildTranscriptModel([header("s1"), user("u1", null)]);
     expect(model.abandonedCount).toBe(0);
     expect(model.turns).toHaveLength(1);
+  });
+});
+
+// ---------- 活动分支叶子（驱动视图的瞬态条目挂靠点，ADR-0012 补记七） ----------
+
+describe("activeLeafId", () => {
+  it("空输入与纯 header 输入返回 null", () => {
+    expect(activeLeafId([])).toBeNull();
+    expect(activeLeafId([header()])).toBeNull();
+  });
+
+  it("线性链取末条；分支分叉取叶子扫描的同一落点（与 buildActiveBranch 同规则）", () => {
+    expect(activeLeafId([header(), user("u1", null), assistant("a1", "u1", [text("hi")])])).toBe("a1");
+    // u2 与 a1 都 unreferenced：从末尾扫，a1 在后即 a1
+    expect(
+      activeLeafId([header(), user("u1", null), user("u2", "u1"), assistant("a1", "u1", [text("old")])]),
+    ).toBe("a1");
   });
 });
 

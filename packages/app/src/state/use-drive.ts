@@ -151,6 +151,13 @@ class DriveClient {
       session?.status === "running" || session?.status === "retrying"
         ? { type: "steer", text }
         : { type: "prompt", text, streamingBehavior: "steer" };
+    // 待回显（GLOSSARY「Pending Echo」）：权威 user 条目要等内核 assistant 的 message_start
+    // 才回传（ADR-0012 补记四），这期间由本地气泡顶住内容区。只在实际会发出的帧上挂——
+    // 连接未就绪时 send 会静默丢弃，气泡不能先亮。
+    if (body.type === "prompt" && session && this.ws?.readyState === WebSocket.OPEN) {
+      this.sessions.set(sessionId, { ...session, pendingPrompt: text });
+      this.publish();
+    }
     this.send({ type: "drive", command: { sessionId, body } });
   }
 

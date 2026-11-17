@@ -1,9 +1,16 @@
 /** drive-client 纯逻辑契约：ServerFrame 入 → 客户端状态出；
     条目幂等合并（REST 全量 × WS 事件流归并的数据基础，ADR-0012 断线恢复） */
 import { describe, expect, it } from "vitest";
-import type { SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
+import type { AssistantMessage, MessageEntry, SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
 import type { DriveEvent, ServerFrame } from "@pi-studio/shared/protocol";
-import { applyServerFrame, mergeEntries, type DriveSession } from "./drive-client";
+import {
+  PENDING_PROMPT_ENTRY_ID,
+  applyServerFrame,
+  mergeEntries,
+  pendingPromptEntries,
+  streamingEntries,
+  type DriveSession,
+} from "./drive-client";
 
 const entry = (id: string): SessionEntry => ({
   type: "message",
@@ -119,6 +126,39 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     expect(state?.streaming).toBeUndefined();
   });
 
+  // 待回显（GLOSSARY「Pending Echo」）：权威 user 条目就是 prompt 的回显，本地气泡随之让位。
+  // 内核要等 assistant 的 message_start 才回传（ADR-0012 补记四），期间气泡不能被无关条目顶掉。
+  it("待回显：新到权威 user 条目让位；非 user 条目保留", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "entry", entry: entry("old") }));
+    const pending: DriveSession = { ...state!, pendingPrompt: "问" };
+    // assistant / toolResult 等无关条目先到（不应顶掉气泡）
+    const assistantEntry: SessionEntry = {
+      type: "message",
+      id: "a1",
+      parentId: null,
+      timestamp: "T1",
+      message: { role: "assistant", content: [], stopReason: "pending" },
+    };
+    const afterAssistant = applyServerFrame(pending, event({ type: "entry", entry: assistantEntry }));
+    expect(afterAssistant?.pendingPrompt).toBe("问");
+    // 权威 user 条目到达：让位
+    const afterUser = applyServerFrame(afterAssistant!, event({ type: "entry", entry: entry("echo") }));
+    expect(afterUser?.pendingPrompt).toBeUndefined();
+    // 重复 user 条目（重放）：幂等命中，引用不变
+    expect(applyServerFrame(afterUser, event({ type: "entry", entry: entry("echo") }))).toBe(afterUser);
+  });
+
+  it("待回显：error 与 commandFailed 即让位（prompt 不会再有回显）", () => {
+    let state = applyServerFrame(undefined, attached);
+    let pending: DriveSession = { ...state!, pendingPrompt: "问" };
+    pending = applyServerFrame(pending, event({ type: "error", message: "模型失败" }))!;
+    expect(pending.pendingPrompt).toBeUndefined();
+    pending = { ...pending, pendingPrompt: "问" };
+    pending = applyServerFrame(pending, { type: "commandFailed", sessionId: "s1", message: "被拒" })!;
+    expect(pending.pendingPrompt).toBeUndefined();
+  });
+
   it("toolCall 帧：start 亮起调用指示，end 按 id 匹配熄灭", () => {
     let state = applyServerFrame(undefined, attached);
     state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
@@ -192,14 +232,16 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
     state = applyServerFrame(state, event({ type: "queue", steering: ["插话"], followUp: [] }));
     state = applyServerFrame(state, event({ type: "compaction", phase: "start", reason: "manual" }));
-    expect(state?.streamingToolCall).toBeDefined();
-    expect(state?.queued).toBeDefined();
-    expect(state?.compacting).toBe(true);
-    state = applyServerFrame(state, event({ type: "status", status: "idle", aborted: true }));
-    expect(state?.status).toBe("idle");
-    expect(state?.streamingToolCall).toBeUndefined();
-    expect(state?.queued).toBeUndefined();
-    expect(state?.compacting).toBeUndefined();
+    const pending: DriveSession = { ...state!, pendingPrompt: "问" };
+    expect(pending.streamingToolCall).toBeDefined();
+    expect(pending.queued).toBeDefined();
+    expect(pending.compacting).toBe(true);
+    const settled = applyServerFrame(pending, event({ type: "status", status: "idle", aborted: true }))!;
+    expect(settled.status).toBe("idle");
+    expect(settled.streamingToolCall).toBeUndefined();
+    expect(settled.queued).toBeUndefined();
+    expect(settled.compacting).toBeUndefined();
+    expect(settled.pendingPrompt).toBeUndefined();
   });
 
   it("released → 状态移除（undefined）", () => {
@@ -210,5 +252,40 @@ describe("applyServerFrame · 帧到客户端状态", () => {
 
   it("未 attach 先收到事件：防御性忽略", () => {
     expect(applyServerFrame(undefined, event({ type: "status", status: "running" }))).toBeUndefined();
+  });
+});
+
+describe("瞬态条目合成 · 喂给同一 buildTranscriptModel 出口（ADR-0012 补记七）", () => {
+  // 回归点：草稿合成条目的 parentId 曾为 null——叶子扫描把它当成新根，
+  // 流式期间整条真实分支被误判为「被弃」，transcript 塌缩成只剩草稿。
+  it("草稿合成条目挂在传入的分支叶子上", () => {
+    const [draft] = streamingEntries({ text: "答" }, undefined, "leaf-1");
+    expect(draft.parentId).toBe("leaf-1");
+  });
+
+  // 验收反馈：运行中思考出现在正文下方（流序颠倒），权威条目落盘后又会翻回去
+  it("草稿内容块按流序排列：思考先行、正文随后", () => {
+    const [draft] = streamingEntries({ text: "答", thinking: "想" }, undefined, null);
+    const blocks = ((draft as MessageEntry).message as AssistantMessage).content;
+    expect(blocks.map((block) => block.type)).toEqual(["thinking", "text"]);
+  });
+
+  it("调用中指示合成为 toolCall 块：无配对结果即 running（模型层判定）", () => {
+    const [draft] = streamingEntries(undefined, { id: "tc1", name: "bash" }, null);
+    expect(((draft as MessageEntry).message as AssistantMessage).content).toEqual([
+      { type: "toolCall", id: "tc1", name: "bash" },
+    ]);
+  });
+
+  it("无草稿且无调用指示时返回空数组（视图层不知道「流式」存在）", () => {
+    expect(streamingEntries(undefined, undefined, null)).toEqual([]);
+  });
+
+  it("pendingPromptEntries：空白文本不出条目，非空白合成挂叶子的 user 条目", () => {
+    expect(pendingPromptEntries("   ", null)).toEqual([]);
+    const [pending] = pendingPromptEntries("你好", "leaf-1");
+    expect(pending.id).toBe(PENDING_PROMPT_ENTRY_ID);
+    expect(pending.parentId).toBe("leaf-1");
+    expect((pending as MessageEntry).message.role).toBe("user");
   });
 });

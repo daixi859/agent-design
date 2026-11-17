@@ -94,6 +94,10 @@ _Avoid_: 状态徽标、成功失败态、Sub Call Status
 流式期间由 delta 累积出的瞬态条目（assistant 的 text / thinking），不落盘；权威条目落盘后整段让位。Draft 与落盘条目在 Recap 里可区分（ADR-0013）：模型层以「末条 assistant 的 `stopReason` 仍为 `pending`」判定，标成 `Turn.draft`，视图只读这个布尔，不读内核字段。
 _Avoid_: 草稿、临时消息、streaming entry
 
+**Pending Echo**:
+已发出的 prompt 在内核权威 user 条目回传前的本地回显——客户端合成的瞬态 user 条目，不落盘。pi 的监听器先于持久化被调用，user 条目最早在 assistant 的 `message_start` 才回传（ADR-0012 补记四），这段窗口由它顶住内容区；权威条目一落盘、命令被拒（error / commandFailed）或回到 idle 即让位。连接未就绪时不挂（发送帧会被静默丢弃，凭证不能先亮）。与 Draft 同族：都是客户端瞬态叠加、都挂活动分支叶子（`activeLeafId`），都喂同一个 `buildTranscriptModel` 出口。
+_Avoid_: 本地气泡、乐观回显、optimistic echo
+
 **Preview**:
 设计验收用的组件清单页（图标全网格、控件、色板、字阶与消息样张），挂在 Settings 侧栏导航下（/settings/preview）；样式直接引用各组件 module.css 源头。
 _Avoid_: 组件库、Gallery（作为页面名时）

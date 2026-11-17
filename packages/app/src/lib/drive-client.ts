@@ -32,6 +32,10 @@ export interface DriveSession {
   readonly queued?: { steering: string[]; followUp: string[] };
   /** 内核正在压缩上下文（compaction 帧驱动）：期间内核拒绝新 prompt；仅运行期为 true */
   readonly compacting?: boolean;
+  /** 已发出 prompt 的待回显文本（GLOSSARY「Pending Echo」）：内核要等 assistant 的
+      message_start 才回传权威 user 条目（ADR-0012 补记四），这段窗口由客户端先挂气泡，
+      权威条目到达 / 回 idle / 出错即让位 */
+  readonly pendingPrompt?: string;
   /** create 出的会话在首条消息前不落盘，header 只能来自 attach 回包 */
   readonly header?: SessionHeaderEntry;
   readonly lastError?: string;
@@ -45,23 +49,51 @@ export function queuedCountOf(session: DriveSession | undefined): number {
 /** 叠加条目的合成 id：只活在客户端内存里，绝不与内核条目 id 相撞（内核 id 为随机串） */
 export const STREAMING_ENTRY_ID = "pi-studio:stream-draft";
 
+/** 待回显条目的合成 id（与 STREAMING_ENTRY_ID 同纪律） */
+export const PENDING_PROMPT_ENTRY_ID = "pi-studio:pending-prompt";
+
+/** 把已发出的 prompt 合成一条挂在分支尾的 user 条目（GLOSSARY「Pending Echo」）。
+ * 内核要等 assistant 的 message_start 才回传权威 user 条目（ADR-0012 补记四），
+ * 这段窗口里它是内容区唯一的「已发出」凭证；parentId 传活动分支叶子（activeLeafId）。 */
+export function pendingPromptEntries(text: string | undefined, parentId: string | null): SessionEntry[] {
+  if (!text?.trim()) return [];
+  return [
+    {
+      type: "message",
+      id: PENDING_PROMPT_ENTRY_ID,
+      parentId,
+      timestamp: new Date().toISOString(),
+      message: { role: "user", content: text },
+    },
+  ];
+}
+
 /** 把流式草稿合成成一条挂在活动分支尾部的 assistant 条目，喂给同一 buildTranscriptModel 出口。
- * 无草稿时返回空数组——视图层因此不必知道「流式」这个概念（ADR-0002 渲染层零伪造）。 */
-export function streamingEntries(draft: StreamingDraft | undefined): SessionEntry[] {
+ * 无草稿且无调用中指示时返回空数组——视图层因此不必知道「流式」这个概念（ADR-0002 渲染层零伪造）。
+ * parentId 传活动分支叶子：挂空会被叶子扫描当成新根，整条真实分支反被判成「被弃」。 */
+export function streamingEntries(
+  draft: StreamingDraft | undefined,
+  calling: StreamingToolCall | undefined,
+  parentId: string | null,
+): SessionEntry[] {
   const text = draft?.text ?? "";
   const thinking = draft?.thinking ?? "";
   // 只丢弃纯空白：正文里可能已有换行等空白，但视图无内容可画
-  if (!text.trim() && !thinking.trim()) return [];
+  if (!text.trim() && !thinking.trim() && !calling) return [];
+  // 内容块按流序排列：思考先行、正文随后、调用中行殿后——
+  // 顺序颠倒会让运行中的思考出现在正文下方，权威条目落盘后又会翻回去
   const content: ContentBlock[] = [];
-  if (text.trim()) content.push({ type: "text", text });
   if (thinking.trim()) content.push({ type: "thinking", thinking });
+  if (text.trim()) content.push({ type: "text", text });
+  if (calling) content.push({ type: "toolCall", id: calling.id, name: calling.name });
   // stopReason 取 "pending"：这不是一次结束，视图层不得据此渲染 aborted / error 警告
   return [
     {
       type: "message",
       id: STREAMING_ENTRY_ID,
-      parentId: null,
-      timestamp: new Date(0).toISOString(),
+      parentId,
+      // 真实当前时刻：草稿挂在分支尾参与本轮结算，占位时间戳会把耗时撑成天文数字
+      timestamp: new Date().toISOString(),
       message: { role: "assistant", content, stopReason: "pending" },
     },
   ];
@@ -100,7 +132,8 @@ export function applyServerFrame(
     case "event":
       return applyEvent(prev, frame.event);
     case "commandFailed":
-      return prev && { ...prev, lastError: frame.message };
+      // 命令被拒（未接管 / 坏帧等）：prompt 不会再有权威回显，待回显一并让位
+      return prev && { ...prev, lastError: frame.message, pendingPrompt: undefined };
     case "disposition":
       // 瞬态排队应答：不入状态
       return prev;
@@ -123,9 +156,18 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
         prev.streamingToolCall && entryMentionsToolCall(event.body.entry, prev.streamingToolCall.id)
           ? undefined
           : prev.streamingToolCall;
-      if (entries === prev.entries && streaming === prev.streaming && streamingToolCall === prev.streamingToolCall)
+      // 新到权威 user 条目 = 已发 prompt 的回显（内核要等 assistant 的 message_start 才回传）：
+      // 本地待回显随之让位；重复条目（重放）不动引用
+      const pendingPrompt =
+        entries !== prev.entries && isUserEntry(event.body.entry) ? undefined : prev.pendingPrompt;
+      if (
+        entries === prev.entries &&
+        streaming === prev.streaming &&
+        streamingToolCall === prev.streamingToolCall &&
+        pendingPrompt === prev.pendingPrompt
+      )
         return prev; // 幂等命中：引用不变
-      return { ...prev, entries, streaming, streamingToolCall };
+      return { ...prev, entries, streaming, streamingToolCall, pendingPrompt };
     }
     case "status": {
       const status = event.body.status;
@@ -137,11 +179,13 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
             streamingToolCall: undefined,
             queued: undefined,
             compacting: undefined,
+            pendingPrompt: undefined,
           }
         : { ...prev, status };
     }
     case "error":
-      return { ...prev, lastError: event.body.message };
+      // prompt 被内核拒绝等：不会再有权威回显，待回显一并让位
+      return { ...prev, lastError: event.body.message, pendingPrompt: undefined };
     case "delta": {
       // 瞬态打字机增量：整轮累积在这里，权威条目到达前先给视图一层可动的草稿。
       // 空 delta 不改引用（下游以此跳过重渲染）
@@ -171,9 +215,13 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
   }
 }
 
+/** 是否 user 消息条目（待回显让位的判定依据） */
+function isUserEntry(entry: SessionEntry): boolean {
+  return entry.type === "message" && (entry as MessageEntry).message.role === "user";
+}
+
 /** 条目是否引用了某次工具调用：assistant 条目含该调用块，或 toolResult 与之配对 */
-function entryMentionsToolCall(entry: SessionEntry, toolCallId: string): boolean {
-  if (entry.type !== "message") return false;
+function entryMentionsToolCall(entry: SessionEntry, toolCallId: string): boolean {  if (entry.type !== "message") return false;
   const message = (entry as MessageEntry).message;
   if (message.role === "toolResult") return (message as ToolResultMessage).toolCallId === toolCallId;
   if (message.role === "assistant") {
