@@ -559,6 +559,36 @@
   }
 }
 
+/* ---- turn 级可展开行（上下文注入 / 系统提示词，ADR-0004 修订二/三）：
+   工具行形态 + 代码面展开体 ---- */
+
+/* 独立于过程组的 turn 级行：与上下文拉开一档（同 groupWrap 节奏） */
+.turnRow {
+  margin-block: var(--space-2);
+}
+
+/* 行体小标签：分隔展开体内的多块内容（正文/元数据、提示词段落） */
+.rowTag {
+  color: var(--text-4);
+  font-size: var(--text-caption2);
+}
+
+/* 系统提示词的段落块：段名标签与段文纵排 */
+.sectionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1h);
+}
+
+/* 无正文也无元数据的注入：静态行头——无指针、悬停不变色（chevron 已不渲染） */
+.rowStatic {
+  cursor: default;
+
+  &:hover {
+    color: var(--text-2);
+  }
+}
+
 .warning {
   display: flex;
   align-items: center;

@@ -43,7 +43,10 @@ export interface MockTool {
 export type MockSegment =
   | { kind: "thinking"; text: string }
   | { kind: "tool"; tool: MockTool }
-  | { kind: "text"; text: string };
+  | { kind: "text"; text: string }
+  /** 上下文注入（custom_message，display:true）：customType 为扩展机器名，
+      details 是扩展私有元数据（不发模型），形状照抄本机真实数据（web-search-results） */
+  | { kind: "injection"; customType: string; text: string; details?: Record<string, unknown> };
 
 export interface MockTurn {
   id: string;
@@ -55,6 +58,9 @@ export interface MockTurn {
   warning?: { kind: "aborted" | "error"; text: MessageKey };
   /** 末尾追加 compaction 注解 */
   compaction?: string;
+  /** 首条 user 之前的系统提示词条目（kernel system message.sections 的形状，
+      project_context 段即 AGENTS.md 渲染；落 orphanAnnotations，ADR-0004 修订三） */
+  systemPrompt?: Record<string, string>;
   /** 被弃分支：生成 N 条挂在首个 assistant 之后、没有后继引用的旧条目 */
   abandoned?: number;
   /** 本轮耗时（均摊到条目时间戳上，Recap 的耗时由模型层真实算出） */
@@ -127,6 +133,15 @@ export const MOCK_TURNS: MockTurn[] = [
     elapsedMs: 82_000,
     tokens: 41_200,
     compaction: "128k tokens",
+    // 形状照抄本机真实落盘（sections 全量段；project_context 含 AGENTS.md 渲染）
+    systemPrompt: {
+      preamble: "You are a coding assistant running inside pi, a coding agent harness. Help users inspect files, run commands, and modify code.",
+      tools: "<tools>\n- read: Read file contents\n- bash: Execute bash commands\n- edit: Make precise file edits\n- write: Create or overwrite files\n</tools>",
+      rules: "<rules>\n- Use read to examine files instead of cat or sed.\n- Keep responses concise and factual.\n</rules>",
+      project_context:
+        '<project_context>\nProject-specific instructions and guidelines:\n\n<project_instructions path="C:\\Users\\DELL\\.pi\\agent\\AGENTS.md">\n# Pi Studio · AGENTS.md\n\npi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）。\n组件样式一律引用语义层变量，颜色与间距不硬编码。\n</project_instructions>\n</project_context>',
+      cwd: "<cwd>\nD:/workspace/mycode/agent-design\n</cwd>",
+    },
     segments: [
       {
         kind: "thinking",
@@ -198,6 +213,43 @@ export const MOCK_TURNS: MockTurn[] = [
     segments: [
       { kind: "tool", tool: { name: "bash", state: "stopped", args: { command: "pnpm test --watch" }, output: "interrupted" } },
       { kind: "text", text: "已停止监听。" },
+    ],
+  },
+  {
+    id: "turn-injection",
+    label: "labInjection",
+    user: "搜索一下 pi 最近的版本动态",
+    at: "2026-11-16T11:16:40.000Z",
+    elapsedMs: 9_500,
+    segments: [
+      // 带元数据的注入（customType 与 details 形状照抄本机真实会话）
+      {
+        kind: "injection",
+        customType: "web-search-results",
+        text: "Search completed: 5 results across 2 queries.\n\nSources\n- github.com/badlogic/pi-mono — pi-mono: monorepo of the pi coding agent\n- pi.dev/docs/extensions — extension authoring guide",
+        details: {
+          queries: ["pi coding agent release notes", "pi-mono changelog"],
+          queryCount: 2,
+          successfulQueries: 2,
+          totalResults: 5,
+          includeContent: true,
+          fetchId: "fx91zz42mm",
+          searchId: "ab12cd34ef",
+          truncated: false,
+          originalChars: 214,
+          returnedChars: 214,
+          omittedChars: 0,
+        },
+      },
+      // 只有正文、无元数据的注入
+      {
+        kind: "injection",
+        customType: "agent-summary",
+        text: "Prior run context: the curator session finished without findings.",
+      },
+      // 无正文也无元数据：退化为静态行头
+      { kind: "injection", customType: "pi.share", text: "" },
+      { kind: "text", text: "已把检索结果注入上下文，要点如上。" },
     ],
   },
 ];
@@ -287,6 +339,15 @@ export function mockEntriesFor(turn: MockTurn): SessionEntry[] {
     parentId = entry.id;
   };
 
+  // 系统提示词条目：首条 user 的祖先（真实落盘形态），落 orphanAnnotations
+  if (turn.systemPrompt) {
+    push({
+      type: "message",
+      id: `${turn.id}-sys`,
+      message: { role: "system", content: "", sections: turn.systemPrompt },
+    } as never);
+  }
+
   if (turn.user) {
     push({
       type: "message",
@@ -302,6 +363,18 @@ export function mockEntriesFor(turn: MockTurn): SessionEntry[] {
   for (const segment of turn.segments) {
     seq += 1;
     const id = `${turn.id}-s${seq}`;
+
+    if (segment.kind === "injection") {
+      push({
+        type: "custom_message",
+        id,
+        customType: segment.customType,
+        content: segment.text ? [{ type: "text", text: segment.text }] : [],
+        details: segment.details,
+        display: true,
+      } as never);
+      continue;
+    }
 
     if (segment.kind === "thinking" || segment.kind === "text") {
       const content = block(segment);

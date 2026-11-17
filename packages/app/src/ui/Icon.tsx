@@ -13,6 +13,7 @@ export type IconName =
   | "chevron-down"
   | "arrow-down"
   | "arrow-up"
+  | "arrow-down-to-line"
   | "sun"
   | "moon"
   | "branch"
@@ -58,6 +59,13 @@ const glyphs: Record<IconName, JSX.Element> = {
   "chevron-down": <path d="M5.5 8l4.5 4.5L14.5 8" />,
   "arrow-down": <path d="M10 4.5v10m0 0-4-4m4 4 4-4" />,
   "arrow-up": <path d="M10 15.5v-10m0 0-4 4m4-4 4 4" />,
+  /* 落位箭头：注入行专用（上下文注入，ADR-0004 修订二）——底横线表达「进入上下文」 */
+  "arrow-down-to-line": (
+    <>
+      <path d="M10 3.75v8.75m0 0-3.25-3.25m3.25 3.25 3.25-3.25" />
+      <path d="M4.75 16.25h10.5" />
+    </>
+  ),
   sun: (
     <>
       <circle cx="10" cy="10" r="3.25" />

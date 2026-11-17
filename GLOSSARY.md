@@ -57,8 +57,16 @@ _Avoid_: 行、记录、event（与运行时事件流区分）
 _Avoid_: 主线、当前路径
 
 **Annotation**:
-注解级条目：不进 Turn / Process Group 正文，渲染为细分隔线与灰色小字的非消息条目（compaction / branch_summary / 首次 session_info / `display:true` 的 custom_message）；首条 user 之前的落 `orphanAnnotations`（ADR-0004 三级呈现策略）。
+注解级条目：不进 Turn / Process Group 正文，渲染为细分隔线与灰色小字的非消息条目（compaction / branch_summary / 首次 session_info）；首条 user 之前的落 `orphanAnnotations`（ADR-0004 三级呈现策略）。custom_message 与 system message 虽同走注解通道（模型层不进正文），视图已升级为独立的可展开行（见 Context Injection、System Prompt）。
 _Avoid_: 注释、系统消息、分隔条
+
+**Context Injection**:
+扩展经内核 `sendMessage` / boundary draft 写入 session 的 custom_message 条目：`content` 参与 LLM 上下文（发给模型时转 user 消息），`details` 是扩展私有元数据、不上送模型；`display:false` 不渲染（ADR-0004）。Transcript 渲染为可展开的注入行——「上下文注入」标题 + customType 摘要，展开见正文与元数据（ADR-0007 代码面）。与不进上下文的 custom 状态条目（`type:"custom"`）是两类东西。
+_Avoid_: 注入事件、扩展消息、自定义消息
+
+**System Prompt**:
+内核每轮 run 前对系统提示词做 sections 级 diff、有变化才落盘一条 `role:"system"` 的消息条目：`content` 为空串，全文在 `message.sections`（preamble / tools / rules / docs / project_context / skills / cwd；project_context 段即 AGENTS.md 等项目说明的渲染）。Transcript 渲染为可展开的系统提示词行——「系统提示词」标题 + 段数摘要，展开逐段呈现；首条 user 之前的落 `orphanAnnotations`（ADR-0004 修订三）。与 Context Injection 同族：都是发给模型、不在对话正文的内容。
+_Avoid_: 系统消息、系统条目
 
 **Compaction**:
 pi 对上下文的压缩事件，原始条目永不删除；Transcript 中渲染为注解。

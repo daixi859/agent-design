@@ -592,8 +592,21 @@ function buildTurns(
         });
         break;
       }
-      case "system":
-        break; // 隐藏级（ADR-0004）
+      case "system": {
+        // 系统提示词条目（ADR-0004 修订三）：content 为空串，全文在 message.sections
+        // （project_context 段即 AGENTS.md 等项目说明的渲染）。落注解通道渲染为可展开行，
+        // 首条 user 之前（常见位置）自然落入 orphanAnnotations；
+        // 内核空 diff 也会落盘 sections:{} 条目，无可展示内容，跳过。
+        const sections = (message as { sections?: Record<string, string> }).sections;
+        if (!sections || Object.keys(sections).length === 0) break;
+        if (turn) {
+          flushGroup();
+          turn.items.push({ kind: "annotation", id: entry.id, entry });
+        } else {
+          orphanAnnotations.push(entry);
+        }
+        break;
+      }
       default: {
         const display = (message as { display?: unknown }).display;
         if (typeof display === "string" && display) {

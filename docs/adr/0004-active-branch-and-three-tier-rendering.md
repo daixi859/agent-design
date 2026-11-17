@@ -4,6 +4,10 @@ pi 的 session 条目是树且类型多样（十余种 Entry 类型）。我们�
 
 修订（上游对齐轮）：custom_message（扩展注入、参与 LLM 上下文的用户可见消息）依本条「新增 Entry 类型默认隐藏、显式决定层级」的规则显式定为**注解级**——pi TUI 也有区别于 user 消息的专门渲染；隐藏的只有 `display:false` 变体。
 
+修订二（上下文注入展示轮）：custom_message 在模型层仍走注解通道（不进正文、首条 user 前落 `orphanAnnotations`），但视图呈现从细分隔线小字升级为**可展开的注入行**——行头同工具行形态（落位图标 + 「上下文注入」标题 + customType 摘要），展开为正文与扩展元数据两块代码面（ADR-0007，无头部栏）；`display:false` 仍隐藏，无正文无元数据时退化为静态行头。动机：注入是有实体的内容条目（正文要发给模型、元数据可查证），一行小字承载不了；compaction / branch_summary / session_info 是纯事件注解，保持原样。
+
+修订三（系统提示词展示轮）：system message 从隐藏级升级为注解通道的可展开行——内核每轮对系统提示词做 sections 级 diff、有变化才落盘（`role:"system"`、`content:""`、全文在 `message.sections`，project_context 段即 AGENTS.md 等项目说明的渲染），行头为齿轮图标 + 「系统提示词」 + 段数摘要，展开逐段代码面；首条 user 之前（常见位置）落 `orphanAnnotations`，内核空 diff 落的 `sections:{}` 条目跳过。动机与修订二同源：这是发给模型的真实内容且可查证，隐藏等于查看器丢数据。
+
 ## 考虑过的选项
 
 - **分支树浏览器**：有真实价值但属于后期功能，届时配合第三栏扩展点做独立视图。

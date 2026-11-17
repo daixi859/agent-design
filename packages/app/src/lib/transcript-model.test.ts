@@ -368,6 +368,29 @@ describe("buildTranscriptModel · 注解收缩", () => {
     ]);
     expect(model.turns[0].items.filter((item) => item.kind === "annotation")).toHaveLength(0);
   });
+
+  // 系统提示词条目（ADR-0004 修订三）：user 前落 orphan、turn 内注解；内核空 diff 落的
+  // sections:{} 条目无可展示内容，跳过
+  it("system 消息按 sections 落注解，空 sections 跳过", () => {
+    const systemPrompt = (id: string, parentId: string | null, sections: Record<string, string>): SessionEntry => ({
+      type: "message",
+      id,
+      parentId,
+      timestamp: TS,
+      message: { role: "system", content: "", sections },
+    });
+    const model = buildTranscriptModel([
+      header(),
+      systemPrompt("sys0", null, { preamble: "You are…", project_context: "<project_context>…" }),
+      user("u1", "sys0"),
+      systemPrompt("sys1", "u1", { tools: "<tools>…" }),
+      systemPrompt("sys2", "sys1", {}),
+    ]);
+    expect(model.orphanAnnotations.map((entry) => entry.id)).toEqual(["sys0"]);
+    const annotations = model.turns[0].items.filter((item) => item.kind === "annotation");
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0].kind === "annotation" && annotations[0].entry.id).toBe("sys1");
+  });
 });
 
 // ---------- Composer 徽标派生 ----------

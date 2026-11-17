@@ -274,7 +274,7 @@ export interface SessionInfoEntry extends EntryBase {
 }
 
 /** 扩展注入、参与 LLM 上下文的消息条目（上游 CustomMessageEntry）。
- *  display:false 完全隐藏；true 以区别于 user 消息的样式渲染。 */
+ *  display:false 完全隐藏；true 渲染为可展开的上下文注入行（GLOSSARY「Context Injection」）。 */
 export interface CustomMessageEntry extends EntryBase {
   type: "custom_message";
   customType: string;
