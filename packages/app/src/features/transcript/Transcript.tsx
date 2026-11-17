@@ -1,12 +1,14 @@
 /** Transcript：对话区本体（ADR-0006 三级结构，ADR-0013 收敛为两级：Turn / Process Group；数据直收 TranscriptModel） */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { TranscriptModel } from "../../lib/transcript-model";
+import type { TranscriptModel, TurnItem } from "../../lib/transcript-model";
 import type { ComposerDrive } from "./Composer";
 import { Icon } from "../../ui/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
+import { TuiGroup } from "./TuiGroup";
 import { TurnView } from "./TurnView";
 import { useLocale } from "../../state/useLocale";
+import { useViewMode } from "../../state/useViewMode";
 import styles from "./transcript.module.css";
 
 export function Transcript({
@@ -44,6 +46,23 @@ export function Transcript({
   const { turns, orphanAnnotations } = view;
   // 末轮即当前生成中的那一轮：只有它值得默认展开（历史轮展开会撑开整篇对话）
   const lastTurnId = turns.at(-1)?.id;
+
+  // TUI 模式（ADR-0014 迭代）：运行中的组贴底——从对话流抽出到滚动区末尾渲染，
+  // 配合贴底自动跟随，运行状态始终在视口底部，与 DSH 的组顶 Recap 拉开形态。
+  // 抽取条件 = 末轮且（驱动运行中或流式草稿）；历史残留 running 组不动（不发明「已死」态）。
+  // 目标组与空窗锚是模型层派生量（Turn.tailGroupId / userAt），这里只决定是否消费
+  const [viewMode] = useViewMode();
+  const lastTurn = turns.at(-1);
+  const detachGroupId =
+    viewMode === "tui" && lastTurn && (live || lastTurn.draft) ? lastTurn.tailGroupId : undefined;
+  const detached: TurnItem | undefined =
+    detachGroupId && lastTurn ? lastTurn.items.find((item) => item.id === detachGroupId) : undefined;
+  // 首 token 前的空窗（迭代反馈）：turn 已存在（user 已回显）但还没有任何组——
+  // 贴底挂一个空组形态的运行指示，计时锚在 user 条目时刻
+  const livePendingAnchor =
+    viewMode === "tui" && lastTurn && (live || lastTurn.draft) && !lastTurn.tailGroupId
+      ? lastTurn.userAt
+      : undefined;
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -87,8 +106,29 @@ export function Transcript({
           ) : (
             turns.map((turn) => (
               // 驱动中且是末轮才视为「生成中」：REST/Live Tail 浏览路径不改变既有折叠行为
-              <TurnView key={turn.id} turn={turn} live={live && turn.id === lastTurnId} />
+              <TurnView
+                key={turn.id}
+                turn={turn}
+                live={live && turn.id === lastTurnId}
+                detachGroupId={turn.id === lastTurnId ? detachGroupId : undefined}
+              />
             ))
+          )}
+          {detached && detached.kind === "group" && (
+            <TuiGroup
+              group={detached.group}
+              recap={detached.recap}
+              drafting={Boolean(lastTurn?.draft)}
+              live={live}
+            />
+          )}
+          {livePendingAnchor !== undefined && (
+            <TuiGroup
+              group={[]}
+              recap={{ tools: 0, thoughts: 0, failed: 0, running: false, toolCounts: [] }}
+              live={live}
+              startedAt={livePendingAnchor}
+            />
           )}
         </div>
       </div>

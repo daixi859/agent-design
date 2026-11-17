@@ -12,10 +12,17 @@ import type {
 } from "@pi-studio/shared/pi-types";
 import type { DriveEvent, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
-/** 「调用中」指示的形状（协议 toolCall 帧的字段子集，状态与消费方共用同名形状） */
+/** 「调用中」指示的形状（协议 toolCall 帧的字段子集，状态与消费方共用同名形状）。
+ *  args / outputTail 为执行期数据（ADR-0012 补记八）：并行调用各占集合一项 */
 export interface StreamingToolCall {
   id: string;
   name: string;
+  /** 仅执行期：完整参数（tool_execution_start 帧驱动） */
+  args?: Record<string, unknown>;
+  /** 仅执行中：已流出输出的文本尾部（toolCall update 帧驱动，瞬态可丢） */
+  outputTail?: string;
+  /** 仅执行中：输出全文长度（> outputTail.length = 输出仍在增长） */
+  totalLen?: number;
 }
 
 /** 单个被驱动 Session 的客户端状态 */
@@ -26,8 +33,9 @@ export interface DriveSession {
   readonly entries: readonly SessionEntry[];
   /** 尚未落盘的那一段流式内容（delta 帧累积）；权威条目一到即清空（ADR-0012） */
   readonly streaming?: StreamingDraft;
-  /** 正在流式/执行的工具调用（toolCall 帧驱动）：参数流式与执行期间的「调用中」指示 */
-  readonly streamingToolCall?: StreamingToolCall;
+  /** 正在流式/执行的工具调用集合（toolCall 帧驱动，start 顺序排列）：
+   *  参数流式与执行期间的「调用中」指示；并行调用各占一项 */
+  readonly streamingToolCalls?: readonly StreamingToolCall[];
   /** steer / followUp 待送达内容（queue 帧全量覆盖） */
   readonly queued?: { steering: string[]; followUp: string[] };
   /** 内核正在压缩上下文（compaction 帧驱动）：期间内核拒绝新 prompt；仅运行期为 true */
@@ -73,27 +81,32 @@ export function pendingPromptEntries(text: string | undefined, parentId: string 
  * parentId 传活动分支叶子：挂空会被叶子扫描当成新根，整条真实分支反被判成「被弃」。 */
 export function streamingEntries(
   draft: StreamingDraft | undefined,
-  calling: StreamingToolCall | undefined,
+  calling: readonly StreamingToolCall[] | undefined,
   parentId: string | null,
 ): SessionEntry[] {
   const text = draft?.text ?? "";
   const thinking = draft?.thinking ?? "";
   // 只丢弃纯空白：正文里可能已有换行等空白，但视图无内容可画
-  if (!text.trim() && !thinking.trim() && !calling) return [];
+  if (!text.trim() && !thinking.trim() && (!calling || calling.length === 0)) {
+    return [];
+  }
   // 内容块按流序排列：思考先行、正文随后、调用中行殿后——
   // 顺序颠倒会让运行中的思考出现在正文下方，权威条目落盘后又会翻回去
   const content: ContentBlock[] = [];
   if (thinking.trim()) content.push({ type: "thinking", thinking });
   if (text.trim()) content.push({ type: "text", text });
-  if (calling) content.push({ type: "toolCall", id: calling.id, name: calling.name });
+  for (const call of calling ?? []) {
+    // 执行期参数（ADR-0012 补记八）随草稿块进同一出口，运行行据此显示参数摘要
+    content.push({ type: "toolCall", id: call.id, name: call.name, arguments: call.args ?? {} });
+  }
   // stopReason 取 "pending"：这不是一次结束，视图层不得据此渲染 aborted / error 警告
   return [
     {
       type: "message",
       id: STREAMING_ENTRY_ID,
       parentId,
-      // 真实当前时刻：草稿挂在分支尾参与本轮结算，占位时间戳会把耗时撑成天文数字
-      timestamp: new Date().toISOString(),
+      // 计时锚随草稿生灭（delta 首帧起表，ADR-0014）：每轮从零起算、多会话互不串
+      timestamp: draft?.anchorAt ?? new Date().toISOString(),
       message: { role: "assistant", content, stopReason: "pending" },
     },
   ];
@@ -151,11 +164,8 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       // 消息条目必然出自内核，因此这里绝不能按正文比对（权威条目可能不是这里累积的那段）
       const streaming = entries === prev.entries && prev.streaming ? prev.streaming : undefined;
       // 权威条目引用了正在指示的工具调用（assistant 条目含该调用块 / toolResult 配对到达）：
-      // 「调用中」指示随之熄灭——end 帧丢失时的条目侧兜底（与草稿让位同一权威语义）
-      const streamingToolCall =
-        prev.streamingToolCall && entryMentionsToolCall(event.body.entry, prev.streamingToolCall.id)
-          ? undefined
-          : prev.streamingToolCall;
+      // 对应项随之熄灭——end 帧丢失时的条目侧兜底（与草稿让位同一权威语义）
+      const streamingToolCalls = filterRetiredCalls(prev.streamingToolCalls, event.body.entry);
       // 新到权威 user 条目 = 已发 prompt 的回显（内核要等 assistant 的 message_start 才回传）：
       // 本地待回显随之让位；重复条目（重放）不动引用
       const pendingPrompt =
@@ -163,11 +173,11 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       if (
         entries === prev.entries &&
         streaming === prev.streaming &&
-        streamingToolCall === prev.streamingToolCall &&
+        streamingToolCalls === prev.streamingToolCalls &&
         pendingPrompt === prev.pendingPrompt
       )
         return prev; // 幂等命中：引用不变
-      return { ...prev, entries, streaming, streamingToolCall, pendingPrompt };
+      return { ...prev, entries, streaming, streamingToolCalls, pendingPrompt };
     }
     case "status": {
       const status = event.body.status;
@@ -176,7 +186,7 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
         ? {
             ...prev,
             status,
-            streamingToolCall: undefined,
+            streamingToolCalls: undefined,
             queued: undefined,
             compacting: undefined,
             pendingPrompt: undefined,
@@ -192,18 +202,59 @@ function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSes
       const delta = event.body.delta;
       if (!delta) return prev;
       const field = event.body.field;
-      return { ...prev, streaming: { ...prev.streaming, [field]: (prev.streaming?.[field] ?? "") + delta } };
+      // 正文一开流思考必然已完（ADR-0012 补记九）：thinkingEnd 帧丢失时的兜底判据
+      const thinkingComplete =
+        field === "text" && (prev.streaming?.thinkingComplete || (prev.streaming?.thinking?.length ?? 0) > 0)
+          ? true
+          : prev.streaming?.thinkingComplete;
+      // 计时锚随草稿生灭：首个 delta 起表，权威条目落盘（草稿清空）后下轮重新起表——
+      // 每次都取 new Date() 会让锚跟着挂钟跑，思考行/头部秒数恒为 0（迭代反馈修复）
+      const anchorAt = prev.streaming?.anchorAt ?? new Date().toISOString();
+      return {
+        ...prev,
+        streaming: {
+          ...prev.streaming,
+          anchorAt,
+          ...(thinkingComplete ? { thinkingComplete } : {}),
+          [field]: (prev.streaming?.[field] ?? "") + delta,
+        },
+      };
+    }
+    case "thinkingEnd": {
+      // 思考定稿（内核 thinking_end）：粘滞标志，草稿清空（权威条目落盘）时一并重置。
+      // streaming 未建也要容下标志（补记九的容忍承诺）：redacted thinking 无 delta 直达
+      // thinking_end，标志先落，此后首个 delta 才在真草稿上沿用它
+      if (prev.streaming?.thinkingComplete) return prev;
+      return { ...prev, streaming: { ...prev.streaming, thinkingComplete: true } };
     }
     case "toolCall": {
-      if (event.body.phase === "start") {
-        const streamingToolCall = { id: event.body.id, name: event.body.name };
-        if (prev.streamingToolCall?.id === streamingToolCall.id && prev.streamingToolCall.name === streamingToolCall.name)
-          return prev;
-        return { ...prev, streamingToolCall };
+      const body = event.body;
+      const calls = prev.streamingToolCalls ?? [];
+      if (body.phase === "start") {
+        // start：追加（重复 start 幂等——流式声明与执行开始会同 id 双发，参数以后到者为准）
+        const next = [...calls.filter((call) => call.id !== body.id)];
+        const previous = calls.find((call) => call.id === body.id);
+        next.push({
+          id: body.id,
+          name: body.name,
+          ...(body.args ? { args: body.args } : previous?.args ? { args: previous.args } : {}),
+        });
+        return { ...prev, streamingToolCalls: next };
       }
-      // end：按 id 匹配才熄灭（一轮多个工具，迟到的 end 不得灭掉后来的 start）
-      if (prev.streamingToolCall?.id !== event.body.id) return prev;
-      return { ...prev, streamingToolCall: undefined };
+      if (body.phase === "update") {
+        // update：按 id 覆盖输出尾巴；start 丢失（帧乱序/丢失）时忽略——瞬态帧可丢
+        const index = calls.findIndex((call) => call.id === body.id);
+        if (index < 0 || body.outputTail === undefined) return prev;
+        const current = calls[index];
+        if (current.outputTail === body.outputTail && current.totalLen === body.totalLen) return prev;
+        const next = [...calls];
+        next[index] = { ...current, outputTail: body.outputTail, totalLen: body.totalLen };
+        return { ...prev, streamingToolCalls: next };
+      }
+      // end：按 id 匹配才移除（一轮多个工具，迟到的 end 不得影响别的调用）
+      const next = calls.filter((call) => call.id !== body.id);
+      if (next.length === calls.length) return prev;
+      return { ...prev, streamingToolCalls: next.length > 0 ? next : undefined };
     }
     case "queue":
       return { ...prev, queued: { steering: event.body.steering, followUp: event.body.followUp } };
@@ -230,4 +281,15 @@ function entryMentionsToolCall(entry: SessionEntry, toolCallId: string): boolean
     );
   }
   return false;
+}
+
+/** 权威条目到达后的调用集合熄灭：引用了该条目的调用移除，其余保留（无引用时引用不变） */
+function filterRetiredCalls(
+  calls: readonly StreamingToolCall[] | undefined,
+  entry: SessionEntry,
+): readonly StreamingToolCall[] | undefined {
+  if (!calls || calls.length === 0) return calls;
+  const next = calls.filter((call) => !entryMentionsToolCall(entry, call.id));
+  if (next.length === calls.length) return calls;
+  return next.length > 0 ? next : undefined;
 }

@@ -91,7 +91,7 @@ describe("resolveDrivenView", () => {
     const session: DriveSession = {
       ...driven([]),
       status: "running",
-      streamingToolCall: { id: "tc1", name: "bash" },
+      streamingToolCalls: [{ id: "tc1", name: "bash" }],
     };
     const view = resolveDrivenView(session, snap([user("m1", "问：")]));
     expect(view!.abandonedCount).toBe(0);

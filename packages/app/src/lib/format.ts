@@ -44,3 +44,10 @@ export function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** 耗时：不足一秒报毫秒，否则报秒（数字走 locale，不手拼）——
+    TurnView（Standard）与 TuiGroup（TUI）同口径消费的唯一实现 */
+export function formatDuration(ms: number, locale: string): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 1000)}s`;
+}

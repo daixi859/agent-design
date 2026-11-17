@@ -38,6 +38,12 @@ describe("normalizeSessionEvent · pi 事件到协议事件体", () => {
     ]);
   });
 
+  it("thinking_end → thinkingEnd（思考定稿信号，ADR-0012 补记九）", () => {
+    expect(
+      normalizeSessionEvent(msgUpdate({ type: "thinking_end", contentIndex: 0, content: "想完了" })),
+    ).toEqual([{ type: "thinkingEnd" }]);
+  });
+
   it("其余 assistantMessageEvent（start / end / delta / done…）不产出", () => {
     expect(normalizeSessionEvent(msgUpdate({ type: "text_start", contentIndex: 0 }))).toEqual([]);
     expect(normalizeSessionEvent(msgUpdate({ type: "text_end", contentIndex: 0, content: "完" }))).toEqual([]);
@@ -57,11 +63,75 @@ describe("normalizeSessionEvent · pi 事件到协议事件体", () => {
     ).toEqual([{ type: "toolCall", phase: "start", id: "tc1", name: "bash" }]);
   });
 
+  it("toolcall_start 参数非空时 start 帧带 args（流式声明期，ADR-0012 补记八）", () => {
+    expect(
+      normalizeSessionEvent(
+        msgUpdate({
+          type: "toolcall_start",
+          contentIndex: 0,
+          partial: { content: [{ type: "toolCall", id: "tc2", name: "read", arguments: { path: "/a.ts" } }] },
+        }),
+      ),
+    ).toEqual([{ type: "toolCall", phase: "start", id: "tc2", name: "read", args: { path: "/a.ts" } }]);
+  });
+
   it("toolcall_start 的 partial 形状不符时吞掉（不猜测）", () => {
     expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_start", contentIndex: 3, partial: { content: [] } }))).toEqual(
       [],
     );
     expect(normalizeSessionEvent(msgUpdate({ type: "toolcall_start", contentIndex: 0 }))).toEqual([]);
+  });
+
+  it("tool_execution_start → toolCall(start) 带完整参数（ADR-0012 补记八）", () => {
+    expect(
+      normalizeSessionEvent({
+        type: "tool_execution_start",
+        toolCallId: "tc1",
+        toolName: "bash",
+        args: { command: "pnpm test" },
+      } as AgentSessionEvent),
+    ).toEqual([{ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "pnpm test" } }]);
+  });
+
+  it("tool_execution_update → toolCall(update) 文本尾部截断（4000 上限）", () => {
+    const frames = normalizeSessionEvent({
+      type: "tool_execution_update",
+      toolCallId: "tc1",
+      toolName: "bash",
+      args: {},
+      partialResult: { content: [{ type: "text", text: "x".repeat(4100) }] },
+    } as AgentSessionEvent);
+    expect(frames).toEqual([
+      {
+        type: "toolCall",
+        phase: "update",
+        id: "tc1",
+        name: "bash",
+        outputTail: "x".repeat(4000),
+        totalLen: 4100,
+      },
+    ]);
+  });
+
+  it("tool_execution_update 形状不符 / 无文本时吞掉（不猜测）", () => {
+    expect(
+      normalizeSessionEvent({
+        type: "tool_execution_update",
+        toolCallId: "t",
+        toolName: "bash",
+        args: {},
+        partialResult: {},
+      } as AgentSessionEvent),
+    ).toEqual([]);
+    expect(
+      normalizeSessionEvent({
+        type: "tool_execution_update",
+        toolCallId: "t",
+        toolName: "bash",
+        args: {},
+        partialResult: { content: [{ type: "text", text: "" }] },
+      } as AgentSessionEvent),
+    ).toEqual([]);
   });
 
   it("tool_execution_end → toolCall(end)（熄灭「调用中」）", () => {
@@ -133,19 +203,8 @@ describe("normalizeSessionEvent · pi 事件到协议事件体", () => {
     ).toEqual([{ type: "status", status: "retrying", attempt: 2, detail: "429" }]);
   });
 
-  it("透传名单外的一律吞掉（message_end / 其余工具执行事件 / 生命周期杂项）", () => {
+  it("透传名单外的一律吞掉（message_end / 生命周期杂项；tool_execution_* 已放行，见补记八）", () => {
     expect(normalizeSessionEvent({ type: "message_end", message: {} } as unknown as AgentSessionEvent)).toEqual([]);
-    expect(
-      normalizeSessionEvent({
-        type: "tool_execution_start",
-        toolCallId: "t",
-        toolName: "bash",
-        args: {},
-      } as AgentSessionEvent),
-    ).toEqual([]);
-    expect(normalizeSessionEvent({ type: "tool_execution_update", toolCallId: "t", toolName: "bash", args: {}, partialResult: {} } as AgentSessionEvent)).toEqual(
-      [],
-    );
     expect(normalizeSessionEvent({ type: "session_info_changed", name: "x" } as AgentSessionEvent)).toEqual([]);
     expect(normalizeSessionEvent({ type: "thinking_level_changed", level: "high" } as AgentSessionEvent)).toEqual([]);
   });

@@ -9,22 +9,19 @@ import { useEffect, useState } from "react";
 import { Icon } from "../../ui/Icon";
 import { cx } from "../../lib/cx";
 import { translateVars, type MessageKey } from "../../lib/i18n";
+import { formatDuration } from "../../lib/format";
 import { useLocale } from "../../state/useLocale";
+import { useViewMode } from "../../state/useViewMode";
 import type { GroupItem, GroupRecap, Turn, TurnItem } from "../../lib/transcript-model";
 import { Markdown } from "./Markdown";
 import { AnnotationRow } from "./AnnotationRow";
 import { ToolRow } from "./ToolRow";
+import { TuiGroup, TuiTurnSummary } from "./TuiGroup";
 import { UserMessageView } from "./MessageViews";
 import styles from "./transcript.module.css";
 
 function plural(n: number, one: MessageKey, many: MessageKey, t: (k: MessageKey) => string) {
   return `${n} ${t(n === 1 ? one : many)}`;
-}
-
-/** 耗时：不足一秒报毫秒，否则报秒（数字走 locale，不手拼） */
-function formatDuration(ms: number, locale: string): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 1000)}s`;
 }
 
 /** tokens：紧凑记数（1.2K / 3.4M），不手拼单位 */
@@ -154,16 +151,28 @@ function TurnItemView({
   draft,
   abandoned,
   live,
+  isLastGroup = false,
+  isTurnTail = false,
+  detachGroupId,
 }: {
   item: TurnItem;
-  /** 本轮结算事实；只交给一个过程组（与被弃分支同一投递点），避免每条 Recap 重复同一个数 */
+  /** 本轮耗时与 tokens（Recap 只报有值的量） */
   settlement: { durationMs?: number; tokens?: number };
   /** 本轮仍是流式草稿（末条 assistant 尚未定稿） */
   draft: boolean;
   abandoned: number;
   live: boolean;
+  /** 是否本轮最后一个过程组：TUI 运行态的 turn 级 live 只亮给它（前面的组已结算） */
+  isLastGroup?: boolean;
+  /** 是否 turn 的当前尾部（ADR-0014）：组被正文 flush 终结后不再是尾部，
+      组内思考即便排在组内末位也已完成——活跃权以此为准 */
+  isTurnTail?: boolean;
+  /** TUI 贴底抽取（ADR-0014 迭代）：命中的组不在此渲染，由 Transcript 在滚动区末尾挂出 */
+  detachGroupId?: string;
 }) {
   const { t } = useLocale();
+  // 渲染模式（ADR-0014）：TUI 只接管 Process Group 区，正文四类 TurnItem 两种模式同渲染
+  const [mode] = useViewMode();
 
   switch (item.kind) {
     case "text":
@@ -186,7 +195,16 @@ function TurnItemView({
         </p>
       );
     case "group":
-      return (
+      if (item.id === detachGroupId) return null;
+      return mode === "tui" ? (
+        <TuiGroup
+          group={item.group}
+          recap={item.recap}
+          drafting={draft}
+          live={live && isLastGroup}
+          isTurnTail={isTurnTail}
+        />
+      ) : (
         <ProcessGroup
           group={item.group}
           recap={item.recap}
@@ -199,30 +217,62 @@ function TurnItemView({
   }
 }
 
-export function TurnView({ turn, live = false }: { turn: Turn; live?: boolean }) {
+export function TurnView({
+  turn,
+  live = false,
+  detachGroupId,
+}: {
+  turn: Turn;
+  live?: boolean;
+  /** TUI 贴底抽取（ADR-0014 迭代）：命中的组不在此渲染，由 Transcript 在滚动区末尾挂出 */
+  detachGroupId?: string;
+}) {
   // 被弃分支只标在首个过程组上，避免每条 Recap 都重复同一个数
   const firstGroupId = turn.items.find((item) => item.kind === "group")?.id;
   // Draft 标记只挂在最后一个过程组上（与「只标一次」的收敛一致）
   const lastGroupId = [...turn.items].reverse().find((item) => item.kind === "group")?.id;
   const abandoned = turn.abandonedCount ?? 0;
+  // 渲染模式（ADR-0014）：汇总行与明细行显隐是 TUI 结算 turn 的专属结构
+  const [mode] = useViewMode();
+  /** 结算 turn 的明细展开态（迭代反馈）：收起 = 只留各段回答正文，展开 = 加上各组明细行 */
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const tuiSettled =
+    mode === "tui" && !live && ((turn.toolsTotal ?? 0) > 0 || (turn.thoughtsTotal ?? 0) > 0);
 
   return (
     <div className={styles.turn}>
       {turn.user && <UserMessageView entry={turn.user} />}
-      {turn.items.map((item) => (
-        <TurnItemView
-          key={item.id}
-          item={item}
-          settlement={
-            item.kind === "group" && item.id === firstGroupId
-              ? { durationMs: turn.durationMs, tokens: turn.tokens }
-              : {}
-          }
-          draft={Boolean(turn.draft && item.kind === "group" && item.id === lastGroupId)}
-          abandoned={item.kind === "group" && item.id === firstGroupId ? abandoned : 0}
-          live={live}
+      {tuiSettled && (
+        <TuiTurnSummary
+          count={turn.toolsTotal ?? 0}
+          thoughts={turn.thoughtsTotal ?? 0}
+          durationMs={turn.durationMs}
+          endAt={turn.endAt}
+          open={detailsOpen}
+          onToggle={() => setDetailsOpen((v) => !v)}
         />
-      ))}
+      )}
+      {turn.items.map((item) => {
+        // TUI 结算 turn 收起态：过程组明细行隐藏（汇总行已表达结论量），正文照常
+        if (tuiSettled && !detailsOpen && item.kind === "group") return null;
+        return (
+          <TurnItemView
+            key={item.id}
+            item={item}
+            settlement={
+              item.kind === "group" && item.id === firstGroupId
+                ? { durationMs: turn.durationMs, tokens: turn.tokens }
+                : {}
+            }
+            draft={Boolean(turn.draft && item.kind === "group" && item.id === lastGroupId)}
+            abandoned={item.kind === "group" && item.id === firstGroupId ? abandoned : 0}
+            live={live}
+            isLastGroup={item.kind === "group" && item.id === lastGroupId}
+            isTurnTail={item.id === turn.items[turn.items.length - 1]?.id}
+            detachGroupId={detachGroupId}
+          />
+        );
+      })}
     </div>
   );
 }

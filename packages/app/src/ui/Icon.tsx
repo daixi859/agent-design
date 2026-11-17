@@ -27,6 +27,8 @@ export type IconName =
   | "play"
   | "pause"
   | "xmark"
+  | "check"
+  | "spinner"
   | "gear"
   | "expand"
   | "contract"
@@ -120,6 +122,10 @@ const glyphs: Record<IconName, JSX.Element> = {
     </>
   ),
   xmark: <path d="m5.5 5.5 9 9m0-9-9 9" />,
+  /* ADR-0014 TUI 状态字形：对勾（槽位完成态）；spinner 是 270° 圆弧，
+     旋转动画由使用方的 CSS 驱动（图标集保持纯静态字形） */
+  check: <path d="m4.75 10.75 3.75 3.75 6.75-8" />,
+  spinner: <path d="M10 3.25A6.75 6.75 0 1 1 3.25 10" />,
   play: <path d="M7.4 4.9v10.2L15.8 10Z" />,
   pause: <path d="M7.4 5v10M12.6 5v10" />,
   /* 滑杆式设置（SF slider.horizontal.3）：三滑轨 + 错位旋钮 */

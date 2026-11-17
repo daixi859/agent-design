@@ -25,7 +25,7 @@ _Avoid_: 顶栏、TopBar、标题栏（与 Session Bar 混淆）、悬浮胶囊
 _Avoid_: 聊天区、对话块、消息流
 
 **Session Bar**:
-内容区标题栏：Session 标题、branched 徽标与动作区（全屏、主题切换）（ADR-0009）；model/tokens/cost 统计展示已移除。
+内容区标题栏：Session 标题、branched 徽标与动作区（全屏、主题切换、渲染模式快切）（ADR-0009，渲染模式见 TUI Mode）；model/tokens/cost 统计展示已移除。
 _Avoid_: 顶栏、TopBar、工具栏
 
 **Settings**:
@@ -83,6 +83,10 @@ _Avoid_: 轮聚合条、步骤条、summary（与 compaction 的 summary 混淆�
 **Process Strip**:
 Recap 展开后逐条铺开的工具/思考行，DSH 式极简 disclosure 行——图标、工具名、摘要、状态，行内无卡片无耗时；一次点击在 Recap 与 Strip 之间切换（ADR-0013）。
 _Avoid_: 工具组、分组条、工具卡列表
+
+**TUI Mode**:
+Transcript 的第二渲染形态（ADR-0014）：终端模拟风格，仅覆盖 Process Group 区（运行摘要行、槽位行、终端块、diff），user 气泡与 assistant 正文仍走现渲染。动态运行渲染（Running 摘要行、槽位行内秒数、流出输出、完成自动收起）为本形态专属；两模式从同一 TranscriptModel 派生，现渲染形态在配置中称 Standard。切换同主题机制：Appearance 存默认、Session Bar 快切。
+_Avoid_: 终端模式（与主题混淆）、compact 模式、TUI 视图（作为配置值时）
 
 **Tool State**:
 工具行的四态：`running`（无配对结果，内核仍在跑或流式草稿）、`ok`、`error`（`isError`）、`stopped`（bashExecution 被取消）。**行内**只以文字色表达，不用彩色徽标（ADR-0013）；唯**终端块的 gutter 状态点**保留分档颜色，是该条明列的例外。四态各自成类，由视图层一张 `STATE_VIEW` 表统一驱动标签、字形与类名。

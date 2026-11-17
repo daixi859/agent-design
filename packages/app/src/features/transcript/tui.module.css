@@ -1,0 +1,261 @@
+/* TUI Mode 的 Process Group 渲染（ADR-0014）：终端模拟的文本形态——
+   无底无框，等宽小字浅色融入画布；仅以字色与绘制的字形（SVG 对勾/叉、CSS 圆点、
+   L 形引导线、chevron 图标）表达结构，不走文本字符（字体回退渲染不一致）。
+   颜色/间距/字号引令牌（primitives + --tui-*）；对齐派生值（37.2px 等，
+   与字形槽中心的几何关系）保留裸值，注释即文档。 */
+
+.group {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.7;
+  margin: var(--space-1h) 0;
+  color: var(--tui-dim);
+  overflow: hidden;
+}
+
+/* 头部摘要行与槽位行同为 disclosure 按钮（gap 收紧：字形槽两侧各 6px，更紧凑） */
+.head,
+.slot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1h);
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: var(--space-hairline) 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* turn 汇总行（ADR-0014 迭代）：`Run N commands` 一轮一行，承载各组明细行的显隐
+   （3px 为行距微调值，无等值令牌） */
+.summaryRow {
+  margin-block: 3px;
+}
+
+/* 头部 chevron：SVG 图标（渲染管线与 Standard 一致），开启时转 90°。
+   baseline 行内字形会被按底边贴到文字基线上（整体偏上），故钉在首行行高内居中；
+   宽度钉 12px，让槽位行 L 线的竖段有明确的对齐目标（中心 x=6px） */
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  inline-size: 12px;
+  block-size: 1.7em;
+  color: var(--tui-dim);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.chevron[data-open] {
+  transform: rotate(90deg);
+}
+
+.head:hover .chevron {
+  color: var(--tui-text);
+}
+
+/* running... 的扫光跑马灯（cc-style 的文字扫光）：高亮段随 background-position 扫过 */
+.runLabel {
+  color: transparent;
+  background-image: linear-gradient(
+    100deg,
+    var(--tui-run) 42%,
+    var(--tui-text) 50%,
+    var(--tui-run) 58%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: tuiShimmer 1.8s linear infinite;
+}
+
+.dim {
+  color: var(--tui-dim);
+}
+
+.failed {
+  color: var(--danger);
+}
+
+/* 槽位区：全量展开时限高 40vh 内部滚动（迭代反馈），展开/追加都由组件贴底跟随；
+   细滚动条与 transcript 内部容器同款（thumb 派生自 --scroll-thumb，轨道透明融入画布） */
+.slots {
+  padding-bottom: var(--space-05);
+  max-height: 40vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+/* L 形引导线（↳ 的 CSS 绘制）：竖线下拐，树形缩进的骨架。
+   竖段 x 对齐头部 chevron 中心（12px 槽内 1px 线 → start 5.5px），
+   横段落在首行基线附近（竖段高 1em ≈ 文字基线深度） */
+.lead {
+  position: relative;
+  flex: none;
+  align-self: flex-start;
+  inline-size: 12px;
+  block-size: 1.4em;
+}
+
+.lead::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  block-size: 1em;
+  inset-inline-start: 5.5px;
+  inline-size: calc(100% - 5.5px);
+  border-inline-start: 1px solid var(--separator-strong);
+  border-block-end: 1px solid var(--separator-strong);
+  border-end-start-radius: 3px;
+}
+
+/* 状态字形槽：钉在首行行高内居中（与 .chevron 同理，baseline 会把小字形贴到基线上）。
+   槽宽 1.1em → 点中心 x = 12(lead) + 6(gap) + 6.6 = 24.6px，展开体竖线以此对齐 */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  block-size: 1.7em;
+  min-inline-size: 1.1em;
+}
+
+.iconRun {
+  color: var(--tui-run);
+}
+
+/* spinner 圆弧（Icon "spinner"）的旋转：CSS 动画驱动，不占挂钟 tick；
+   只在真运行上下文（组容器 [data-live]）转——历史残留 running 组的字形定格 */
+.iconRun svg {
+  display: block;
+  transform-origin: center;
+}
+
+.group[data-live] .iconRun svg {
+  animation: tuiSpin 0.8s linear infinite;
+}
+
+.iconOk {
+  color: var(--success);
+}
+
+.iconError {
+  color: var(--danger);
+}
+
+.dotGlyph {
+  display: block;
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.name {
+  color: var(--tui-text);
+}
+
+/* 思考摘要：与工具名同档最强字色（阶梯），但带 ellipsis 收缩——
+   超长时自身截断，行尾时间（.elapsed）不被挤出溢出区 */
+.thinkSummary {
+  color: var(--tui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 摘要：不占满（grow 退役）——行内秒数紧跟其后，不推到行尾（迭代） */
+.summary {
+  color: var(--tui-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 行内秒数：字色阶梯最浅一档（--tui-faint），紧跟内容、不靠右；不参与压缩（摘要收缩让位） */
+.elapsed {
+  color: var(--tui-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex: none;
+}
+
+/* 活跃思考的「思考中」标签：与工具名同档最强字色 */
+.thinkLabel {
+  color: var(--tui-text);
+  white-space: nowrap;
+}
+
+/* 活跃思考：标签行 + 内容块垂直堆叠（同行右侧会把文本挤成窄条）；
+   内容块缩进与工具名齐平（37.2px），随 thinking delta 推进上滚 */
+.thinkRun {
+  min-width: 0;
+}
+
+.thinkBody {
+  margin: var(--space-05) 0 var(--space-1) 37.2px;
+  color: var(--tui-dim);
+}
+
+/* 每行不折行，超出宽度截断为 …（终端行语义：一行就是一行） */
+.thinkLine {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* cc 风格展开体（迭代）：竖线与状态字形槽中心齐平（24.6px），内容与字形后的工具名齐平
+   （37.2px → padding 11.6px = 37.2 − 24.6 − 1px 线宽）；间距收紧，标签亮、正文 dim */
+.slotBody {
+  margin: var(--space-05) 0 var(--space-1) 24.6px;
+  padding-inline-start: 11.6px;
+  border-inline-start: 1px solid var(--separator-strong);
+  color: var(--tui-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Input/Output 标签：字色走 .name（与工具名同档），这里只管布局 */
+.bodyLabel {
+  display: block;
+  margin: var(--space-1) 0 var(--space-hairline);
+}
+
+.bodyLabel:first-child {
+  margin-block-start: var(--space-05);
+}
+
+.bodyPre {
+  margin: var(--space-05) 0;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.subCall {
+  color: var(--tui-dim);
+  width: auto;
+}
+
+@keyframes tuiShimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes tuiSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}

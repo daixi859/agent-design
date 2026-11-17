@@ -112,4 +112,27 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 - 视图层零改动：两种瞬态条目仍喂同一个 `buildTranscriptModel` 出口，Transcript 不知道「流式」「待回显」存在。
 - 草稿丢了仍只是少一帧画面；待回显的兜底是 idle 清口——最坏情形气泡随轮次结束消失，权威历史永远完整。
 
+## 补记八（运行态渲染轮）：toolCall 帧扩字段与 tool_execution_* 放行
+
+**问题**：TUI 运行态渲染（ADR-0014）需要执行中的参数与已流出的输出，而协议的 `toolCall` 帧只有 `{phase, id, name}`，normalize 把 `tool_execution_start`（带 args）与 `tool_execution_update`（带 partialResult）一律丢弃——「正在跑的命令是什么、输出到哪了」在两条路径上都到不了客户端（Live Tail 只拿落盘条目，JSONL 无运行中状态）。
+
+**决定**：`toolCall` 帧扩为 `{ phase: "start" | "update" | "end"; id; name; args?; outputTail?; totalLen? }`——start 映射 `tool_execution_start.args`；update 映射 `tool_execution_update.partialResult` 的文本内容**尾部**（截断 4000 字符，`totalLen` 供「输出增长中」提示）；end 不扩（耗时从落盘 toolResult 的 `durationMs` 取，帧不带）。normalize 的透传名单相应放行这两个事件，其余照旧吞掉。
+
+**边界**：update 帧沿袭「瞬态帧可丢」语义——丢了只是运行行少一帧输出尾巴，权威输出仍以落盘条目为准；截断是推送策略而非数据缺损，展开体的完整输出始终来自条目。客户端 `streamingToolCalls` 瞬态位随之扩为集合（并行工具调用各占一行），配对的 end / 权威条目到达即灭的既有规则不变；运行态在模型层经 `buildTranscriptModel(entries, liveTools?)` 的可选入参汇入同一出口，视图层不读内核字段。
+
+**后果**：
+
+- Live Tail 路径无 update 流（轮询拿不到未落盘内容），运行行输出区显示占位——两路径能力差异是本补记明示的，不是缺陷。
+- `streamingToolCall` 单数位退役，消费方（Composer 徽标）取最近一次 start 的工具名。
+
+## 补记九（思考定稿信号）：thinking_end 放行与 thinkingComplete 标志
+
+**问题**：TUI 运行态的思考活跃判定（ADR-0014）只能靠「组是 turn 尾部 + 组内末条是思考」间接推断——真实驾驶里出现过「正文已开流渲染、思考行仍在转」的状态矛盾：思考块闭合的瞬间客户端无从知晓，只能等正文 flush 组这个间接后果。
+
+**依据**：内核 `AssistantMessageEvent`（pi-ai types）有显式的块生命周期 `thinking_start → thinking_delta × N → thinking_end`，`thinking_end` 携带定稿 content，是**唯一精确的思考定稿信号**；redacted thinking 无 delta 直接 start→end。流式期间 `stopReason` 恒为 `"pending"`，不能当判据；`message_end`/`done` 粒度是整条消息，太粗。
+
+**决定**：协议新增瞬态帧 `{ type: "thinkingEnd" }`（normalize 放行 `message_update` 里的 `thinking_end`，其余 `text_start/text_end/toolcall_delta` 等照旧吞掉）；客户端 `StreamingDraft` 加粘滞标志 `thinkingComplete`——`thinkingEnd` 帧置位，**首个 text delta 也置位**（帧可丢，语义同义的双保险），权威条目落盘草稿清空时一并重置。标志经 `buildTranscriptModel(entries, liveTools?, draft?)` 第三参（`{ entryId, thinkingComplete }`，只作用于调用方指认的合成草稿条目）汇入同一出口，driven-view 负责组装；视图层思考活跃判定（ADR-0014）加「未定稿」前提。
+
+**后果**：Live Tail 路径无 delta 流（拿不到 thinking_end），思考行在浏览路径仍靠正文 flush 的间接判定收起——两路径能力差异沿袭补记八的口径，是明示的而非缺陷；测试侧 delta 分量的互不覆盖断言随新语义更新（text 到达即带 `thinkingComplete`），并补 thinkingEnd 帧与 normalize 放行断言。
+
 

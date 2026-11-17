@@ -1,7 +1,12 @@
-/** 设置·外观分区：主题与语言的正式入口（分段控件，ADR-0011）。
-    主题与 Session Bar 快捷键共用 useTheme；语言经 useLocale 写 <html lang> 并持久化。 */
+/** 设置·外观分区：主题、渲染模式、思考尾部行数与语言的正式入口（分段控件，ADR-0011）。
+    主题与 Session Bar 快捷键共用 useTheme；渲染模式共用 useViewMode（ADR-0014）；
+    思考尾部行数共用 useTuiThinkLines（ADR-0014：活跃思考行的尾部滚动行数）；
+    语言经 useLocale 写 <html lang> 并持久化。 */
 import { useTheme } from "../../state/useTheme";
 import { useLocale } from "../../state/useLocale";
+import { useTuiThinkLines } from "../../state/useTuiThinkLines";
+import { useViewMode } from "../../state/useViewMode";
+import { TUI_THINK_LINES_OPTIONS } from "../../lib/tui-prefs";
 import { cx } from "../../lib/cx";
 import styles from "./settings.module.css";
 
@@ -16,8 +21,16 @@ const LOCALE_OPTIONS = [
   { value: "zh", label: "中文" },
 ] as const;
 
+/** 渲染模式项（ADR-0014）：值为配置值，标签走 i18n */
+const VIEW_MODE_OPTIONS = [
+  { value: "standard", label: "viewStandard" },
+  { value: "tui", label: "viewTui" },
+] as const;
+
 export function AppearanceSection() {
   const [theme, setTheme] = useTheme();
+  const [viewMode, setViewMode] = useViewMode();
+  const [thinkLines, setThinkLines] = useTuiThinkLines();
   const { locale, setLocale, t } = useLocale();
 
   return (
@@ -39,6 +52,44 @@ export function AppearanceSection() {
         </div>
         <p className={styles.hint}>{t("themeHint")}</p>
       </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>{t("viewMode")}</h2>
+        <div className={styles.segmented} role="group" aria-label={t("viewMode")}>
+          {VIEW_MODE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={cx(styles.segment, viewMode === option.value && styles.segmentActive)}
+              aria-pressed={viewMode === option.value}
+              onClick={() => setViewMode(option.value)}
+            >
+              {t(option.label)}
+            </button>
+          ))}
+        </div>
+        <p className={styles.hint}>{t("viewModeHint")}</p>
+      </section>
+
+      {viewMode === "tui" && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>{t("thinkLines")}</h2>
+          <div className={styles.segmented} role="group" aria-label={t("thinkLines")}>
+            {TUI_THINK_LINES_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={cx(styles.segment, thinkLines === option && styles.segmentActive)}
+                aria-pressed={thinkLines === option}
+                onClick={() => setThinkLines(option)}
+              >
+                {option} {t(option === 1 ? "linesOne" : "linesSuffix")}
+              </button>
+            ))}
+          </div>
+          <p className={styles.hint}>{t("thinkLinesHint")}</p>
+        </section>
+      )}
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("language")}</h2>

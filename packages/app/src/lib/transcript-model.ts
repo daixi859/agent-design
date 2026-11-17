@@ -221,7 +221,7 @@ export interface SubCallItem {
 /** 层 3：过程组内的单条目——归一化后的显示形状（pi 类型只在实现内部流转，不外泄）。
     bashExecution 与孤儿 toolResult 在此归一为 toolCall 条目，视图层零伪造。 */
 export type GroupItem =
-  | { kind: "thinking"; id: string; thinking: string; redacted?: boolean }
+  | { kind: "thinking"; id: string; thinking: string; redacted?: boolean; /** 条目时间戳（TUI 活跃思考行的流逝秒数锚，ADR-0014）；内核无思考独立时长，结算后无数据不显示 */ startedAt?: number; /** 所在 assistant 条目的请求耗时（内核给的，思考占其主体）：完成思考行的耗时展示 */ durationMs?: number; /** 流式草稿的思考已定稿（内核 thinking_end，ADR-0012 补记九）：完成后思考行即收起 */ thinkingComplete?: boolean }
   | {
       kind: "toolCall";
       id: string;
@@ -243,19 +243,47 @@ export type GroupItem =
       terminal?: { command: string; output?: string };
       /** 嵌套调用（codemode 等） */
       subCalls?: SubCallItem[];
+      /** 运行秒数锚（running 态有意义）：调用所在 assistant 条目的毫秒时间戳——
+          双路径统一取条目时间戳，不依赖客户端起表（ADR-0014）；缺时间戳留空 */
+      startedAt?: number;
+      /** 执行耗时（内核单调时钟，落盘 toolResult 携带）；结算行的秒数显示 */
+      durationMs?: number;
+      /** 执行期输出尾巴（running 态、驱动路径独有；ADR-0012 补记八） */
+      live?: LiveToolOutput;
       state: ToolState;
     };
 
 /** 工具调用显示条目（ToolRow 的消费形状） */
 export type ToolCallItem = Extract<GroupItem, { kind: "toolCall" }>;
 
+/** 运行中工具的实时输出尾巴（ADR-0012 补记八）：执行期输出无条目载体，
+    由驱动层经可选入参汇入同一出口；Live Tail 不传即无尾巴（两路径能力差异是明示的） */
+export interface LiveToolOutput {
+  outputTail: string;
+  /** 输出全文长度（> outputTail.length = 输出仍在增长） */
+  totalLen?: number;
+}
+
+/** 运行中工具的实时尾巴表（toolCallId → 尾巴），buildTranscriptModel 的可选入参 */
+export type LiveTools = Record<string, LiveToolOutput>;
+
 /** Recap 的结算事实（GLOSSARY「Recap」）：只数可解释的量。
-    ADR-0013 写「N 步」——动作数 = 工具数 + 思考数，与这两档重复，故不单独承载。 */
+    ADR-0013 写「N 步」——动作数 = 工具数 + 思考数，与这两档重复，故不单独承载。
+    running / toolCounts / startedAt 是 TUI Mode 的运行态派生量（ADR-0014），
+    Standard 视图不消费即零改动。 */
 export interface GroupRecap {
   tools: number;
   thoughts: number;
   /** 其中失败的工具数（error 态） */
   failed: number;
+  /** 组内仍有 running 工具（TUI 摘要行运行态的判定） */
+  running: boolean;
+  /** 组内工具按名聚合计数（首次出现序）；不去重、不排除 edit/write（ADR-0014） */
+  toolCounts: { name: string; count: number }[];
+  /** 组首条目毫秒时间戳（运行态秒数锚，挂钟求值）；缺时间戳时留空，不发明 */
+  startedAt?: number;
+  /** 组内条目时间跨度（结算态「Ran for」的秒数）；缺时间戳时留空 */
+  durationMs?: number;
 }
 
 /** 层 2：Turn 内的条目——过程组与回答按源顺序交替（text 是分隔符，也是分组边界） */
@@ -277,6 +305,16 @@ export interface Turn {
   durationMs?: number;
   /** 本轮 tokens（assistant.usage.totalTokens 累加）；内核未给 usage 时留空 */
   tokens?: number;
+  /** 本轮工具命令总数（各过程组 tools 之和，ADR-0014）：TUI 结算汇总行的数据源 */
+  toolsTotal?: number;
+  /** 本轮思考总数（各过程组 thoughts 之和，ADR-0014）：纯思考轮汇总行的数据源 */
+  thoughtsTotal?: number;
+  /** 末个过程组 id（ADR-0014：TUI 贴底抽取的目标组）；本轮无组时缺省 */
+  tailGroupId?: string;
+  /** user 条目时刻（ms，ADR-0014：TUI 首 token 前空窗运行指示的计时锚）；无 user 或坏时间戳缺省 */
+  userAt?: number;
+  /** 本轮末条目时刻（ADR-0014）：汇总行的完成时间 */
+  endAt?: number;
   /** 本轮仍挂在内核流式草稿上（GLOSSARY「Draft」）：末条 assistant 是 stopReason "pending"。
       草稿是瞬态叠加，权威条目落盘后该标记自然消失——视图据此把 Draft 与落盘条目区分开。 */
   draft?: boolean;
@@ -313,7 +351,11 @@ function subCallStatus(value: unknown): ToolState | undefined {
  * 这正是「同一条 assistant 消息里 text→tool→text」能被正确分组的依据。
  * 注解级收缩：model_change / thinking_level_change 不渲染，session_info 仅首次。
  */
-function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations: SessionEntry[] } {
+function buildTurns(
+  branch: SessionEntry[],
+  liveTools?: LiveTools,
+  draft?: DraftThinking,
+): { turns: Turn[]; orphanAnnotations: SessionEntry[] } {
   // 预扫：配对表（toolCall → toolResult）与分支上出现过的 toolCall id（孤儿判定依据）
   const results = new Map<string, ToolResultMessage>();
   const callIds = new Set<string>();
@@ -334,14 +376,45 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
   const orphanAnnotations: SessionEntry[] = [];
   let turn: Turn | undefined;
   let group: GroupItem[] | undefined;
+  /** 组首条目毫秒时间戳（运行态秒数锚，ADR-0014）；开组时记，flush 时清 */
+  let groupStartedAt: number | undefined;
+  /** 组末条目毫秒时间戳（组级结算时长 = 末 − 首）；push 时推进，flush 时清 */
+  let groupLastAt: number | undefined;
+  /** 组内 assistant 条目的请求耗时（AssistantMessage.durationMs）：
+      纯思考组只有单条目（首末同刻，跨时长报不出），用它兜底「这组跑了多久」 */
+  let groupFallbackDuration: number | undefined;
   /** 当前轮的结算（turn 切换时重置）；j 与 turns 同步推进 */
   let settlement: TurnSettlement | undefined;
   let settled: TurnSettlement[] = [];
   const namedSeen = new Set<string>();
 
+  /** 开组（无则开）并记组首/组末条目时间戳——运行态秒数锚取组首、
+      结算时长取末 − 首（ADR-0014），缺时间戳一侧就不报，不发明 */
+  const ensureGroup = (entry: SessionEntry): GroupItem[] => {
+    const message = entry.type === "message" ? (entry as MessageEntry).message : undefined;
+    const t = timeOf(entry.timestamp) ?? timeOf((message as { timestamp?: number } | undefined)?.timestamp);
+    if (!group) {
+      group = [];
+      groupStartedAt = t;
+    }
+    if (t !== undefined) groupLastAt = groupLastAt === undefined ? t : Math.max(groupLastAt, t);
+    if (message?.role === "assistant") {
+      const duration = (message as AssistantMessage).durationMs;
+      if (typeof duration === "number") groupFallbackDuration = duration;
+    }
+    return group;
+  };
+
+  /** 条目毫秒时间戳：wire 层 ISO 字符串优先，消息体内毫秒数兜底 */
+  const at = (entry: SessionEntry, message: unknown): number | undefined =>
+    timeOf(entry.timestamp) ?? timeOf((message as { timestamp?: number } | undefined)?.timestamp);
+
   const flushGroup = () => {
     if (group?.length && turn) {
       const tools = group.filter((item) => item.kind === "toolCall");
+      // 分类计数：按工具名聚合、首次出现序；不去重、不排除 edit/write（ADR-0014）
+      const counts = new Map<string, number>();
+      for (const item of tools) counts.set(item.name, (counts.get(item.name) ?? 0) + 1);
       turn.items.push({
         kind: "group",
         id: `group-${group[0].id}`,
@@ -350,10 +423,23 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
           tools: tools.length,
           thoughts: group.length - tools.length,
           failed: tools.filter((item) => item.state === "error").length,
+          running: tools.some((item) => item.state === "running"),
+          toolCounts: [...counts].map(([name, count]) => ({ name, count })),
+          ...(groupStartedAt !== undefined ? { startedAt: groupStartedAt } : {}),
+          ...(groupStartedAt !== undefined &&
+          groupLastAt !== undefined &&
+          groupLastAt > groupStartedAt
+            ? { durationMs: groupLastAt - groupStartedAt }
+            : groupFallbackDuration !== undefined
+              ? { durationMs: groupFallbackDuration }
+              : {}),
         },
       });
     }
     group = undefined;
+    groupStartedAt = undefined;
+    groupLastAt = undefined;
+    groupFallbackDuration = undefined;
   };
   const ensureTurn = (firstId: string): Turn => {
     if (!turn) {
@@ -409,19 +495,33 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
       case "assistant": {
         const current = ensureTurn(entry.id);
         const assistant = message as AssistantMessage;
+        const entryAt = at(entry, assistant);
         for (const block of assistant.content) {
           if (block.type === "text" && block.text.trim()) {
             flushGroup();
             current.items.push({ kind: "text", id: `${entry.id}-t${current.items.length}`, text: block.text });
           } else if (block.type === "thinking") {
-            group ??= [];
-            group.push({ kind: "thinking", id: `${entry.id}-k${group.length}`, thinking: block.thinking, redacted: block.redacted });
+            const items = ensureGroup(entry);
+            // durationMs = 所在 assistant 条目的请求耗时（思考是请求主体）：完成思考行的耗时；
+            // thinkingComplete 只标在调用方指认的草稿条目上（内核 thinking_end 定稿信号）
+            items.push({
+              kind: "thinking",
+              id: `${entry.id}-k${items.length}`,
+              thinking: block.thinking,
+              redacted: block.redacted,
+              startedAt: entryAt,
+              durationMs: assistant.durationMs,
+              ...(draft?.entryId === entry.id && draft.thinkingComplete ? { thinkingComplete: true } : {}),
+            });
           } else if (block.type === "toolCall") {
-            group ??= [];
+            const items = ensureGroup(entry);
             const result = results.get(block.id);
             const output = result ? contentText(result.content) : undefined;
             const command = block.arguments?.command;
-            group.push({
+            const state = stateOf(result);
+            // 执行期输出尾巴（ADR-0012 补记八）：仅 running 态注入，结算态权威输出在 output 里
+            const tail = state === "running" ? liveTools?.[block.id] : undefined;
+            items.push({
               kind: "toolCall",
               id: block.id,
               name: block.name,
@@ -436,7 +536,10 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
                 TERMINAL_TOOLS.has(block.name) && typeof command === "string"
                   ? { command, output }
                   : undefined,
-              state: stateOf(result),
+              ...(entryAt !== undefined ? { startedAt: entryAt } : {}),
+              ...(result?.durationMs !== undefined ? { durationMs: result.durationMs } : {}),
+              ...(tail ? { live: tail } : {}),
+              state,
             });
           }
         }
@@ -454,8 +557,7 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
         // 配对结果已并入调用条目；孤儿（分支上无前置 toolCall，如中断后的迟到结果）补成合成条目
         if (callIds.has(result.toolCallId)) break;
         ensureTurn(entry.id);
-        group ??= [];
-        group.push({
+        ensureGroup(entry).push({
           kind: "toolCall",
           id: entry.id,
           name: result.toolName,
@@ -467,6 +569,7 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
           requested: undefined,
           subCalls: extractSubCalls(result.details),
           terminal: undefined,
+          ...(result.durationMs !== undefined ? { durationMs: result.durationMs } : {}),
           state: result.isError ? "error" : "ok",
         });
         break;
@@ -475,8 +578,7 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
         // 归一为调用显示条目：命令即摘要，取消/非零退出即错误
         const bash = message as BashExecutionMessage;
         ensureTurn(entry.id);
-        group ??= [];
-        group.push({
+        ensureGroup(entry).push({
           kind: "toolCall",
           id: entry.id,
           name: "bash",
@@ -511,9 +613,29 @@ function buildTurns(branch: SessionEntry[]): { turns: Turn[]; orphanAnnotations:
     if (s.first !== undefined && s.last !== undefined && s.last > s.first) {
       item.durationMs = s.last - s.first;
     }
+    if (s.last !== undefined) item.endAt = s.last;
     if (s.tokens !== undefined) item.tokens = s.tokens;
     if (s.draft) item.draft = true;
+    // TUI 贴底抽取（ADR-0014）的模型层派生量：尾组 id 与 user 条目时刻——
+    // 视图只按渲染模式与运行态决定是否消费，判定本身不留在视图层
+    item.tailGroupId = [...item.items].reverse().find((child) => child.kind === "group")?.id;
+    item.userAt = item.user ? Date.parse(item.user.timestamp) || undefined : undefined;
   });
+
+  // 本轮工具命令总数与思考总数（ADR-0014）：TUI 结算汇总行的数据源——
+  // 纯思考轮（无工具命令）同样出汇总行，第一段报思考数
+  for (const turn of turns) {
+    let total = 0;
+    let thoughts = 0;
+    for (const item of turn.items) {
+      if (item.kind === "group") {
+        total += item.recap.tools;
+        thoughts += item.recap.thoughts;
+      }
+    }
+    if (total > 0) turn.toolsTotal = total;
+    if (thoughts > 0) turn.thoughtsTotal = thoughts;
+  }
 
   return { turns, orphanAnnotations };
 }
@@ -574,10 +696,22 @@ export interface TranscriptModel {
  * 唯一派生入口：Entry 列表进，TranscriptModel 出。
  * 状态层（useSessionDetail）与视图层（Transcript）都只消费这个 interface；
  * 本函数即测试面——黄金样本断言的就是它的返回值。
+ * liveTools 是运行中工具的实时尾巴（ADR-0012 补记八）：驱动路径注入，Live Tail 不传。
  */
-export function buildTranscriptModel(entries: SessionEntry[]): TranscriptModel {
+/** 流式草稿元数据（ADR-0012 补记九）：thinkingComplete 是内核 thinking_end 的定稿信号，
+    只作用于调用方指认的那条草稿条目——完成思考在运行视图里即收起，不等正文开流 */
+export interface DraftThinking {
+  entryId: string;
+  thinkingComplete?: boolean;
+}
+
+export function buildTranscriptModel(
+  entries: SessionEntry[],
+  liveTools?: LiveTools,
+  draft?: DraftThinking,
+): TranscriptModel {
   const branch = buildActiveBranch(entries);
-  const { turns, orphanAnnotations } = buildTurns(branch.entries);
+  const { turns, orphanAnnotations } = buildTurns(branch.entries, liveTools, draft);
 
   // 被弃分支数只标注在首个 Turn 上（Recap 用），避免每轮重复
   if (turns[0] && branch.abandonedCount > 0) {

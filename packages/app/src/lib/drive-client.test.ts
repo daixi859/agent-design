@@ -116,7 +116,50 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     let state = applyServerFrame(undefined, attached);
     state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "想" }));
     state = applyServerFrame(state, event({ type: "delta", field: "text", delta: "答" }));
-    expect(state?.streaming).toEqual({ thinking: "想", text: "答" });
+    // 正文开流即思考定稿（ADR-0012 补记九）：thinkingComplete 是粘滞的完成标志；
+    // 计时锚随首个 delta 起表（ADR-0014）
+    expect(state?.streaming).toEqual({
+      thinking: "想",
+      text: "答",
+      thinkingComplete: true,
+      anchorAt: expect.any(String),
+    });
+  });
+
+  it("thinkingEnd 帧：思考定稿置粘滞标志（redacted thinking 无增量也能命中）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "想" }));
+    state = applyServerFrame(state, event({ type: "thinkingEnd" }));
+    expect(state?.streaming).toEqual({
+      thinking: "想",
+      thinkingComplete: true,
+      anchorAt: expect.any(String),
+    });
+  });
+
+  it("thinkingEnd 帧：streaming 未建（redacted 无增量直达）也容下标志（补记九的容忍）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "thinkingEnd" }));
+    expect(state?.streaming).toEqual({ thinkingComplete: true });
+    // 标志先落：此后首个 delta 在真草稿上沿用，不因迟到而丢失
+    state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "想" }));
+    expect(state?.streaming?.thinkingComplete).toBe(true);
+    expect(state?.streaming?.thinking).toBe("想");
+  });
+
+  it("计时锚随草稿生灭：首个 delta 起表沿用，落盘后下轮重新起表（不串轮、不串会话）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "想" }));
+    const anchor = state?.streaming?.anchorAt;
+    expect(anchor).toBeTruthy();
+    state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "再" }));
+    expect(state?.streaming?.anchorAt).toBe(anchor);
+    // 权威条目落盘 = 草稿让位 = 锚随之消失；下一轮 delta 重新起表
+    // （同毫秒内两次起表取值相同，不比 not.toBe，新锚存在即语义成立）
+    state = applyServerFrame(state, event({ type: "entry", entry: entry("e1") }));
+    expect(state?.streaming).toBeUndefined();
+    state = applyServerFrame(state, event({ type: "delta", field: "thinking", delta: "新" }));
+    expect(state?.streaming?.anchorAt).toBeTruthy();
   });
 
   it("权威条目到达：瞬态叠加整体让位（entry 是权威，ADR-0012）", () => {
@@ -162,13 +205,29 @@ describe("applyServerFrame · 帧到客户端状态", () => {
   it("toolCall 帧：start 亮起调用指示，end 按 id 匹配熄灭", () => {
     let state = applyServerFrame(undefined, attached);
     state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
-    expect(state?.streamingToolCall).toEqual({ id: "tc1", name: "bash" });
+    expect(state?.streamingToolCalls).toEqual([{ id: "tc1", name: "bash" }]);
     // 迟到的 end（id 不匹配）不得灭掉后来的 start
     state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc2", name: "edit" }));
     state = applyServerFrame(state, event({ type: "toolCall", phase: "end", id: "tc1", name: "bash" }));
-    expect(state?.streamingToolCall).toEqual({ id: "tc2", name: "edit" });
+    expect(state?.streamingToolCalls).toEqual([{ id: "tc2", name: "edit" }]);
     state = applyServerFrame(state, event({ type: "toolCall", phase: "end", id: "tc2", name: "edit" }));
-    expect(state?.streamingToolCall).toBeUndefined();
+    expect(state?.streamingToolCalls).toBeUndefined();
+  });
+
+  it("toolCall 帧：start 带 args，同 id 双发后到者覆盖（流式声明 → 执行开始，ADR-0012 补记八）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "pnpm bu" } }));
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash", args: { command: "pnpm build" } }));
+    expect(state?.streamingToolCalls).toEqual([{ id: "tc1", name: "bash", args: { command: "pnpm build" } }]);
+  });
+
+  it("toolCall 帧：update 按 id 覆盖输出尾巴；start 丢失时忽略（瞬态帧可丢）", () => {
+    let state = applyServerFrame(undefined, attached);
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "update", id: "ghost", name: "bash", outputTail: "x", totalLen: 1 }));
+    expect(state?.streamingToolCalls).toBeUndefined();
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc1", name: "bash" }));
+    state = applyServerFrame(state, event({ type: "toolCall", phase: "update", id: "tc1", name: "bash", outputTail: "部分输出", totalLen: 4 }));
+    expect(state?.streamingToolCalls).toEqual([{ id: "tc1", name: "bash", outputTail: "部分输出", totalLen: 4 }]);
   });
 
   // end 帧丢失时的条目侧兜底：权威条目引用了正在指示的调用，指示随之熄灭（与草稿让位同权威语义）
@@ -183,13 +242,13 @@ describe("applyServerFrame · 帧到客户端状态", () => {
       message: { role: "toolResult", toolCallId: "tc1", toolName: "bash", content: [], isError: false },
     };
     state = applyServerFrame(state, event({ type: "entry", entry: toolResultEntry }));
-    expect(state?.streamingToolCall).toBeUndefined();
+    expect(state?.streamingToolCalls).toBeUndefined();
 
     // 其它引用（无关注解、别的调用）不清指示
     state = applyServerFrame(state, event({ type: "toolCall", phase: "start", id: "tc2", name: "edit" }));
     const annotation: SessionEntry = { type: "compaction", id: "c9", parentId: null, timestamp: "T2", tokensBefore: 1 };
     state = applyServerFrame(state, event({ type: "entry", entry: annotation }));
-    expect(state?.streamingToolCall).toEqual({ id: "tc2", name: "edit" });
+    expect(state?.streamingToolCalls).toEqual([{ id: "tc2", name: "edit" }]);
     const otherResult: SessionEntry = {
       type: "message",
       id: "tr2",
@@ -198,7 +257,7 @@ describe("applyServerFrame · 帧到客户端状态", () => {
       message: { role: "toolResult", toolCallId: "other", toolName: "read", content: [], isError: false },
     };
     state = applyServerFrame(state, event({ type: "entry", entry: otherResult }));
-    expect(state?.streamingToolCall).toEqual({ id: "tc2", name: "edit" });
+    expect(state?.streamingToolCalls).toEqual([{ id: "tc2", name: "edit" }]);
     const assistantEntry: SessionEntry = {
       type: "message",
       id: "a1",
@@ -207,7 +266,7 @@ describe("applyServerFrame · 帧到客户端状态", () => {
       message: { role: "assistant", content: [{ type: "toolCall", id: "tc2", name: "edit", arguments: {} }] },
     };
     state = applyServerFrame(state, event({ type: "entry", entry: assistantEntry }));
-    expect(state?.streamingToolCall).toBeUndefined();
+    expect(state?.streamingToolCalls).toBeUndefined();
   });
 
   it("queue 帧：排队快照全量覆盖", () => {
@@ -233,12 +292,12 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     state = applyServerFrame(state, event({ type: "queue", steering: ["插话"], followUp: [] }));
     state = applyServerFrame(state, event({ type: "compaction", phase: "start", reason: "manual" }));
     const pending: DriveSession = { ...state!, pendingPrompt: "问" };
-    expect(pending.streamingToolCall).toBeDefined();
+    expect(pending.streamingToolCalls).toBeDefined();
     expect(pending.queued).toBeDefined();
     expect(pending.compacting).toBe(true);
     const settled = applyServerFrame(pending, event({ type: "status", status: "idle", aborted: true }))!;
     expect(settled.status).toBe("idle");
-    expect(settled.streamingToolCall).toBeUndefined();
+    expect(settled.streamingToolCalls).toBeUndefined();
     expect(settled.queued).toBeUndefined();
     expect(settled.compacting).toBeUndefined();
     expect(settled.pendingPrompt).toBeUndefined();
@@ -270,10 +329,10 @@ describe("瞬态条目合成 · 喂给同一 buildTranscriptModel 出口（ADR-0
     expect(blocks.map((block) => block.type)).toEqual(["thinking", "text"]);
   });
 
-  it("调用中指示合成为 toolCall 块：无配对结果即 running（模型层判定）", () => {
-    const [draft] = streamingEntries(undefined, { id: "tc1", name: "bash" }, null);
+  it("调用中指示合成为 toolCall 块：无配对结果即 running（模型层判定）；执行参数随块带入（补记八）", () => {
+    const [draft] = streamingEntries(undefined, [{ id: "tc1", name: "bash", args: { command: "ls" } }], null);
     expect(((draft as MessageEntry).message as AssistantMessage).content).toEqual([
-      { type: "toolCall", id: "tc1", name: "bash" },
+      { type: "toolCall", id: "tc1", name: "bash", arguments: { command: "ls" } },
     ]);
   });
 

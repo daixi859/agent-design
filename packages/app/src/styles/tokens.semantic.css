@@ -77,6 +77,14 @@
   --primary-btn-bg: #141413;
   --primary-btn-fg: #faf9f5;
 
+  /* ---- TUI Mode（ADR-0014：终端模拟的文本形态，无底无框） ----
+     字色三档阶梯（迭代）：工具名/思考最强（text）、摘要中等（dim）、时间最浅（faint）。
+     状态色不另造：运行用赤陶文字档，成功/失败复用 --success / --danger。 */
+  --tui-text: #3f3e39;
+  --tui-dim: #73716a;
+  --tui-faint: #a5a29a;
+  --tui-run: #a84e30;
+
   /* ---- 滚动条 ----
      thumb 刻意保持 macOS 细滑质感（约 1.8:1）：滚动条不属于 WCAG 1.4.11 的
      「理解内容所必需的图形」，此处的取舍是观感优先，勿再标注对比度声明。 */
@@ -176,6 +184,12 @@
   /* 主按钮反转墨色：暗画布上 #141413 仅 1.2:1，形同隐形 */
   --primary-btn-bg: #f5f4ef;
   --primary-btn-fg: #1f1e1d;
+
+  /* ---- TUI Mode（文本形态，无底无框；字色三档阶梯同浅色） ---- */
+  --tui-text: #d9d7cd;
+  --tui-dim: rgba(235, 233, 224, 0.54);
+  --tui-faint: rgba(235, 233, 224, 0.34);
+  --tui-run: #e0876a;
 
   --focus-color: #e0876a;
   /* 发丝内描边：值随主题 separator 变化，结构同亮色 */

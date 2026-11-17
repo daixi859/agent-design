@@ -41,8 +41,25 @@ export type DriveEventBody =
   | { type: "entry"; entry: SessionEntry }
   /** 瞬态流式增量（打字机效果），用完即弃 */
   | { type: "delta"; field: "text" | "thinking"; delta: string }
-  /** 瞬态工具调用指示：参数流式/执行期间亮起，配对的 end 或权威条目到达即灭 */
-  | { type: "toolCall"; phase: "start" | "end"; id: string; name: string }
+  /** 思考定稿信号（内核 thinking_end，ADR-0012 补记九）：思考块的权威闭合——
+   *  此后 thinking 不再增长，正文/工具块接续。瞬态帧可丢：首个 text delta 兜底同义 */
+  | { type: "thinkingEnd" }
+  /** 瞬态工具调用指示：参数流式/执行期间亮起，配对的 end 或权威条目到达即灭。
+   *  start 带 args（tool_execution_start，参数摘要用）；update 带 outputTail
+   *  （tool_execution_update.partialResult 文本尾部截断 + totalLen，ADR-0012 补记八）；
+   *  end 不扩（耗时从落盘 toolResult 的 durationMs 取）。瞬态帧可丢：权威内容仍以条目为准 */
+  | {
+      type: "toolCall";
+      phase: "start" | "update" | "end";
+      id: string;
+      name: string;
+      /** 仅 start：执行参数（tool_execution_start.args） */
+      args?: Record<string, unknown>;
+      /** 仅 update：已流出输出的文本尾部（截断推送，非数据缺损） */
+      outputTail?: string;
+      /** 仅 update：输出全文长度（totalLen > tail 长度 = 输出仍在增长） */
+      totalLen?: number;
+    }
   /** 瞬态排队快照（pi queue_update）：steer / followUp 待送达的内容全量覆盖 */
   | { type: "queue"; steering: string[]; followUp: string[] }
   /** 压缩生命周期（pi compaction_start/end）：期间内核拒绝新 prompt */

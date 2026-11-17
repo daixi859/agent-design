@@ -48,7 +48,7 @@ export function SessionView() {
           onSend: (text: string) => drive.sendText(id, text),
           onFollowUp: (text: string) => drive.followUp(id, text),
           onAbort: () => drive.abort(id),
-          callingTool: data.drive.streamingToolCall?.name,
+          callingTool: data.drive.streamingToolCalls?.at(-1)?.name,
           queuedCount: queuedCountOf(data.drive),
           compacting: data.drive.compacting,
         }

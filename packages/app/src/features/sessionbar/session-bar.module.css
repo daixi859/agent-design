@@ -74,3 +74,9 @@
 .drivePillRunning .driveDot {
   background: var(--success);
 }
+
+/* TUI 渲染模式快切（ADR-0014）：激活态用 accent-subtle 底标出（与 branched 徽标同语言） */
+.modeActive {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}

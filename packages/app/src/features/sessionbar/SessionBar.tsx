@@ -1,9 +1,10 @@
 /** Session Bar（ADR-0009）：内容区标题栏——title / branched 徽标由 MainShell 派生下发；
-    动作区：驱动（Attach/解除 + 状态徽标）、浏览器全屏、主题切换。 */
+    动作区：驱动（Attach/解除 + 状态徽标）、浏览器全屏、渲染模式快切（ADR-0014）、主题切换。 */
 import { useEffect, useState } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { useTheme } from "../../state/useTheme";
 import { useLocale } from "../../state/useLocale";
+import { useViewMode } from "../../state/useViewMode";
 import { cx } from "../../lib/cx";
 import { driveBadgeKey } from "../../lib/drive-labels";
 import { Icon } from "../../ui/Icon";
@@ -34,6 +35,7 @@ export function SessionBar({
   attach?: SessionBarAttach;
 }) {
   const [theme, setTheme] = useTheme();
+  const [viewMode, setViewMode] = useViewMode();
   const { t } = useLocale();
   const [fullscreen, setFullscreen] = useState(() => Boolean(document.fullscreenElement));
 
@@ -91,6 +93,14 @@ export function SessionBar({
           icon={fullscreen ? "contract" : "expand"}
           title={fullscreen ? t("exitFullScreen") : t("fullScreen")}
           onClick={toggleFullscreen}
+        />
+        {/* TUI 渲染模式快切（ADR-0014）：与主题切换同构的单钮循环；激活态 accent-subtle 底 */}
+        <IconButton
+          icon="terminal"
+          title={t("toggleViewMode")}
+          aria-pressed={viewMode === "tui"}
+          className={cx(viewMode === "tui" && styles.modeActive)}
+          onClick={() => setViewMode(viewMode === "tui" ? "standard" : "tui")}
         />
         <IconButton
           icon={theme === "dark" ? "sun" : "moon"}

@@ -14,16 +14,39 @@ export function normalizeSessionEvent(event: AgentSessionEvent): DriveEventBody[
       const ae = event.assistantMessageEvent;
       if (ae.type === "text_delta") return [{ type: "delta", field: "text", delta: ae.delta }];
       if (ae.type === "thinking_delta") return [{ type: "delta", field: "thinking", delta: ae.delta }];
+      // 思考定稿（ADR-0012 补记九）：thinking 块的权威闭合信号。redacted thinking
+      // 无 delta 直接 start→end，客户端需容忍「无 thinking 增量先到」的 thinkingEnd
+      if (ae.type === "thinking_end") return [{ type: "thinkingEnd" }];
       // 工具调用参数开始流式：亮起「调用中」指示。id/name 取自 partial 的对应内容块
       // （与上游 json-event.ts 的 JSON 协议同一取法）；形状不符则吞，绝不猜测。
       if (ae.type === "toolcall_start") {
         const block = ae.partial?.content?.[ae.contentIndex];
         if (block?.type === "toolCall") {
-          return [{ type: "toolCall", phase: "start", id: block.id, name: block.name }];
+          return [toolCallStart(block.id, block.name, block.arguments)];
         }
         return [];
       }
       return [];
+    }
+    case "tool_execution_start":
+      // 执行开始（ADR-0012 补记八）：带完整参数，运行行据此显示参数摘要；
+      // 与流式期的 toolcall_start 同 id 双发，客户端按 id 覆盖——执行期参数更完整
+      return [toolCallStart(event.toolCallId, event.toolName, event.args)];
+    case "tool_execution_update": {
+      // 执行中输出（ADR-0012 补记八）：取 partialResult 文本尾部截断推送；
+      // 瞬态帧可丢，权威输出仍以落盘条目为准。形状不符则吞，绝不猜测
+      const output = partialOutputTail(event.partialResult);
+      if (!output) return [];
+      return [
+        {
+          type: "toolCall",
+          phase: "update",
+          id: event.toolCallId,
+          name: event.toolName,
+          outputTail: output.tail,
+          totalLen: output.totalLen,
+        },
+      ];
     }
     case "tool_execution_end":
       // 执行结束：熄灭「调用中」指示（正常路径由它关闭；abort 等异常路径由 idle 兜底）
@@ -53,4 +76,39 @@ export function normalizeSessionEvent(event: AgentSessionEvent): DriveEventBody[
     default:
       return [];
   }
+}
+
+/** start 帧的统一出口：参数存在且非空对象才带（流式声明期与执行开始共用） */
+function toolCallStart(
+  id: string,
+  name: string,
+  args: unknown,
+): DriveEventBody {
+  const record =
+    args && typeof args === "object" && !Array.isArray(args) && Object.keys(args).length > 0
+      ? (args as Record<string, unknown>)
+      : undefined;
+  return record ? { type: "toolCall", phase: "start", id, name, args: record } : { type: "toolCall", phase: "start", id, name };
+}
+
+/** 输出尾部截断上限：运行行的流出预览不需要全文，4000 字符约一屏半 */
+const OUTPUT_TAIL_MAX = 4000;
+
+/** partialResult 的文本尾部（ADR-0012 补记八）：拼 content[] 的 text 块，
+    超上限取尾部。形状不符或无文本返回 undefined——绝不猜测。 */
+function partialOutputTail(partialResult: unknown): { tail: string; totalLen: number } | undefined {
+  if (!partialResult || typeof partialResult !== "object") return undefined;
+  const content = (partialResult as { content?: unknown }).content;
+  if (!Array.isArray(content)) return undefined;
+  let text = "";
+  for (const block of content) {
+    if (block && typeof block === "object" && (block as { type?: unknown }).type === "text") {
+      const value = (block as { text?: unknown }).text;
+      if (typeof value === "string") text += value;
+    }
+  }
+  if (!text) return undefined;
+  return text.length <= OUTPUT_TAIL_MAX
+    ? { tail: text, totalLen: text.length }
+    : { tail: text.slice(-OUTPUT_TAIL_MAX), totalLen: text.length };
 }

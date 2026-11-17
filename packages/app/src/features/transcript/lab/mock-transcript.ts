@@ -130,7 +130,7 @@ export const MOCK_TURNS: MockTurn[] = [
     segments: [
       {
         kind: "thinking",
-        text: "重定向循环最可能来自守卫读到了过期的 cookie。计划：先看 session.ts 的 refresh 路径，再看登录路由的跳转条件，最后确认 cookie 的 SameSite 设置。\n\n先定位 refreshSession 对 payload.sub 的处理，那里一旦抛错就会被上层当成未登录。",
+        text: "The user asks for today's GitHub trending projects. Note the date discrepancy — the fetched trending page is the primary source: https://github.com/trending?since=daily. I should be careful: some search results appear to be about a different date.\n\n先定位 refreshSession 对 payload.sub 的处理，那里一旦抛错就会被上层当成未登录。",
       },
       { kind: "tool", tool: { name: "read", state: "ok", args: { path: "src/auth/session.ts", offset: 1, limit: 120 }, output: "export async function refreshSession(token: string) {\n  const payload = await verify(token)\n  return extendSession(payload.sub)\n}" } },
       { kind: "tool", tool: { name: "grep", state: "ok", args: { pattern: "refreshSession", path: "src", limit: 40 }, output: "src/auth/session.ts:40:export async function refreshSession(token: string) {\nsrc/auth/guard.ts:18:    await refreshSession(cookie.token)\nsrc/routes/login.ts:52:  refreshSession(token)" } },
@@ -309,7 +309,8 @@ export function mockEntriesFor(turn: MockTurn): SessionEntry[] {
       push({
         type: "message",
         id,
-        message: { role: "assistant", content: [content] },
+        // 请求耗时（内核 AssistantMessage.durationMs 的落盘形态）：思考行耗时展示的数据源
+        message: { role: "assistant", durationMs: 3200, content: [content] },
       } as never);
       // 首条 assistant 落盘后立刻插入被弃分支（parentId 指向它）
       if (!forkInjected && turn.abandoned) {

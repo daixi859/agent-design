@@ -10,8 +10,8 @@
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
     "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono:
-    ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
-    "Microsoft YaHei", monospace;
+    "Anthropic Mono Web", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
+    Consolas, -apple-system, "PingFang SC", "Microsoft YaHei", monospace;
 
   /* ---- 字号（纯 size；行高用 --leading-*，font-size 引用才合法） ---- */
   --text-micro: 10px;
@@ -34,7 +34,9 @@
     calc(var(--content-font-size) - 1px),
     max(13px, calc(var(--content-font-size) - 2px))
   );
-  --content-font-delta-secondary: calc(var(--content-font-size-secondary) - 13px);
+  --content-font-delta-secondary: calc(
+    var(--content-font-size-secondary) - 13px
+  );
 
   /* ---- 行高 ---- */
   --leading-micro: 14px;

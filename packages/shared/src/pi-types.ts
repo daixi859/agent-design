@@ -214,6 +214,10 @@ export interface SessionSnapshot {
 export interface StreamingDraft {
   text?: string;
   thinking?: string;
+  /** 思考块已定稿（内核 thinking_end 信号，ADR-0012 补记九）：思考完成即收起，不等正文 */
+  thinkingComplete?: boolean;
+  /** 草稿计时锚（首轮 delta 时刻，ADR-0014）：挂锚随草稿生灭，per-session 不串（原模块级单例已废） */
+  anchorAt?: string;
 }
 
 export interface ModelChangeEntry extends EntryBase {

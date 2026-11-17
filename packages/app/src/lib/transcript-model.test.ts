@@ -634,7 +634,54 @@ describe("buildTranscriptModel · Recap 结算事实（ADR-0013）", () => {
       },
     ]);
     const group = model.turns[0].items[0];
-    expect(group.kind === "group" && group.recap).toEqual({ tools: 2, thoughts: 1, failed: 1 });
+    // running / toolCounts / startedAt 是 TUI Mode 的运行态派生量（ADR-0014），随 recap 一并结算
+    expect(group.kind === "group" && group.recap).toEqual({
+      tools: 2,
+      thoughts: 1,
+      failed: 1,
+      running: false,
+      toolCounts: [
+        { name: "read", count: 1 },
+        { name: "bash", count: 1 },
+      ],
+      startedAt: Date.parse(TS),
+    });
+  });
+
+  it("纯思考组的结算时长兜底 assistant.durationMs（无工具调用时头部不空白，ADR-0014 迭代）", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [thinking("想")], { durationMs: 4200 }),
+    ]);
+    const group = model.turns[0].items[0];
+    expect(group.kind === "group" && group.recap).toMatchObject({
+      tools: 0,
+      thoughts: 1,
+      failed: 0,
+      running: false,
+      toolCounts: [],
+      durationMs: 4200,
+    });
+  });
+
+  it("分类计数同名累加、保持首次出现序；组内存在无配对结果的调用即 running", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("m1", "u1", [call("t1", "bash"), call("t2", "read"), call("t3", "bash"), call("t4", "read")]),
+      toolResult("r1", "m1", "t1", "bash"),
+      toolResult("r2", "r1", "t2", "read"),
+      // t3 / t4 无配对结果：running
+    ]);
+    const group = model.turns[0].items[0];
+    expect(group.kind === "group" && group.recap).toMatchObject({
+      running: true,
+      toolCounts: [
+        { name: "bash", count: 2 },
+        { name: "read", count: 2 },
+      ],
+    });
   });
 
   it("耗时 = 本轮末条目 − user 条目；tokens 取 assistant.usage 累加", () => {
