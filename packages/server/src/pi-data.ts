@@ -234,7 +234,8 @@ async function tailSession(id: string, offset: number) {
 
 // ---------- connect 中间件 ----------
 
-function json(res: ServerResponse, status: number, data: unknown) {
+/** JSON 响应助手：pi-data 与 main.ts（/api/catalog，补记十四）共用 */
+export function json(res: ServerResponse, status: number, data: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.end(JSON.stringify(data));

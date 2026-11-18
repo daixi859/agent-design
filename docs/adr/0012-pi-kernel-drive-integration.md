@@ -180,3 +180,23 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 **边界**：`inflightFile` 的线性反查在待发送序列只有个位数（同一次 attach 空窗内的连发）时可忽略；缓存投影是有损的——浏览态永远拿不到命令目录，Trigger Menu 仍只在驱动态出现（与补记十一同口径）。`command` 字段对命令类型的枚举是协议知识，新增命令类型时须在 `isTextCommandFailure` 里重新判定。
 
 **后果**：`use-drive` 的乐观状态撤销收敛到一个 `dropOptimistic(ids)`（`failPendingSends` / `failPendingSend` / `release` 三处共用，疑似重复代码就地消除）；`Composer` 的输入区状态由四个互相编码的布尔收敛为一元状态机 `ComposerMode = driven | lazy | foreign | locked`，模型/档位分流抽 `selectModel` / `selectThinkingLevel`；测试补三则（setModel/setThinkingLevel 被拒不抹待回显、未携 command 按文本处理、`cacheableCatalog` 只留 model 切片）。
+
+## 补记十四（浏览态目录兜底）：全局模型目录走 REST——「首次浏览只读」边界修订
+
+**问题**：补记十二把浏览态 Model Seat 押在 per-session 目录缓存上，而缓存只在 attached 帧到达时写入——从未被本端接管过的会话（CLI 创建的历史会话占绝大多数）首次浏览永远无目录，Model Seat 自动禁为只读，「换模型再发」手势对这类会话整体断档。补记十二「首次浏览维持只读」的取舍在历史会话场景下代价过大，且目录的 `models` 列表本身并不强会话特有（来自全局 models 快照按已配置服务商过滤，会话级的只有 current / thinkingLevel 两值）。
+
+**决定**：core 增全局模型目录只读投影（`ModelRuntime.create()` 独立装配，与 createAgentSession 未传 agentDir 的会话运行时同源：同一份本地 auth/models 快照），server 在 pi-data fallthrough 前直连暴露 `GET /api/catalog`，返回缺省 current / thinkingLevel 的 ModelCatalog（`GlobalCatalog`）。客户端浏览态在 per-session 缓存缺席时以全局目录兜底渲染可选菜单（缓存优先——它带会话 clamp 过的档位）；选择仍走挂起选择、首条发送兑付，Send-to-Attach 语义不变。读目录是纯只读操作，不触碰任何会话状态，ADR-0012「浏览路径只读」的本意（浏览不驱动）未被破坏。
+
+**边界**：命令目录当时仍只随 attach 下发（随后补记十五扩入全局目录与缓存）；全局目录不过会话——无「当前模型保留」规则，thinkingLevels 按模型推导（越界的最终 clamp 仍在内核）；服务端每请求新建 runtime（本地快照读取，allowModelNetwork 默认关，无网络刷新），客户端每页加载至多取一次（成功 memo，失败不缓存、重挂载重试，缺席只是菜单空）；per-session 缓存的写穿与 localStorage 续命机制不变，全局目录不落盘。
+
+**后果**：`shared/protocol` 增 `GlobalCatalog`；core 增 `catalog-map`（条目级映射自 pi-session-source 抽出，会话/全局两路共用，已测）与 `global-catalog`（过滤投影，已测）、`globalCatalog` 装配（薄层不单测）；server `main.ts` 增该端点（目录是内核态，不属 pi-data 文件访问层，`json` 助手自 pi-data 导出共用）；app 增 `state/global-catalog`（zustand 切片 + 模块级 memo）与 `pi-client.fetchCatalog`；`SessionView` 浏览态目录改「会话缓存 ?? 全局目录」，GLOSSARY Model Seat 词条同步。另：hook 纪律的一则新变体——「缓存 ?? 全局」最初写成 `useCachedCatalog(id) ?? useGlobalCatalog()` 链在同一表达式里，`??` 短路使缓存命中时少调一粒 hook（attach 完成目录进缓存即崩，"Rendered fewer hooks than expected"）；两粒 hook 须各自无条件调用、求值后再合并。
+
+## 补记十五（命令目录兜底）：全局目录扩入 commands，Trigger Menu 浏览态可用
+
+**问题**：补记十四把全局目录限定在 models，Trigger Menu 因此仍属驱动态——浏览态输入区常开（Send-to-Attach），但 `/` 无菜单、加号不渲染，命令的手势对历史会话断档；而命令目录的两类菜单源（prompt 模板与 skills）来自 `ResourceLoader`，本就可独立于会话装配，随 attach 下发只是实现路径而非必要耦合。
+
+**决定**：`GlobalCatalog` 扩入 `commands`（只含 prompt 与 skills——扩展命令需会话内运行器且本就不入菜单），core `globalCatalog()` 装配改「ModelRuntime + DefaultResourceLoader（server 进程 cwd）」，与 pi CLI 同目录启动同源；per-session 缓存同步扩界收 `commands`（`CachedCatalog` 改 `Pick<SessionCatalog, "model" | "commands">`，补记十二「命令目录不缓存」边界废止）——会话缓存是会话所属项目的命令，比 server cwd 的全局投影更贴切，全局目录只兜首次浏览的底。浏览态选中命令落 Command Chip，随首条发送 attach 后由内核解释：会话 cwd 无此命令时走既有 commandFailed 错误条（与挂起模型选择兑付失败同构）。
+
+**边界**：Composer 的触发检测条件由「已驱动」放宽为「可输入」（driven / lazy 两态），他属驱动与不可驱动仍不触发；加号以「可输入且有命令可选」在场；驱动态目录仍以 attached 帧为准（新鲜且含扩展命令全集），缓存与全局投影只在浏览态消费。挂起选择（模型/档位）机制不变。
+
+**后果**：core `catalog-map` 增 `promptCommandOf` / `skillCommandOf`（会话与全局两路共用，已测）、`global-catalog` 增 `globalCommandEntries` / `CatalogResourcesLike`（已测）；`globalModelCatalog` 改名 `globalCatalog`；app `drive-client.cacheableCatalog` 带 commands 切片（启动灌入的旧完整 SessionCatalog 经收窄自动迁移）；`Composer` 命令目录改「attached 帧 ?? browsingCatalog.commands」，GLOSSARY Trigger Menu 词条同步。

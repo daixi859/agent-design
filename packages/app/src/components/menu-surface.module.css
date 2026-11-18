@@ -66,7 +66,7 @@
 
 .item {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: var(--space-2);
   inline-size: 100%;
   padding: var(--space-1h) var(--space-2);
@@ -86,22 +86,25 @@
   }
 }
 
-.itemIcon {
-  flex: none;
-  color: var(--text-2);
-  margin-block-start: 1px;
-}
-
+/* 行主体：单行排布——名称在前、描述紧跟其后（浅色，不换行不横滚，超出即省略号，
+   Trigger Menu / 选择器行的统一口径）；overflow hidden 兜底极端长名称不出界 */
 .itemBody {
-  flex: 1;
-  min-inline-size: 0;
-}
-
-.itemTitle {
   display: flex;
   align-items: baseline;
   gap: var(--space-1h);
-  font-weight: var(--weight-medium);
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.itemTitle {
+  /* shrink 近零：收缩由描述全额吸收（高权重），名称不因 1px 级分配差误触省略号；
+     名称自身超长时仍可省略（真溢出经整数舍入后 scrollWidth 必大于 clientWidth） */
+  flex: 0 0.01 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-regular);
 }
 
 .itemHint {
@@ -110,28 +113,33 @@
   font-weight: var(--weight-regular);
 }
 
+/* 描述紧跟名称之后（不吸收剩余空间、不推向行尾）：高 shrink 权重让描述先于名称
+   收缩省略，名称尽量完整 */
 .itemDesc {
-  margin-block-start: 1px;
-  color: var(--text-2);
-  font-size: var(--text-caption);
+  flex: 0 100 auto;
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-4);
+  font-size: var(--text-caption);
+}
+
+/* 紧随名称的行内徽标（视觉 Tag 等）：不收缩，名称之后、描述之前的固定侧位 */
+.itemBadge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
 }
 
 /* 行尾插槽（✓ 等行内末端内容）：推向行尾，随行首对齐 */
 .itemTrailing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   flex: none;
   color: var(--accent-text);
   margin-block-start: 1px;
-}
-
-/* 行内能力徽标（模型行尾的图片输入标记）：弱化色，随 title 提示语义 */
-.itemFlag {
-  flex: none;
-  align-self: center;
-  display: inline-flex;
-  color: var(--text-4);
 }
 
 .empty {

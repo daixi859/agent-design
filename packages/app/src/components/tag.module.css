@@ -1,0 +1,13 @@
+/* Tag：弱化行内徽标（GLOSSARY「Base Component」）——短文本标记（能力/状态词），
+   无业务语义，文案与提示由消费方给；配方引用语义层令牌（ADR-0001） */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-2);
+  font-size: var(--text-micro);
+  line-height: 1.6;
+  white-space: nowrap;
+}

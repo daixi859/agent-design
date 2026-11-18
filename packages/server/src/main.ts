@@ -6,9 +6,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { join, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SessionRegistry, openPiSession } from "@pi-studio/core";
+import { SessionRegistry, globalCatalog, openPiSession } from "@pi-studio/core";
 import type { DriveCommand } from "@pi-studio/shared/protocol";
-import { createPiDataApi } from "./pi-data.ts";
+import { errorMessage } from "@pi-studio/shared/errors";
+import { createPiDataApi, json } from "./pi-data.ts";
 import { staticRelPath, stripApiPrefix } from "./http-routing.ts";
 import { createWsGateway, type DriveOutcome } from "./ws-gateway.ts";
 
@@ -121,6 +122,15 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
   const apiUrl = stripApiPrefix(raw);
   if (apiUrl !== undefined) {
     req.url = apiUrl;
+    // 全局目录（补记十四/十五）：浏览态 Model Seat 与 Trigger Menu 的兜底菜单源。
+    // 目录是内核全局态，不属 pi-data 的文件访问层，在 fallthrough 前直连 core 的只读投影
+    if (req.method === "GET" && pathname === "/api/catalog") {
+      globalCatalog().then(
+        (catalog) => json(res, 200, catalog),
+        (error) => json(res, 500, { error: errorMessage(error) }),
+      );
+      return;
+    }
     // pi-data 的 fallthrough 仍按原 pathname 走静态：别拿已重写的 req.url 再算一次
     void piDataApi(req, res, () => serveStatic(res, pathname));
     return;

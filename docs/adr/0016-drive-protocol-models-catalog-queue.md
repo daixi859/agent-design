@@ -26,3 +26,23 @@
 - **目录只列已添加（配置过凭据）的服务商**：内核 `getAllModels()` 是 models.dev 全集，未配置的服务商模型既切不过去（`getModel` 未配凭据即 throw）也不该入眼。core 映射层按 `hasConfiguredAuth(provider)` 过滤（「已添加」的内核口径），当前模型始终保留——会话正跑在它上面，不因凭据判定时序而消失。切换仅会话级的语义不变。
 - **条目扩 `providerName`**（可选，内核 `Provider.name`）：分组头展示服务商名而非裸 id；同名同 id 时缺省。客户端 ModelSeat 按 provider 首现顺序分组渲染，搜索连服务商名一起匹配；行级 provider 描述随分组头退役。分组头为分割线式（短分割线 — 服务商名 — 通栏分割线），搜索框在长列表滚动时吸顶。
 - **条目扩 `supportsImages`**（可选，内核 `Model.input` 含 `"image"`）：Model Seat 行内图片输入徽标，读者据此判断能否贴图提问；纯展示，不做交互过滤。
+
+## 补记二（Trigger Menu 视觉收敛轮）：菜单只收 skills 与 prompt 模板
+
+**问题**：Trigger Menu 首版列三类透传目录加内建 compact，图标按来源映射、行内标题 medium 字重——实测目录里扩展命令噪音大（与 skills/模板争夺注意力），内建 compact 与「运行态占位符已挡压缩期输入」的定位重叠，菜单视觉层级偏重。
+
+**决定**：菜单收敛为 **skills 与 prompt 模板两类、按来源分组**（技能在前、提示词在后，组头沿用分割线式）；扩展命令不再入菜单，内建 compact 退役（`onCompact` UI 链路拆除——协议 `compact` 命令与内核能力保留，手动压缩暂无 UI 入口，后续需要时挂设置或快捷键）。行样式去图标、标题退常规字重；目录协议（`commands` 三类）不变，收敛是客户端消费层的过滤（`menuCommandsFromCatalog`，已测）。
+
+**边界**：`/` 行首触发与 Command Chip 语义不变；底栏加号为第二入口（与 `/` 同一菜单，见 ADR-0017 补记二）。`supportsImages` 徽标从图片 SVG 改为「视觉」文字 Tag（通用 Tag 组件首用），纯展示语义不变。
+
+**后果**：`trigger-menu` 增 `menuCommandsFromCatalog` / `groupMenuCommands` 纯函数（已测），`MenuCommand` 去掉 `icon` / `builtin` 字段；Composer 的命令 useMemo 只做映射；GLOSSARY Trigger Menu 词条同步。
+
+## 补记三（命令分组回归）：内建 compact 以「命令」组重入 Trigger Menu
+
+**问题**：补记二把内建 compact 退役后，手动压缩无 UI 入口；验收反馈要一个可扩展的内建命令分组（后续客户端本地动作都归此），compact 是第一个成员——补记二「与占位符定位重叠」的顾虑被高估：压缩与「压缩期输入被挡」是因果两态，入口在场才能触发前者。
+
+**决定**：菜单恢复三组固定序——**技能 → 提示词 → 命令（内建）**；内建命令是客户端知识（描述走 i18n，纯逻辑层 `trigger-menu` 只定 `source: "builtin"` 与分组序，不持文案），由 Composer 在 UI 层构造拼入。compact 选中落 Command Chip，发送时走 `onCompact` 兑付（`DriveClient.compact` 回归，协议 `compact` 命令原本就保留）——不透传内核 `prompt()`，正文「内建命令是 TUI 层专属」的边界不变。**内建命令仅驱动态入菜单**：兑付通道在驱动连接上，浏览态无路径；目录透传两类不受影响（浏览态照旧全局目录兜底）。
+
+**边界**：`/` 触发、加号入口、Command Chip 语义与补记二一致；扩展命令仍不入菜单；压缩期内核拒绝新 prompt，输入区由 compacting 占位符接管（既有）。
+
+**后果**：`trigger-menu` 的 `MenuCommand.source` 加 `"builtin"`、`GROUP_ORDER` 加 `"builtin"`（已测）；`draft-store` 的 chip source 合法值同步；i18n 增 `groupCommands` / `cmdCompactDesc`；Composer 增 `onCompact` 兑付分支与 `GROUP_LABELS` 映射；GLOSSARY Trigger Menu 词条改三组口径。行样式同步一改（归本 ADR 补记二的行口径）：描述从「推向行尾右对齐」改「紧跟名称之后」，高 shrink 权重保证名称尽量完整。

@@ -76,15 +76,29 @@ export interface ModelChoice {
   thinkingLevel?: string;
 }
 
-/** 浏览态可缓存的目录子集：只有 `model`（Model Seat 菜单需要可取选）——`commands`
-    跟 attach 走，不进缓存（ADR-0012 补记十二边界「命令目录不缓存」） */
-export type CachedCatalog = Pick<SessionCatalog, "model">;
+/** 浏览态可缓存的目录子集：model + commands（补记十五扩界——commands 进缓存后
+    浏览任意会话都能拿到该会话所属项目的命令，比全局目录以 server cwd 解析更贴切；
+    原补记十二「命令目录不缓存」的边界随扩界废止） */
+export type CachedCatalog = Pick<SessionCatalog, "model" | "commands">;
 
-/** 缓存投影（纯函数，组装层写穿与灌入共用）：只留 model 切片，空目录返回 undefined
-    （不占 localStorage，也不让浏览态误以为有菜单） */
+/** 缓存投影（纯函数，组装层写穿与灌入共用）：留 model 与 commands 切片，空目录返回
+    undefined（不占 localStorage，也不让浏览态误以为有菜单） */
 export function cacheableCatalog(catalog: SessionCatalog | undefined): CachedCatalog | undefined {
   if (!catalog?.model) return undefined;
-  return { model: catalog.model };
+  return { model: catalog.model, ...(catalog.commands ? { commands: catalog.commands } : {}) };
+}
+
+/** 浏览态目录合并（纯函数，已测）：切片级兜底——model / commands 各自缓存优先、
+    全局目录兜底。整目录级 `??` 会漏切片（旧缓存只存 model 时全局的 commands 被一并
+    挡掉，加号与 `/` 随之缺席），合并必须逐切片做；两侧全空返回 undefined */
+export function mergeBrowsingCatalog(
+  cached: CachedCatalog | undefined,
+  global: CachedCatalog | undefined,
+): CachedCatalog | undefined {
+  const model = cached?.model ?? global?.model;
+  const commands = cached?.commands ?? global?.commands;
+  if (!model && !commands) return undefined;
+  return { ...(model ? { model } : {}), ...(commands ? { commands } : {}) };
 }
 
 /** 在途懒发送的定位（ADR-0012 补记十三）：先按 file 直查（懒接管首条，调用方还带着

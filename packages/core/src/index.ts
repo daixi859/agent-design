@@ -2,7 +2,13 @@
 export { SessionHost, type SessionHostOptions } from "./session-host.ts";
 export { RegistryError, SessionRegistry } from "./session-registry.ts";
 export { normalizeSessionEvent } from "./normalize.ts";
-export { openPiSession } from "./pi-session-source.ts";
+export { openPiSession, globalCatalog } from "./pi-session-source.ts";
+export {
+  globalCommandEntries,
+  globalModelEntries,
+  type CatalogResourcesLike,
+  type CatalogRuntimeLike,
+} from "./global-catalog.ts";
 export type {
   InputDisposition,
   StreamingBehavior,

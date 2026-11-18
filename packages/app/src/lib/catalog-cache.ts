@@ -12,9 +12,10 @@ export function catalogKey(sessionId: string): string {
   return KEY_PREFIX + sessionId;
 }
 
-/** 启动灌入：坏条目即弃（清键）；旧版本写入的完整 SessionCatalog（含 commands）
-    也经 cacheableCatalog 收窄——命令目录不进缓存（补记十二边界）。返回值与
-    「最终该写回什么」一起给：调用方据 written 做同形比较，避免无谓重写 */
+/** 启动灌入：坏条目即弃（清键）；旧版本写入的完整 SessionCatalog（含 current 等
+    会话级字段）也经 cacheableCatalog 收窄——commands 现已进缓存（补记十五扩界），
+    current/thinkingLevel 仍不入。返回值与「最终该写回什么」一起给：调用方据 written
+    做同形比较，避免无谓重写 */
 export function loadCachedCatalogs(storage: Storage): {
   catalogs: Map<string, CachedCatalog>;
   written: Map<string, string>;

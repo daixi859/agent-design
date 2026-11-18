@@ -742,6 +742,24 @@
   color: var(--text-2);
 }
 
+/* 命令插入 +（Model Seat addon）：seat 同族的弱化小圆钮 */
+.plusButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-05) var(--space-1h);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+  color: var(--text-2);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-1);
+  }
+}
+
 .ring {
   display: inline-grid;
   place-items: center;

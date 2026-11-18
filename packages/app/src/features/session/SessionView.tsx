@@ -13,6 +13,8 @@ import {
   useDriveSession,
   type QueuedItem,
 } from "../../state/use-drive";
+import { mergeBrowsingCatalog } from "../../lib/drive-client";
+import { useGlobalCatalog } from "../../state/global-catalog";
 import { driveErrorText } from "../../lib/drive-errors";
 import type { SessionDetailState } from "../../state/useSessionDetail";
 import { Icon } from "../../components/Icon";
@@ -26,9 +28,15 @@ export function SessionView() {
   const driveSession = useDriveSession(id);
   const summary = useSessionSummary(id);
   const connectionError = useConnectionError();
-  // 浏览态 Model Seat 的缓存目录（补记十二）：驱动态不消费（catalog 随 attached 新鲜到达）；
-  // hook 须在所有提前 return 之前（无条件调用）
-  const browsingCatalog = useCachedCatalog(id);
+  // 浏览态 Model Seat 与 Trigger Menu 的目录（补记十二/十四/十五）：切片级合并——
+  // model / commands 各自会话缓存优先（档位带会话 clamp、命令属会话项目）、全局目录
+  // 兜底（GET /api/catalog）。整目录级 `??` 会漏切片（缓存命中时全局 commands 被
+  // 挡掉），合并走 mergeBrowsingCatalog。驱动态不消费（catalog 随 attached 新鲜到达）。
+  // hook 纪律（补记十二）：两粒 hook 无条件调用——`??` 会短路，链在表达式里会在缓存
+  // 命中时少调 hook（渲染间 hook 数漂移）
+  const cachedCatalog = useCachedCatalog(id);
+  const globalCatalog = useGlobalCatalog();
+  const browsingCatalog = mergeBrowsingCatalog(cachedCatalog, globalCatalog);
   // 连接级错误优先（它解释为什么 attach/create 不生效）；带 code 的走 i18n
   const errorText = connectionError
     ? driveErrorText(connectionError.code, connectionError.message, t)
@@ -65,9 +73,9 @@ export function SessionView() {
           onSteer: (text: string) => drive.steerText(id, text),
           onRebuildQueue: (items: QueuedItem[]) => drive.rebuildQueue(id, items),
           onAbort: () => drive.abort(id),
-          onCompact: () => drive.compact(id),
           onSetModel: (provider: string, modelId: string) => drive.setModel(id, provider, modelId),
           onSetThinkingLevel: (level: string) => drive.setThinkingLevel(id, level),
+          onCompact: () => drive.compact(id),
           queued: data.drive.queued,
           pendingQueue: data.drive.pendingQueue,
           catalog: data.drive.catalog,

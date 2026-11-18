@@ -7,18 +7,28 @@ import {
   createToolSearchExtension,
   DefaultResourceLoader,
   getAgentDir,
+  ModelRuntime,
   SessionManager,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
 import type { SessionEntry, SessionHeaderEntry } from "@pi-studio/shared/pi-types";
-import { THINKING_LEVEL_ORDER } from "@pi-studio/shared/protocol";
 import type {
   CommandCatalogItem,
   ContextUsageInfo,
+  GlobalCatalog,
   ModelCatalog,
   ModelCatalogEntry,
   SessionCatalog,
 } from "@pi-studio/shared/protocol";
+import {
+  modelEntryOf,
+  promptCommandOf,
+  providerNameOf,
+  skillCommandOf,
+  thinkingLevelsOf,
+  type KernelModelLike,
+} from "./catalog-map.ts";
+import { globalCommandEntries, globalModelEntries } from "./global-catalog.ts";
 import type { PiSessionLike, PiSessionRequest } from "./types.ts";
 
 /**
@@ -49,40 +59,11 @@ export async function openPiSession(request: PiSessionRequest): Promise<PiSessio
   return adaptAgentSession(session);
 }
 
-// ===== 目录映射（ADR-0016）：内核形状 → 协议形状，唯一映射点 =====
-
-/** 目录所需的内核模型字段子集（pi-ai Model 的窄投影，结构化收窄替代 any） */
-interface KernelModelLike {
-  id: string;
-  provider: string;
-  name?: string;
-  contextWindow?: number;
-  reasoning?: boolean;
-  /** 输入模态（pi-ai ModelInputModality："image" | "text"），判图片能力用 */
-  input?: readonly string[];
-  /** 键为 thinking 档位名（off/minimal/.../max）的映射表 */
-  thinkingLevelMap?: unknown;
-}
-
-/** 单个模型的可用档位：内核给过 thinkingLevelMap 就取键（按正典序），
- *  未给则按 reasoning 推导——setThinkingLevel 内核还会再 clamp，此处宁全勿缺 */
-function thinkingLevelsOf(model: KernelModelLike): string[] {
-  const map = model.thinkingLevelMap;
-  if (map && typeof map === "object") {
-    const keys = Object.keys(map).filter((key) => key.length > 0);
-    if (keys.length > 0) {
-      return keys.sort(
-        (a, b) =>
-          THINKING_LEVEL_ORDER.indexOf(a as (typeof THINKING_LEVEL_ORDER)[number]) -
-          THINKING_LEVEL_ORDER.indexOf(b as (typeof THINKING_LEVEL_ORDER)[number]),
-      );
-    }
-  }
-  return model.reasoning === false ? ["off"] : [...THINKING_LEVEL_ORDER];
-}
+// ===== 目录映射（ADR-0016）：条目级映射抽至 catalog-map（会话/全局两路共用，已测） =====
 
 /** 命令目录（ADR-0016）：扩展命令（冲突时内核已解析出 invocationName）+ prompt 模板 + skills。
- *  三类的触发文本都走内核 prompt() 的解释形态，客户端原样透传 */
+ *  三类的触发文本都走内核 prompt() 的解释形态，客户端原样透传；模板与 skills 走
+ *  catalog-map 共享映射（全局投影同源） */
 function buildCommandCatalog(session: AgentSession): CommandCatalogItem[] {
   const items: CommandCatalogItem[] = [];
   let extensionCommands: ReturnType<typeof session.extensionRunner.getRegisteredCommands> = [];
@@ -101,21 +82,10 @@ function buildCommandCatalog(session: AgentSession): CommandCatalogItem[] {
     });
   }
   for (const template of session.promptTemplates) {
-    items.push({
-      name: template.name,
-      trigger: `/${template.name}`,
-      ...(template.description ? { description: template.description } : {}),
-      ...(template.argumentHint ? { argumentHint: template.argumentHint } : {}),
-      source: "prompt",
-    });
+    items.push(promptCommandOf(template));
   }
   for (const skill of session.resourceLoader.getSkills().skills) {
-    items.push({
-      name: skill.name,
-      trigger: `/skill:${skill.name}`,
-      ...(skill.description ? { description: skill.description } : {}),
-      source: "skill",
-    });
+    items.push(skillCommandOf(skill));
   }
   return items;
 }
@@ -128,10 +98,6 @@ function buildModelCatalog(session: AgentSession): ModelCatalog {
   // 当前模型始终保留（会话正跑在它上面，不因凭据判定时序而消失）
   const isConfigured = (provider: string) =>
     current?.provider === provider || runtime.hasConfiguredAuth(provider);
-  const providerName = (provider: string): string | undefined => {
-    const name = runtime.getProvider(provider)?.name;
-    return name && name !== provider ? name : undefined;
-  };
   const models: ModelCatalogEntry[] = (runtime.getAllModels() as readonly KernelModelLike[])
     .filter((model) => isConfigured(model.provider))
     .map((model) => {
@@ -140,22 +106,28 @@ function buildModelCatalog(session: AgentSession): ModelCatalog {
       const thinkingLevels = isCurrent
         ? session.getAvailableThinkingLevels()
         : thinkingLevelsOf(model);
-      const pName = providerName(model.provider);
-      return {
-        provider: model.provider,
-        ...(pName ? { providerName: pName } : {}),
-        modelId: model.id,
-        ...(model.name && model.name !== model.id ? { name: model.name } : {}),
-        thinkingLevels,
-        ...(model.input?.includes("image") ? { supportsImages: true } : {}),
-        ...(typeof model.contextWindow === "number" ? { contextWindow: model.contextWindow } : {}),
-      };
+      return modelEntryOf(model, thinkingLevels, providerNameOf(runtime, model.provider));
     });
   return {
     models,
     ...(current ? { current: { provider: current.provider, modelId: current.id } } : {}),
     ...(session.thinkingLevel ? { thinkingLevel: session.thinkingLevel } : {}),
   };
+}
+
+// ===== 全局目录（补记十四/十五）：浏览态 Model Seat 与 Trigger Menu 的 REST 兜底 =====
+
+/** 全局目录（GET /api/catalog）：每请求新建 runtime 与 resource loader——读本地
+    auth/models/skills/prompts 快照（allowModelNetwork 默认关，无网络刷新），与
+    createAgentSession 未传 agentDir 的会话装配同源同滤；单例缓存会漏掉运行期新增的
+    服务商与命令，而本端点每页加载至多被取一次（客户端模块级 memo），新建成本可忽略。
+    命令目录以 server 进程 cwd 解析（与 pi CLI 同目录启动同源；会话属其它项目时以
+    该会话缓存目录为准，本投影只兜首次浏览的底）。映射走 globalModelEntries /
+    globalCommandEntries（已测）。 */
+export async function globalCatalog(): Promise<GlobalCatalog> {
+  const runtime = await ModelRuntime.create();
+  const loader = await createPiResourceLoader(process.cwd());
+  return { model: { models: globalModelEntries(runtime) }, commands: globalCommandEntries(loader) };
 }
 
 function adaptAgentSession(session: AgentSession): PiSessionLike {

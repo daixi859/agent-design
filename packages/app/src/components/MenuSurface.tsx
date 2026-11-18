@@ -18,7 +18,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Icon, type IconName } from "./Icon";
-import { placeFixed } from "./anchored";
+import { EDGE_GAP, placeFixed } from "./anchored";
 import styles from "./menu-surface.module.css";
 
 export function MenuSurface<E extends HTMLElement = HTMLElement>({
@@ -166,6 +166,11 @@ export function MenuSurfaceItem({
   );
 }
 
-function rectOpts(anchor: DOMRect, matchAnchorWidth: boolean): { width?: number } {
-  return matchAnchorWidth ? { width: anchor.width } : {};
+function rectOpts(anchor: DOMRect, matchAnchorWidth: boolean): { width?: number; maxWidth?: number } {
+  if (!matchAnchorWidth) return {};
+  // 同宽口径连上限一并对齐锚：placeFixed 的默认 320 上限会把 width 压扁（弹窗从未真正同宽）
+  return {
+    width: anchor.width,
+    maxWidth: Math.min(anchor.width, window.innerWidth - EDGE_GAP * 2),
+  };
 }

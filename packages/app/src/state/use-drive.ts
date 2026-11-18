@@ -431,7 +431,8 @@ class DriveClient {
     this.send({ type: "drive", command: { sessionId, body: { type: "setThinkingLevel", level } } });
   }
 
-  /** 手动压缩上下文（Trigger Menu 内建映射，ADR-0016）：生命周期经 compaction 事件回推 */
+  /** 压缩上下文（协议通道一直在，UI 入口以内建命令回归，ADR-0016 补记三）：
+      压缩期间内核拒绝新 prompt，Composer 占位符由 compacting 状态接管 */
   compact(sessionId: string): void {
     this.send({ type: "drive", command: { sessionId, body: { type: "compact" } } });
   }

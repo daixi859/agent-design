@@ -5,7 +5,7 @@
 // 换来零测量零抖动；视口 resize 时由消费方重放。
 import type { CSSProperties } from "react";
 
-const EDGE_GAP = 8;
+export const EDGE_GAP = 8;
 const ANCHOR_GAP = 6;
 
 export function placeFixed(

@@ -1,20 +1,31 @@
 /** Composer：会话输入区（ADR-0017 重设计；ADR-0012 补记十一懒接管）。
     已驱动即激活；未驱动但有 file 的会话输入区常开（Send-to-Attach：首条发送即接管，
     由 DriveClient 懒发送兑付），仅他属驱动（别的连接持属主）时禁用并提示。
-    动作与状态各归其位：底栏左 = Model Seat + Context Ring，右 = Stop（busy 时）
-    与发送；运行态占位符化（排队 / 重试 / 压缩），中断 = Stop 钮或双击 Esc（500ms），
-    中断保留队列。发送语义：idle → prompt（兜底 followUp），busy → followUp 排队，
-    Ctrl/Cmd+Enter 显式插话。`/` 行首触发 Trigger Menu，命令落定为 Command Chip。 */
+    动作与状态各归其位：底栏左 = 加号（命令插入）+ Model Seat + Context Ring
+    （thinking 后），右 = 发送/中断一元钮（busy 时变终止方块，中断保留队列）。
+    运行态占位符化（排队 / 重试 / 压缩），双击 Esc（500ms）与终止钮等价。
+    发送语义：idle → prompt（兜底 followUp），busy → followUp 排队，
+    Ctrl/Cmd+Enter 显式插话。Trigger Menu（`/` 行首或加号触发）按来源分三组——
+    技能、提示词、命令（内建：compact，仅驱动态），选中落定为 Command Chip。 */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ContextUsageInfo, DriveStatus, SessionCatalog } from "@pi-studio/shared/protocol";
 import { Button } from "../../components/Button";
-import { Icon, type IconName } from "../../components/Icon";
-import { MenuSurface, MenuSurfaceItem, hasOpenMenuSurface } from "../../components/MenuSurface";
+import { Icon } from "../../components/Icon";
+import { MenuSurface, MenuSurfaceGroup, MenuSurfaceItem, hasOpenMenuSurface } from "../../components/MenuSurface";
 import { Tooltip } from "../../components/Tooltip";
 import { clearDraft, loadDraft, saveDraft, type PersistedChip } from "../../lib/draft-store";
 import { isBusyStatus } from "../../lib/drive-client";
+import { cx } from "../../lib/cx";
 import { translateVars } from "../../lib/i18n";
-import { detectSlashTrigger, filterCommands, type MenuCommand } from "../../lib/trigger-menu";
+import {
+  detectSlashTrigger,
+  filterCommands,
+  groupMenuCommands,
+  menuCommandsFromCatalog,
+  type MenuCommand,
+  type MenuCommandGroup,
+} from "../../lib/trigger-menu";
+import type { MessageKey } from "../../lib/i18n";
 import { useLocale } from "../../state/useLocale";
 import { usePendingChoice, type QueuedItem } from "../../state/use-drive";
 import { ContextRing } from "./ContextRing";
@@ -23,12 +34,8 @@ import { QueueDock, type QueueRow } from "./QueueDock";
 import styles from "./transcript.module.css";
 import menuStyles from "../../components/menu-surface.module.css";
 
-/** 命令图标按来源映射（内建另计） */
-const COMMAND_ICON: Record<NonNullable<MenuCommand["source"]>, IconName> = {
-  extension: "terminal",
-  prompt: "doc",
-  skill: "sparkles",
-};
+/** 输入区的四态（一元状态机，避免多个布尔各自编码同一状态而互相飘移） */
+type ComposerMode = "driven" | "lazy" | "foreign" | "locked";
 
 export interface ComposerDrive {
   status: DriveStatus;
@@ -40,10 +47,10 @@ export interface ComposerDrive {
   /** Queue Dock 行内操作落点（整批重编，ADR-0016） */
   onRebuildQueue(items: QueuedItem[]): void;
   onAbort(): void;
-  /** 手动压缩（Trigger Menu 内建 compact） */
-  onCompact(): void;
   onSetModel(provider: string, modelId: string): void;
   onSetThinkingLevel(level: string): void;
+  /** 内建命令兑付（GLOSSARY Trigger Menu「命令」组，ADR-0016 补记三）：compact 等客户端本地动作 */
+  onCompact(): void;
   /** 内核排队快照 + 本地待确认发送：Queue Dock 数据源 */
   queued?: { steering: string[]; followUp: string[] };
   pendingQueue?: readonly string[];
@@ -58,8 +65,12 @@ export interface ComposerDrive {
 
 const COMMAND_MENU_ID = "composer-trigger-menu";
 
-/** 输入区的四态（一元状态机，避免多个布尔各自编码同一状态而互相飘移） */
-type ComposerMode = "driven" | "lazy" | "foreign" | "locked";
+/** 分组头文案映射（ADR-0016 补记三）：技能 → 提示词 → 命令（内建） */
+const GROUP_LABELS: Record<MenuCommandGroup["source"], MessageKey> = {
+  skill: "groupSkills",
+  prompt: "groupPrompts",
+  builtin: "groupCommands",
+};
 
 /** 懒接管插槽（GLOSSARY Send-to-Attach）：会话未驱动但可接管时由 SessionView 下发；
     foreignDriven = 他属驱动（REST driven 标志 × 本端驱动表），输入区禁用并提示 */
@@ -91,7 +102,8 @@ export function Composer({
   drive?: ComposerDrive;
   /** 未驱动但可接管时存在（GLOSSARY Send-to-Attach） */
   lazy?: LazyComposer;
-  /** 浏览态 Model Seat 的缓存目录（补记十二）：驱动态不消费，未驱动时供可选菜单 */
+  /** 浏览态 Model Seat 的目录（补记十二/十四）：驱动态不消费，未驱动时供可选菜单
+      （会话缓存缺席时由 SessionView 以全局目录兜底） */
   browsingCatalog?: SessionCatalog;
   /** 草稿持久化键（GLOSSARY「Queue Dock」同族的会话恢复件） */
   sessionId?: string;
@@ -139,32 +151,31 @@ export function Composer({
     else clearDraft(sessionId);
   }, [text, chip, canInput, sessionId]);
 
-  // —— Trigger Menu 数据源：目录透传命令 + 内建 compact（ADR-0016） ——
+  // —— Trigger Menu 数据源：目录透传（skills / prompt 模板）+ 内建命令（「命令」组，
+  //    ADR-0016 补记三，仅驱动态——compact 的兑付通道在驱动连接上，浏览态无路径）。
+  //    驱动态目录随 attached 帧在场；浏览态退会话缓存 / 全局目录兜底（补记十五） ——
 
   const commands: MenuCommand[] = useMemo(() => {
-    const items: MenuCommand[] = (drive?.catalog?.commands ?? []).map((entry) => ({
-      name: entry.name,
-      trigger: entry.trigger,
-      ...(entry.description ? { description: entry.description } : {}),
-      ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
-      source: entry.source,
-      icon: COMMAND_ICON[entry.source],
-    }));
-    items.push({
-      name: "compact",
-      trigger: "/compact",
-      description: t("cmdCompactDesc"),
-      builtin: "compact",
-      icon: "contract",
-    });
-    return items;
-  }, [drive?.catalog?.commands, t]);
+    const cataloged = menuCommandsFromCatalog(drive?.catalog?.commands ?? browsingCatalog?.commands ?? []);
+    // builtin 命令的描述走 i18n（纯逻辑层不持文案），故在此构造
+    const driven = drive != null;
+    const builtin: MenuCommand[] = driven
+      ? [{ name: "compact", trigger: "/compact", description: t("cmdCompactDesc"), source: "builtin" }]
+      : [];
+    return [...cataloged, ...builtin];
+    // 依赖只取 drive 的在亮度（SessionView 每渲染内联新建 drive 对象，整对象依赖恒失效）
+  }, [drive != null, drive?.catalog?.commands, browsingCatalog?.commands, t]);
 
-  const menuItems = menu ? filterCommands(commands, menu.query) : [];
+  /** 展示序 = 分组序（技能在前、提示词在后），高亮下标即该序的下标 */
+  const menuGroups = useMemo(
+    () => groupMenuCommands(menu ? filterCommands(commands, menu.query) : []),
+    [commands, menu],
+  );
+  const menuItems = useMemo(() => menuGroups.flatMap((group) => group.items), [menuGroups]);
 
-  /** 输入后同步触发检测：claimed（chip 在场）或未驱动（命令目录随 attach 帧下发，懒接管态无目录）时不触发 */
+  /** 输入后同步触发检测：claimed（chip 在场）或不可输入（他属驱动 / 不可驱动）时不触发 */
   const syncMenu = (value: string, caret: number) => {
-    if (chip || !drive) {
+    if (chip || !canInput) {
       setMenu(null);
       return;
     }
@@ -194,7 +205,12 @@ export function Composer({
     if (!outgoing) return;
     // 没接手的发送（连接未就绪）不清草稿——否则用户刚写的字被静默吐掉
     let accepted = false;
-    if (drive) {
+    if (drive && chip?.source === "builtin") {
+      // 内建命令（compact）：客户端本地动作，不透传内核 prompt()（内核不解释 /compact）；
+      // 参数文本一并弃置（compact 无参）。浏览态无兑付通道——菜单本就不列（见 commands）
+      drive.onCompact();
+      accepted = true;
+    } else if (drive) {
       // chip 透传不走插话（内核排队路径不做斜杠展开，罕见路径接受，ADR-0016 执行语义）
       if (steer && !chip) {
         drive.onSteer(outgoing);
@@ -212,11 +228,6 @@ export function Composer({
   const pick = (index: number) => {
     const item = menuItems[index];
     if (!item) return;
-    if (item.builtin === "compact") {
-      drive?.onCompact();
-      resetAfterSubmit();
-      return;
-    }
     setChip({
       trigger: item.trigger,
       name: item.name,
@@ -355,9 +366,12 @@ export function Composer({
 
   const bar = (
     <div className={styles.composerBar}>
-      {/* Model Seat 恒渲染：驱动态目录随 attached 帧在场；浏览态退读缓存目录（补记十二），
-          选择挂起随首条发送兑付；目录缺席（首次浏览）内部自动禁为只读展示；
-          他属驱动 / 不可驱动恒禁（选择无兑付路径）——底栏信息不随接管时机消失 */}
+      {/* 底栏左 = 加号（命令插入，领先于模型钮，ADR-0017）+ Model Seat + Context Ring。
+          Model Seat 恒渲染：驱动态目录随 attached 帧在场；浏览态退读缓存目录（补记十二）
+          或全局目录兜底（补记十四），选择挂起随首条发送兑付；目录缺席内部自动禁为只读
+          展示；他属驱动 / 不可驱动恒禁（选择无兑付路径）——底栏信息不随接管时机消失。
+          加号与 `/` 同一 Trigger Menu：驱动态随 attached 帧，浏览态随缓存/全局目录
+          （补记十五），有命令可选才在场 */}
       <ModelSeat
         catalog={drive?.catalog ?? browsingCatalog}
         current={displayModel}
@@ -366,27 +380,32 @@ export function Composer({
         disabledHint={mode === "foreign" ? t("drivenByOtherHint") : undefined}
         onSetModel={selectModel}
         onSetThinkingLevel={selectThinkingLevel}
+        addon={
+          canInput && commands.length > 0 && (
+            <Tooltip label={t("insertCommandHint")}>
+              <Button
+                icon="plus"
+                iconSize={11}
+                className={styles.plusButton}
+                aria-label={t("insertCommandHint")}
+                onClick={() => setMenu((current) => (current ? null : { query: "", highlight: 0 }))}
+              />
+            </Tooltip>
+          )
+        }
       />
-      <span className={styles.barSpacer} />
+      {/* Context Ring：thinking tag 之后（视觉简化轮）；usage 缺席（未驱动）不渲染 */}
       <ContextRing usage={drive?.usage} modelLabel={displayModel?.modelId} compacting={compacting} />
-      {drive && busy && (
-        <Tooltip label={t("stopHint")}>
-          <Button
-            icon="stop"
-            iconSize={13}
-            className={styles.stopButton}
-            aria-label={t("abort")}
-            onClick={() => drive.onAbort()}
-          />
-        </Tooltip>
-      )}
-      <Tooltip label={foreignDriven ? t("drivenByOtherHint") : busy ? t("queueSendHint") : t("sendHint")}>
+      <span className={styles.barSpacer} />
+      {/* 发送 / 中断一元钮：busy 时变终止方块（原独立 Stop 钮撤销，中断保留队列） */}
+      <Tooltip label={foreignDriven ? t("drivenByOtherHint") : busy ? t("stopHint") : t("sendHint")}>
         <Button
-          icon="arrow-up"
-          iconSize={24}
-          className={styles.sendButton}
-          disabled={!canInput || compacting || (!chip && !text.trim())}
-          onClick={() => submit()}
+          icon={busy ? "stop" : "arrow-up"}
+          iconSize={busy ? 16 : 24}
+          className={cx(styles.sendButton, busy && styles.stopButton)}
+          disabled={!canInput || compacting || (!busy && !chip && !text.trim())}
+          aria-label={busy ? t("abort") : t("sendHint")}
+          onClick={() => (busy ? drive?.onAbort() : submit())}
         />
       </Tooltip>
     </div>
@@ -415,7 +434,6 @@ export function Composer({
             {chip && (
               <div className={styles.chipRow}>
                 <span className={styles.commandChip}>
-                  <Icon name={(chip.source && COMMAND_ICON[chip.source]) || "doc"} size={11} />
                   {chip.name}
                   <button
                     type="button"
@@ -457,26 +475,35 @@ export function Composer({
       >
         <div role="listbox" id={COMMAND_MENU_ID}>
           {menuItems.length === 0 && <div className={menuStyles.empty}>{t("menuEmpty")}</div>}
-          {menuItems.map((item, index) => (
-            <MenuSurfaceItem
-              key={`${item.trigger}-${item.name}`}
-              role="option"
-              id={`${COMMAND_MENU_ID}-opt-${index}`}
-              selected={index === menu?.highlight}
-              icon={item.icon}
-              onMouseEnter={() => setMenu((current) => (current ? { ...current, highlight: index } : current))}
-              // mousedown 接：焦点不离开编辑器（combobox 口径）
-              onMouseDown={(event) => {
-                event.preventDefault();
-                pick(index);
-              }}
+          {menuGroups.map((group) => (
+            <MenuSurfaceGroup
+              key={group.source}
+              label={t(GROUP_LABELS[group.source])}
             >
-              <span className={menuStyles.itemTitle}>
-                {item.name}
-                {item.argumentHint && <span className={menuStyles.itemHint}>{item.argumentHint}</span>}
-              </span>
-              {item.description && <span className={menuStyles.itemDesc}>{item.description}</span>}
-            </MenuSurfaceItem>
+              {group.items.map((item) => {
+                const index = menuItems.indexOf(item);
+                return (
+                  <MenuSurfaceItem
+                    key={`${item.trigger}-${item.name}`}
+                    role="option"
+                    id={`${COMMAND_MENU_ID}-opt-${index}`}
+                    selected={index === menu?.highlight}
+                    onMouseEnter={() => setMenu((current) => (current ? { ...current, highlight: index } : current))}
+                    // mousedown 接：焦点不离开编辑器（combobox 口径）
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      pick(index);
+                    }}
+                  >
+                    <span className={menuStyles.itemTitle}>
+                      {item.name}
+                      {item.argumentHint && <span className={menuStyles.itemHint}>{item.argumentHint}</span>}
+                    </span>
+                    {item.description && <span className={menuStyles.itemDesc}>{item.description}</span>}
+                  </MenuSurfaceItem>
+                );
+              })}
+            </MenuSurfaceGroup>
           ))}
         </div>
       </MenuSurface>

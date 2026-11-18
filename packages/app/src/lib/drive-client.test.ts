@@ -7,6 +7,7 @@ import {
   PENDING_PROMPT_ENTRY_ID,
   applyServerFrame,
   cacheableCatalog,
+  mergeBrowsingCatalog,
   inflightFileOf,
   mergeEntries,
   pendingPromptEntries,
@@ -262,12 +263,37 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     expect(after?.pendingPrompt).toBeUndefined();
   });
 
-  // 浏览态目录缓存只留 model 切片（补记十二边界：命令目录不缓存）
-  it("cacheableCatalog 只留 model 切片，空目录返回 undefined", () => {
+  // 浏览态目录缓存留 model + commands 切片（补记十五扩界）；commands 缺席不带键
+  it("cacheableCatalog 留 model 与 commands 切片，空目录返回 undefined", () => {
     expect(cacheableCatalog(undefined)).toBeUndefined();
     expect(cacheableCatalog({})).toBeUndefined();
-    const catalog = { model: { models: [], current: { provider: "p", modelId: "m" } }, commands: [] };
-    expect(cacheableCatalog(catalog)).toEqual({ model: catalog.model });
+    const commands = [{ name: "review", trigger: "/review", source: "prompt" as const }];
+    const catalog = {
+      model: { models: [], current: { provider: "p", modelId: "m" } },
+      commands,
+    };
+    expect(cacheableCatalog(catalog)).toEqual({ model: catalog.model, commands });
+    expect(cacheableCatalog({ model: { models: [] } })).toEqual({ model: { models: [] } });
+  });
+
+  // 浏览态合并是切片级的：旧缓存只存 model 时，全局目录的 commands 仍要兜进来
+  it("mergeBrowsingCatalog 切片级兜底，两侧全空返回 undefined", () => {
+    const cachedModel = { models: [], current: { provider: "p", modelId: "m" } };
+    const globalModel = { models: [] };
+    const globalCommands = [{ name: "x", trigger: "/x", source: "prompt" as const }];
+    // 缓存命中 model、commands 缺席：commands 退全局（整目录级 ?? 会把它挡掉）
+    expect(mergeBrowsingCatalog({ model: cachedModel }, { model: globalModel, commands: globalCommands })).toEqual({
+      model: cachedModel,
+      commands: globalCommands,
+    });
+    // 缓存双侧齐：全局不掺入
+    const merged = mergeBrowsingCatalog(
+      { model: cachedModel, commands: [{ name: "y", trigger: "/y", source: "skill" as const }] },
+      { model: globalModel, commands: globalCommands },
+    );
+    expect(merged?.commands).toEqual([{ name: "y", trigger: "/y", source: "skill" }]);
+    // 两侧全空
+    expect(mergeBrowsingCatalog(undefined, undefined)).toBeUndefined();
   });
 
   it("toolCall 帧：start 亮起调用指示，end 按 id 匹配熄灭", () => {

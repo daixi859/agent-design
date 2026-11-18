@@ -30,3 +30,13 @@
 - Base Component 新增 MenuSurface / Tooltip / HoverCard；散装「chip」样式收敛到 Command Chip。
 - i18n「追问 / 追加」退役（GLOSSARY 已收词：Steer=插话、Follow-up=排队），en/zh 同步换词。
 - `ComposerDrive` 面收窄：`callingTool` / `queuedCount` 等只读徽标字段退役，队列内容改经 store 订阅（ADR-0015 selector）。
+
+## 补记二（底栏视觉收敛轮）：发送/中断一元钮、Context Ring 归位、选择器标准化
+
+**问题**：首版底栏「右 = Stop（busy 时）与发送」是两粒按钮分工，运行态按钮跳位；Context Ring 挂在最右端与 Model Seat 分离；模型/thinking 两粒选择各自包 MenuSurface 手搭列表（搜索、分组、✓、滚进视口各写一遍），行样式与 Trigger Menu 各自为政。
+
+**决定**：底栏排布改为 **命令插入 +（addon）→ Model Seat（模型）→ Model Seat（thinking）→ Context Ring → 弹性空隙 → 发送/中断一元钮**——加号领衔（验收修订：命令插入是输入的起手动作，居于控件对之前，与发送钮构成底栏两端）。发送钮 busy 时原位变终止方块（`stop` 图标 16px、`--bg-inset` 底 + `--danger` 色，原独立 Stop 钮样式退役），点击即 abort——「双击 Esc 等价中断、中断保留队列」不变。两粒选择改走标准选择器 **SelectMenu**（Base Component：传入 groups / value / onChange，触发钮归消费方渲染，搜索、分组头、✓、当前项滚进视口在组件内定型，行普通字号）；thinking 菜单只列档位名（描述文案退役）；模型行图片输入改「视觉」Tag 紧随模型名（SelectMenu 的 badge 插槽——名称之后、描述之前的固定侧位；✓ 仍独占行尾，trailing 侧位归选中标记，通用 Tag 组件见 ADR-0016 补记二）。
+
+**边界**：发送语义（idle → prompt 兜底 followUp、busy → followUp 排队、Ctrl/Cmd+Enter 插话）与占位符化不变；SelectMenu 不发明键盘交互（与首版 Model Seat 菜单同口径）；Trigger Menu 弹层仍锚 composer 卡同宽（`matchAnchorWidth`），加号只是第二触发入口。
+
+**后果**：`ComposerDrive` 曾去 `onCompact`、`DriveClient.compact` 曾退役（协议保留）——其后 ADR-0016 补记三以内建命令分组回归（`onCompact` 兑付复接，见彼处）；`components/` 增 Tag / SelectMenu；transcript.module.css 增 `plusButton`，`stopButton` 转为发送钮的 busy 修饰类；GLOSSARY Trigger Menu 词条同步。

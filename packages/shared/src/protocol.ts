@@ -96,6 +96,16 @@ export interface SessionCatalog {
   commands?: CommandCatalogItem[];
 }
 
+/** 全局目录（REST GET /api/catalog，ADR-0012 补记十四）：浏览态 Model Seat 与
+    Trigger Menu 在 per-session 缓存缺席时的兜底菜单源。current/thinkingLevel 是
+    会话级，全局投影不携带 */
+export interface GlobalCatalog {
+  model: Pick<ModelCatalog, "models">;
+  /** 命令目录（补记十五）：只含 prompt 模板与 skills——扩展命令需会话内运行器，
+      本就不入 Trigger Menu */
+  commands?: CommandCatalogItem[];
+}
+
 /** 领域层命令（core SessionHost 与 WS 帧共用） */
 export interface DriveCommand {
   sessionId: string;

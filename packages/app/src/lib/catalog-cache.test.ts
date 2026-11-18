@@ -31,9 +31,18 @@ describe("catalog-cache · 浏览态目录缓存的读写", () => {
     expect(loadCachedCatalogs(storage).catalogs.get("s1")).toEqual({ model });
   });
 
-  it("旧版本写入的完整目录（含 commands）灌入时收窄——命令目录不缓存", () => {
-    const storage = fakeStorage({ [catalogKey("s1")]: JSON.stringify({ model, commands: [{ name: "x" }] }) });
-    expect(loadCachedCatalogs(storage).catalogs.get("s1")).toEqual({ model });
+  it("旧版本写入的完整 SessionCatalog 灌入时收窄：commands 保留（补记十五），会话级字段剥离", () => {
+    const storage = fakeStorage({
+      [catalogKey("s1")]: JSON.stringify({
+        model,
+        commands: [{ name: "x", trigger: "/x", source: "prompt" }],
+        extra: "会话级杂字段",
+      }),
+    });
+    expect(loadCachedCatalogs(storage).catalogs.get("s1")).toEqual({
+      model,
+      commands: [{ name: "x", trigger: "/x", source: "prompt" }],
+    });
   });
 
   it("坏条目即弃并清键；无 model 切片的条目不入缓存", () => {

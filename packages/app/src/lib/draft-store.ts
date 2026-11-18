@@ -8,7 +8,7 @@ export interface PersistedChip {
   trigger: string;
   name: string;
   argumentHint?: string;
-  source?: "extension" | "prompt" | "skill";
+  source?: "extension" | "prompt" | "skill" | "builtin";
 }
 
 export interface ComposerDraft {
