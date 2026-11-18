@@ -1,5 +1,6 @@
 /** Session Bar（ADR-0009）：内容区标题栏——title / branched 徽标由 MainShell 派生下发；
-    动作区：驱动（Attach/解除 + 状态徽标）、浏览器全屏、渲染模式快切（ADR-0014）、主题切换。 */
+    动作区：驱动状态徽标与解除（ADR-0012 补记十一：接管并入首条发送，仅存解除侧）、
+    浏览器全屏、渲染模式快切（ADR-0014）、主题切换。 */
 import { useEffect, useState } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { useTheme } from "../../state/useTheme";
@@ -12,10 +13,10 @@ import { Button } from "../../components/Button";
 import nav from "../../components/nav.module.css";
 import styles from "./session-bar.module.css";
 
-export interface SessionBarAttach {
-  attached: boolean;
+/** 会话已被本端驱动时由 MainShell 下发（状态徽标 + 解除，GLOSSARY 仅存解除侧）；
+    不存在 = 未驱动（接管动作在输入区首条发送） */
+export interface SessionBarDrive {
   status?: DriveStatus;
-  onAttach(): void;
   onRelease(): void;
 }
 
@@ -23,7 +24,7 @@ export function SessionBar({
   title,
   branched,
   collapsed,
-  attach,
+  drive,
 }: {
   /** 当前 session 标题（无 session 时为产品名） */
   title: string;
@@ -31,8 +32,8 @@ export function SessionBar({
   branched: boolean;
   /** 侧栏收起时 Brand Float 压在本栏左端，需要让位 */
   collapsed: boolean;
-  /** 当前 session 可驱动时由 MainShell 下发（有真实文件路径才有值） */
-  attach?: SessionBarAttach;
+  /** 当前 session 的解除侧控件（有真实驱动状态才有值） */
+  drive?: SessionBarDrive;
 }) {
   const [theme, setTheme] = useTheme();
   const [viewMode, setViewMode] = useViewMode();
@@ -56,7 +57,7 @@ export function SessionBar({
   };
 
   // 驱动徽标文案只算一次（title 与正文同源；idle 时悬停提示解除动作）
-  const badgeText = attach?.status ? t(driveBadgeKey(attach.status)) : undefined;
+  const badgeText = drive?.status ? t(driveBadgeKey(drive.status)) : undefined;
 
   return (
     <header className={cx(styles.bar, collapsed && styles.clearFloat)}>
@@ -71,22 +72,16 @@ export function SessionBar({
       </div>
 
       <div className={styles.actions}>
-        {attach && (
+        {drive && (
           <>
-            {attach.attached && (
-              <span
-                className={cx(styles.drivePill, attach.status === "running" && styles.drivePillRunning)}
-                title={attach.status === "idle" ? t("detach") : badgeText}
-              >
-                <span className={styles.driveDot} />
-                {badgeText}
-              </span>
-            )}
-            <Button
-              icon={attach.attached ? "xmark" : "play"}
-              title={attach.attached ? t("detach") : t("attach")}
-              onClick={attach.attached ? attach.onRelease : attach.onAttach}
-            />
+            <span
+              className={cx(styles.drivePill, drive.status === "running" && styles.drivePillRunning)}
+              title={drive.status === "idle" ? t("detach") : badgeText}
+            >
+              <span className={styles.driveDot} />
+              {badgeText}
+            </span>
+            <Button icon="xmark" title={t("detach")} onClick={drive.onRelease} />
           </>
         )}
         <Button

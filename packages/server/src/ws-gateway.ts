@@ -116,7 +116,8 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
     });
   }
 
-  /** attach / create 共用骨架：打开 → 回 attached → 登记属主与订阅 */
+  /** attach / create 共用骨架：打开 → 回 attached → 登记属主与订阅。
+   *  attach 失败的 error 帧携 file 回显（Send-to-Attach 按它精确兑付，ADR-0012 补记十一） */
   async function openSubscription(
     socket: WsSocket,
     owned: Set<string>,
@@ -132,7 +133,12 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
     } catch (err) {
       // 机器码供客户端走 i18n（ADR-0011）；服务端文案仅作调试兜底
       const code = (err as { code?: DriveErrorCode }).code;
-      send(socket, { type: "error", message: errorMessage(err), ...(code ? { code } : {}) });
+      send(socket, {
+        type: "error",
+        message: errorMessage(err),
+        ...(code ? { code } : {}),
+        ...(file ? { file } : {}),
+      });
     }
   }
 
@@ -176,12 +182,19 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
         try {
           const outcome = await deps.drive(frame.command);
           if (!outcome.ok) {
-            send(socket, { type: "commandFailed", sessionId, message: outcome.message, ...(outcome.code ? { code: outcome.code } : {}) });
+            // command 回带被拒命令类型：client 只让文本命令的待回显让位（ADR-0012 补记十二）
+            send(socket, {
+              type: "commandFailed",
+              sessionId,
+              message: outcome.message,
+              command: body.type,
+              ...(outcome.code ? { code: outcome.code } : {}),
+            });
           } else if (outcome.disposition && (body.type === "steer" || body.type === "followUp")) {
             send(socket, { type: "disposition", sessionId, command: body.type, disposition: outcome.disposition });
           }
         } catch (err) {
-          send(socket, { type: "commandFailed", sessionId, message: errorMessage(err) });
+          send(socket, { type: "commandFailed", sessionId, message: errorMessage(err), command: body.type });
         }
         return;
       }

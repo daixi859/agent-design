@@ -141,7 +141,13 @@ async function listMeta(ref: FileRef): Promise<ListMeta> {
   return meta;
 }
 
-async function listSessions(): Promise<{ rootExists: boolean; sessions: SessionSummary[] }> {
+/** 属主查询（Send-to-Attach）：组装层注入 registry.isFileDriven，列表据此标 driven */
+type IsFileDriven = (file: string) => boolean;
+
+async function listSessions(
+  options: { isFileDriven?: IsFileDriven },
+): Promise<{ rootExists: boolean; sessions: SessionSummary[] }> {
+  const { isFileDriven } = options;
   let rootExists = true;
   try {
     await stat(SESSIONS_ROOT);
@@ -166,6 +172,7 @@ async function listSessions(): Promise<{ rootExists: boolean; sessions: SessionS
       sizeBytes: ref.sizeBytes,
       model: meta.model,
       provider: meta.provider,
+      ...(isFileDriven?.(ref.file) ? { driven: true } : {}),
     });
   }
   sessions.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
@@ -233,13 +240,14 @@ function json(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
-export function createPiDataApi() {
+export function createPiDataApi(options: { isFileDriven?: IsFileDriven } = {}) {
+  const { isFileDriven } = options;
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://local");
     const path = url.pathname;
     try {
       if (req.method === "GET" && path === "/sessions") {
-        return json(res, 200, await listSessions());
+        return json(res, 200, await listSessions({ isFileDriven }));
       }
       let m = path.match(/^\/session\/([^/]+)\/tail$/);
       if (req.method === "GET" && m) {

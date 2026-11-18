@@ -19,3 +19,4 @@ Thumbs.db
 tmp/
 # 技能工作目录（议题工单、验收截图等本地产物）
 .scratch/
+screenshots/

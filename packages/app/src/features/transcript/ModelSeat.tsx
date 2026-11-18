@@ -31,6 +31,8 @@ export function ModelSeat({
   catalog,
   current,
   thinkingLevel,
+  disabled: forcedDisabled,
+  disabledHint,
   onSetModel,
   onSetThinkingLevel,
 }: {
@@ -39,6 +41,10 @@ export function ModelSeat({
   current?: { provider?: string; modelId?: string };
   /** 当前档位（同上口径） */
   thinkingLevel?: string;
+  /** 恒禁（他属驱动 / 不可驱动）：选择无兑付路径——区别于目录缺席的自动禁 */
+  disabled?: boolean;
+  /** 恒禁时的提示（已翻译串，如他属驱动的 drivenByOtherHint）；缺省退只读提示 */
+  disabledHint?: string;
   onSetModel(provider: string, modelId: string): void;
   onSetThinkingLevel(level: string): void;
 }) {
@@ -60,6 +66,10 @@ export function ModelSeat({
   };
 
   const models = catalog?.model?.models ?? [];
+  // 恒禁（他属驱动 / 不可驱动）或目录缺席（首次浏览）：两粒按钮都退只读展示
+  const seatDisabled = Boolean(forcedDisabled) || models.length === 0;
+  // 禁用态的提示：他属驱动用传入的 disabledHint，其余退只读提示（接管后可切换）
+  const seatHint = disabledHint ?? t("seatReadOnlyHint");
   const showSearch = models.length > 8;
   const query = search.trim().toLowerCase();
   const filtered = query
@@ -100,8 +110,8 @@ export function ModelSeat({
             ref={anchorRef}
             type="button"
             className={barStyles.seatButton}
-            title={t("model")}
-            disabled={models.length === 0}
+            title={seatDisabled ? seatHint : t("model")}
+            disabled={seatDisabled}
             aria-haspopup="listbox"
             aria-expanded={menu === "model"}
             onClick={() => open("model")}
@@ -164,8 +174,8 @@ export function ModelSeat({
             ref={anchorRef}
             type="button"
             className={cx(barStyles.seatButton, levels.includes("off") && levels.length === 1 && barStyles.seatMuted)}
-            title={t("thinkingLevel")}
-            disabled={models.length === 0}
+            title={seatDisabled ? seatHint : t("thinkingLevel")}
+            disabled={seatDisabled}
             aria-haspopup="listbox"
             aria-expanded={menu === "thinking"}
             onClick={() => open("thinking")}

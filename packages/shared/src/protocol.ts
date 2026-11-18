@@ -185,8 +185,13 @@ export type ServerFrame =
       usage?: ContextUsageInfo;
     }
   | { type: "released"; sessionId: string }
-  | { type: "commandFailed"; sessionId: string; message: string; code?: DriveErrorCode }
+  /** 命令被拒：client 据此决定撤不撤待回显（Pending Echo）。`command` 回带被拒命令类型——
+   *  只有文本命令（prompt / steer / followUp）被拒才让回显让位；setModel / setThinkingLevel
+   *  被拒不得抹掉随后补发的 prompt 的气泡（ADR-0012 补记十二）*/
+  | { type: "commandFailed"; sessionId: string; message: string; code?: DriveErrorCode; command?: DriveCommandBody["type"] }
   /** steer / followUp 的排队应答（prompt / abort 靠事件流反馈，无应答帧） */
   | { type: "disposition"; sessionId: string; command: "steer" | "followUp"; disposition: InputDisposition }
-  | { type: "error"; message: string; code?: DriveErrorCode }
+  /** attach / create 被拒走这里：attach 失败携 `file` 回显（Send-to-Attach 按它精确兑付，
+   *  ADR-0012 补记十一）；坏帧 / 未知类型等连接级错误无 file 关联 */
+  | { type: "error"; message: string; code?: DriveErrorCode; file?: string }
   | { type: "event"; event: DriveEvent };

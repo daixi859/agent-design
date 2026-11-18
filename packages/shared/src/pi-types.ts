@@ -312,6 +312,8 @@ export interface SessionSummary {
   sizeBytes: number;
   model?: string;
   provider?: string;
+  /** 已被某连接接管（GLOSSARY: Attach）——客户端据此禁用他属驱动的输入区（Send-to-Attach） */
+  driven?: boolean;
 }
 
 export interface SessionsResponse {

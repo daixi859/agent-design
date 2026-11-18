@@ -10,7 +10,15 @@ import type {
   StreamingDraft,
   ToolResultMessage,
 } from "@pi-studio/shared/pi-types";
-import type { ContextUsageInfo, DriveEvent, DriveStatus, ServerFrame, SessionCatalog } from "@pi-studio/shared/protocol";
+import type {
+  ClientFrame,
+  ContextUsageInfo,
+  DriveCommandBody,
+  DriveEvent,
+  DriveStatus,
+  ServerFrame,
+  SessionCatalog,
+} from "@pi-studio/shared/protocol";
 
 /** 「调用中」指示的形状（协议 toolCall 帧的字段子集，状态与消费方共用同名形状）。
  *  args / outputTail 为执行期数据（ADR-0012 补记八）：并行调用各占集合一项 */
@@ -57,6 +65,67 @@ export interface DriveSession {
   /** create 出的会话在首条消息前不落盘，header 只能来自 attach 回包 */
   readonly header?: SessionHeaderEntry;
   readonly lastError?: string;
+}
+
+/** 浏览态的模型/档位选择（GLOSSARY Send-to-Attach 浏览态可选，ADR-0012 补记十二）：
+    选择挂起待兑付，发送随懒发送入列，attached 后先 set 后 prompt；
+    provider 与 modelId 成对才有意义（只改其一不成切换） */
+export interface ModelChoice {
+  provider?: string;
+  modelId?: string;
+  thinkingLevel?: string;
+}
+
+/** 浏览态可缓存的目录子集：只有 `model`（Model Seat 菜单需要可取选）——`commands`
+    跟 attach 走，不进缓存（ADR-0012 补记十二边界「命令目录不缓存」） */
+export type CachedCatalog = Pick<SessionCatalog, "model">;
+
+/** 缓存投影（纯函数，组装层写穿与灌入共用）：只留 model 切片，空目录返回 undefined
+    （不占 localStorage，也不让浏览态误以为有菜单） */
+export function cacheableCatalog(catalog: SessionCatalog | undefined): CachedCatalog | undefined {
+  if (!catalog?.model) return undefined;
+  return { model: catalog.model };
+}
+
+/** 在途懒发送的定位（ADR-0012 补记十三）：先按 file 直查（懒接管首条，调用方还带着
+    file），再按 sessionId 反查（乐观注册后 Composer 已切驱动分支，只传 sessionId）——
+    两条路径都必须落回「待补发」而不是直发，否则第二条会以 prompt 发往尚未 attach 的会话 */
+export function inflightFileOf(
+  pending: Iterable<readonly [string, { sessionId: string }]>,
+  sessionId: string,
+  file: string | undefined,
+): string | undefined {
+  const entries = [...pending];
+  if (file && entries.some(([candidate]) => candidate === file)) return file;
+  return entries.find(([, value]) => value.sessionId === sessionId)?.[0];
+}
+
+/** 兑付命令序（纯函数，attached 回包后的补发序列）：先 set 再 prompt——首轮即跑在
+ *  新模型/档位上。setModel 失败（未知模型/无凭据）走既有 commandFailed 落错误条，
+ *  prompt 照发（内核保持原模型），不阻断。同一 WS 顺序到达即顺序执行。 */
+export function pendingSendCommands(
+  sessionId: string,
+  texts: readonly string[],
+  choice: ModelChoice | undefined,
+): ClientFrame[] {
+  const outgoing: ClientFrame[] = [];
+  if (choice?.provider && choice?.modelId) {
+    outgoing.push({
+      type: "drive",
+      command: { sessionId, body: { type: "setModel", provider: choice.provider, modelId: choice.modelId } },
+    });
+  }
+  // "off" 是合法档位：判定用 !== undefined 而非真值
+  if (choice?.thinkingLevel !== undefined) {
+    outgoing.push({ type: "drive", command: { sessionId, body: { type: "setThinkingLevel", level: choice.thinkingLevel } } });
+  }
+  for (const text of texts) {
+    outgoing.push({
+      type: "drive",
+      command: { sessionId, body: { type: "prompt", text, streamingBehavior: "followUp" } },
+    });
+  }
+  return outgoing;
 }
 
 /** 忙碌判定（GLOSSARY「Running Indicator」同口径）：running / retrying 都算忙——
@@ -164,15 +233,28 @@ export function applyServerFrame(
       return undefined;
     case "event":
       return applyEvent(prev, frame.event);
-    case "commandFailed":
-      // 命令被拒（未接管 / 坏帧等）：prompt 不会再有权威回显，待回显与待确认队列一并让位
-      return prev && { ...prev, lastError: frame.message, pendingPrompt: undefined, pendingQueue: undefined };
+    case "commandFailed": {
+      // 命令被拒：文本命令（prompt / steer / followUp）不会再有权威回显，待回显与待确认队列
+      // 一并让位；setModel / setThinkingLevel 被拒只是切换失败——prompt 照发（ADR-0012 补记十二
+      // 「prompt 不阻断」），绝不能抹掉顶住首条消息的保命气泡。帧未携 command（旧服务端）
+      // 时按文本命令处理：留下永不回显的气泡比误撤更糟
+      if (!prev) return prev;
+      const { message } = frame;
+      if (!isTextCommandFailure(frame.command)) return { ...prev, lastError: message };
+      return { ...prev, lastError: message, pendingPrompt: undefined, pendingQueue: undefined };
+    }
     case "disposition":
       // 瞬态排队应答：不入状态
       return prev;
     default:
       return prev;
   }
+}
+
+/** 该次命令失败是否会让待回显失效：prompt / steer / followUp 承载文本，其余（setModel /
+    setThinkingLevel / clearQueue / compact / abort）不碰待回显。缺省按文本处理（旧服务端） */
+export function isTextCommandFailure(command: DriveCommandBody["type"] | undefined): boolean {
+  return command === undefined || command === "prompt" || command === "steer" || command === "followUp";
 }
 
 function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSession | undefined {

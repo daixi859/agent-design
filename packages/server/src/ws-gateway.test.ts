@@ -188,6 +188,8 @@ describe("createWsGateway · 驱动协议传输", () => {
         type: "commandFailed",
         sessionId: "sid-f1.jsonl",
         message: "session 未驱动",
+        // command 回带被拒命令类型：client 只让文本命令的待回显让位（ADR-0012 补记十二）
+        command: "prompt",
       });
     } finally {
       await server.close();
@@ -202,7 +204,8 @@ describe("createWsGateway · 驱动协议传输", () => {
       await client.opened;
       client.send({ type: "attach", file: "locked.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "error"));
-      expect(client.frames[0]).toEqual({ type: "error", message: "已被驱动" });
+      // file 回显：Send-to-Attach 按它精确兑付失败（ADR-0012 补记十一）
+      expect(client.frames[0]).toEqual({ type: "error", message: "已被驱动", file: "locked.jsonl" });
 
       client.send({ type: "attach", file: "f2.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
@@ -242,7 +245,7 @@ describe("createWsGateway · 驱动协议传输", () => {
 
       b.send({ type: "attach", file: "f1.jsonl" });
       await waitFor(() => b.frames.some((f) => f.type === "error"));
-      expect(b.frames[0]).toEqual({ type: "error", message: "已被驱动" });
+      expect(b.frames[0]).toEqual({ type: "error", message: "已被驱动", file: "f1.jsonl" });
 
       // 属主断开 → 属主释放 → b 可接管
       await a.close();

@@ -146,3 +146,37 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 **边界**：沿袭「瞬态帧可丢」——delta 帧丢了只是参数可见性晚几帧，权威参数仍以落盘条目为准；执行开始的完整参数是兜底来源，参数流整个丢失也不影响正确性。空参数调用（无参工具）三源均为空对象，运行行继续显示不带参数的裸工具名。
 
 **后果**：Live Tail 路径无声明流（轮询拿不到未落盘参数），参数可见性差异沿补记八口径是明示的；客户端参数摘要随流逐步成形（`{}` → 部分键 → 完整 JSON），与真实终端体验对齐。
+
+## 补记十一（交互简化轮）：Send-to-Attach——attach 的同意动作并入首条发送
+
+**问题**：显式驱动按钮把「同意」放在「意图」之前：进入老会话必先点一下才能输入，高频路径摩擦大；且按钮态（play）与他属冲突的实际判定（点击才报错）脱节。浏览只读的边界本身没有争议，争议的只是边界的表达方式。
+
+**决定**：未驱动的落盘会话输入区常开，**首条发送即接管**（GLOSSARY Send-to-Attach）：客户端乐观注册最小 DriveSession（`pendingPrompt` 挂待回显；`attached` 分支以 `base = prev` 展开合并，乐观状态天然存活，纯归约零改动），并发 `attach` 帧；attach 在途的**后续发送入列**（file → 待补发消息序列，本地 `pendingQueue` 顶住显示），`attached` 回包到达即按 file 兑付、按序补发 prompt（第二条起内核经 `streamingBehavior: "followUp"` 兜底排队，与 sendText 同口径）。attach 被拒（`sessionAlreadyDriven`，属主心跳宽免窗）沿重连重放的**静默退避重试**（重试窗耗尽才落错误位并兑付失败）；其它拒绝按 file **精确**兑付失败——gateway 的 attach 错误帧携 `file` 回显（协议 error 帧扩可选 `file`），无 file 关联的连接级错误不撤待发送。他属驱动的前馈由 REST 下发：`/sessions` 列表加 `driven` 标志（组装层把 `registry.isFileDriven` 注入 pi-data），为真且本端驱动表无此会话时输入区禁用、占位符与发送钮 tooltip 提示「正在其它窗口驱动」。可接管的 file 依据以 REST 详情（`fetchSession` 一次取数）为主、5s 轮询摘要为辅——常开语义不依赖轮询命中。SessionBar 收敛为纯解除侧（pill + 解除钮），attach 钮退役；断线时待发送**不**兑付失败（乐观回显顶住，重连重放后续发）。
+
+**边界**：属主排他与互斥语义不变——内存属主标记、文件级/sessionId 级标记、僵尸接管全部照旧，本补记只挪动**同意时机**（按钮点击 → 首条发送）。`driven` 标志是轮询快照（5s），发送瞬间的竞态（他属刚接管）由 attach 拒绝路径兜底，两道防线缺一不可。Trigger Menu 依赖 catalog（随 attached 帧下发），仍属驱动态功能，懒接管态不出现；create 路径仍 eager attach（快照只随 attached 帧走）；无 file 的会话不可驱动，输入区维持只读提示。
+
+**后果**：
+
+- `DriveClient.pendingSends`（file → 待补发消息序列）与 `pendingCreates` 同构而兑付语义各随其需：attach 错误帧按 `file` 精确兑付失败；断线时 create 立即失败（有 Promise 悬挂问题）而 lazy 保留续发（无 Promise，乐观回显顶住）。
+- composer 可输入口径从「已被驱动」变为「已驱动或可接管」（`canInput`），草稿持久化随之覆盖浏览态；LazyComposer 插槽由 SessionView 组装，file 依据详情直取、他属判定取轮询摘要 × 本端驱动表。
+- 测试：乐观注册被 attached 帧保留 / commandFailed 清待回显但保留会话壳（撤会话不属归约）落在 drive-client 纯归约；driven 标志落在 pi-data 注入谓词。
+
+## 补记十二（交互简化轮续）：浏览态可选——Model Seat 目录缓存与选择挂起兑付
+
+**问题**：补记十一把 attach 的同意挪到首条发送后，浏览态（未驱动）底栏的 Model Seat 失去 catalog（随 attached 帧一次性下发），退化为纯只读——与输入区常开可写的新语义不一致：「换模型再发」手势在浏览态断档；曾接管的会话 detach 或刷新后重进，连切模型都不可为，底栏信息随接管时机消失。
+
+**决定**：attached 帧的 catalog 由客户端按 sessionId 缓存（内存 store 切片 + localStorage 续命跨刷新，release 不清，attach 覆盖刷新），浏览态 Model Seat 以缓存目录渲染**可选**菜单；目录完全缺席（首次浏览 / 他属驱动 / 不可驱动）时维持只读展示，值取 entries 派生。浏览态选择写入挂起选择（merge 语义，乐观显示），首条发送随懒发送入列，attached 兑付序为先 set（setModel → setThinkingLevel）后 prompt——首轮即跑在新模型/档位上；档位越界的最终裁决在内核 clamp（setModel 随后自行 clamp，实测 DeepSeek 换模即触），UI 显示内核权威值。setModel 失败（未知模型/无凭据）走既有 commandFailed 落错误条，prompt 不阻断。缓存目录可能过期（models.json 变更），由下次 attach 的 attached 帧覆盖刷新；档位菜单按当前选中模型的 thinkingLevels 过滤，越界选择只剩先选档位后换模型的窄窗口，由内核 clamp 兜底。
+
+**边界**：命令目录（扩展/模板/skills）不缓存，Trigger Menu 仍属驱动态功能（浏览态 `/` 不触发）；挂起选择不持久化（刷新即弃，未发送的意图不承诺存活）；Context Ring 仍按「内核 usage 缺席不渲染」口径，浏览态无分母不补；create 出的会话首条消息前不落盘，刷新后详情 404 进错误态，属既有行为。
+
+**后果**：`DriveState` 增 `catalogs` / `pendingChoices` 切片；懒发送待补发序列携 `choice`，兑付序抽纯函数 `pendingSendCommands`（drive-client，已测：先 set 后 prompt、off 档位不被 falsy 吞、不成对不发 setModel）；localStorage 读写全部守卫降级（隐私模式/超限静默，缓存 miss 只是菜单空）；React Hook 纪律提醒——SessionView 的 hook 一律置于提前 return 之前（开发中曾因 hook 落在错误态 return 后触发 "Rendered fewer hooks than expected"，端到端验证逮住）。
+
+## 补记十三（审查修复轮）：在途入列的判定口径、commandFailed 携 command、缓存只留 model
+
+**问题**：代码审查在补记十一/十二的落地里查出三处与规格不符：一是「attach 在途的后续发送入列」实际不可达——乐观注册后会话壳已在驱动表里，`sendText` 的入列分支被 `if (!session)` 挡住，第二条消息会以 `drive prompt` 直发尚未 attach 的 sessionId，服务端回 `sessionNotDriven`，`commandFailed` 反把首条待回显抹掉；二是 `commandFailed` 无条件清 `pendingPrompt`，与补记十二「setModel 失败 prompt 不阻断」相悖——兑付序是先 set 后 prompt，前一帧的切换失败会抹掉首条消息的气泡；三是缓存写的是整个 `SessionCatalog`（含 `commands`），违反补记十二边界「命令目录不缓存」。
+
+**决定**：入列判定改为**先看有没有 attach 在途**（`inflightFile`：先按 file 直查、再按 sessionId 反查），与「会话壳在不在」解耦——乐观注册后 Composer 已切到驱动分支、只传 sessionId，反查是唯一能兜住第二条的路径。协议 `commandFailed` 帧扩可选 `command`（被拒命令的 `type`）；客户端只在文本命令（prompt / steer / followUp）被拒时让待回显与待确认队列让位，`setModel` / `setThinkingLevel` 被拒仅落 `lastError`；帧未携 `command`（旧服务端）按文本命令处理——留下永不回显的气泡比误撤更糟。缓存收窄为 `CachedCatalog = Pick<SessionCatalog, "model">`，投影抽纯函数 `cacheableCatalog`（组装层写穿与 localStorage 灌入共用，旧键里的 `commands` 在灌入时即被剥掉）。另：`sendText` 返回「有没有被接手」，懒接管但连接未就绪时 Composer **不清**输入框与草稿（原先静默丢字）。
+
+**边界**：`inflightFile` 的线性反查在待发送序列只有个位数（同一次 attach 空窗内的连发）时可忽略；缓存投影是有损的——浏览态永远拿不到命令目录，Trigger Menu 仍只在驱动态出现（与补记十一同口径）。`command` 字段对命令类型的枚举是协议知识，新增命令类型时须在 `isTextCommandFailure` 里重新判定。
+
+**后果**：`use-drive` 的乐观状态撤销收敛到一个 `dropOptimistic(ids)`（`failPendingSends` / `failPendingSend` / `release` 三处共用，疑似重复代码就地消除）；`Composer` 的输入区状态由四个互相编码的布尔收敛为一元状态机 `ComposerMode = driven | lazy | foreign | locked`，模型/档位分流抽 `selectModel` / `selectThinkingLevel`；测试补三则（setModel/setThinkingLevel 被拒不抹待回显、未携 command 按文本处理、`cacheableCatalog` 只留 model 切片）。

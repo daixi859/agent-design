@@ -22,6 +22,9 @@ export interface SessionDetailState {
   loading: boolean;
   error?: string;
   header?: SessionSnapshot["header"];
+  /** 会话文件路径（Send-to-Attach 的接管依据）：详情一次取数直带，不等 5s 轮询摘要——
+      常开语义不依赖轮询命中（ADR-0012 补记十一） */
+  file?: string;
   view: TranscriptModel;
   /** 被驱动时非空：驱动状态、瞬态指示与动作随组件树下发（sessionId 即当前路由 id） */
   drive?: DriveSession;
@@ -49,7 +52,7 @@ export function useSessionDetail(id: string | undefined): SessionDetailState {
         const tail = createSessionTail(detail);
         tailRef.current = tail;
         setBaseline({ header: detail.header, entries: [...detail.entries] });
-        setState({ loading: false, header: detail.header, view: tail.view });
+        setState({ loading: false, header: detail.header, file: detail.file, view: tail.view });
       })
       .catch((error: unknown) => {
         if (cancelled) return;

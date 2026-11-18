@@ -82,7 +82,10 @@ async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
 }
 // ===== HTTP：/api（剥前缀转 pi-data）→ 静态托管 → 404 =====
 
-const piDataApi = createPiDataApi();
+const piDataApi = createPiDataApi({
+  // Send-to-Attach：会话列表标 driven，客户端据此禁用他属驱动的输入区（ADR-0012 补记十一）
+  isFileDriven: (file) => registry.isFileDriven(file),
+});
 
 function serveStatic(res: ServerResponse, pathname: string): void {
   const rel = staticRelPath(pathname);

@@ -6,8 +6,11 @@ import type { DriveEvent, ServerFrame } from "@pi-studio/shared/protocol";
 import {
   PENDING_PROMPT_ENTRY_ID,
   applyServerFrame,
+  cacheableCatalog,
+  inflightFileOf,
   mergeEntries,
   pendingPromptEntries,
+  pendingSendCommands,
   streamingEntries,
   type DriveSession,
 } from "./drive-client";
@@ -200,6 +203,71 @@ describe("applyServerFrame · 帧到客户端状态", () => {
     pending = { ...pending, pendingPrompt: "问" };
     pending = applyServerFrame(pending, { type: "commandFailed", sessionId: "s1", message: "被拒" })!;
     expect(pending.pendingPrompt).toBeUndefined();
+  });
+
+  // 懒接管（GLOSSARY Send-to-Attach，ADR-0012 补记十一）：发送先乐观注册最小快照，
+  // attach 回包后到——attached 分支必须保留乐观待回显，否则首条消息的气泡在空窗闪没。
+  it("Send-to-Attach：乐观注册被 attached 回包保留（带不带快照都保留 pendingPrompt）", () => {
+    const optimistic: DriveSession = { sessionId: "s1", status: "idle", entries: [], pendingPrompt: "问" };
+    // attach 路径（无快照）：零变化走幂等早退，引用原样
+    expect(applyServerFrame(optimistic, attachedBare)).toBe(optimistic);
+    // 快照路径（create 形态 / 带条目）：展开合并，pendingPrompt 随 base 存活
+    const merged = applyServerFrame(optimistic, attached);
+    expect(merged?.pendingPrompt).toBe("问");
+    expect(merged?.header).toEqual(header);
+    expect(merged?.status).toBe("idle");
+  });
+
+  // 归约边界：commandFailed 只清待回显，不撤会话壳——撤乐观会话是组装层按 file
+  // 精确兑付的职责（error 帧 file 回显），归约层无从判定
+  it("Send-to-Attach：commandFailed 清待回显但保留会话壳", () => {
+    const optimistic: DriveSession = { sessionId: "s1", status: "idle", entries: [], pendingPrompt: "问" };
+    const after = applyServerFrame(optimistic, {
+      type: "commandFailed",
+      sessionId: "s1",
+      message: "被拒",
+      command: "prompt",
+    });
+    expect(after?.pendingPrompt).toBeUndefined();
+    expect(after).toBeDefined();
+  });
+
+  // 兑付序是 setModel → setThinkingLevel → prompt（补记十二）：前两条被拒只是切换失败，
+  // prompt 照发——绝不能把顶住首条消息的气泡抹掉
+  it("Send-to-Attach：setModel / setThinkingLevel 被拒不抹待回显，仅落 lastError", () => {
+    const optimistic: DriveSession = {
+      sessionId: "s1",
+      status: "idle",
+      entries: [],
+      pendingPrompt: "问",
+      pendingQueue: ["第二条"],
+    };
+    for (const command of ["setModel", "setThinkingLevel"] as const) {
+      const after = applyServerFrame(optimistic, {
+        type: "commandFailed",
+        sessionId: "s1",
+        message: "未知模型",
+        command,
+      });
+      expect(after?.pendingPrompt).toBe("问");
+      expect(after?.pendingQueue).toEqual(["第二条"]);
+      expect(after?.lastError).toBe("未知模型");
+    }
+  });
+
+  // 旧服务端不携 command：按文本命令处理（留下永不回显的气泡比误撤更糟）
+  it("commandFailed 未携 command 时按文本命令处理", () => {
+    const optimistic: DriveSession = { sessionId: "s1", status: "idle", entries: [], pendingPrompt: "问" };
+    const after = applyServerFrame(optimistic, { type: "commandFailed", sessionId: "s1", message: "被拒" });
+    expect(after?.pendingPrompt).toBeUndefined();
+  });
+
+  // 浏览态目录缓存只留 model 切片（补记十二边界：命令目录不缓存）
+  it("cacheableCatalog 只留 model 切片，空目录返回 undefined", () => {
+    expect(cacheableCatalog(undefined)).toBeUndefined();
+    expect(cacheableCatalog({})).toBeUndefined();
+    const catalog = { model: { models: [], current: { provider: "p", modelId: "m" } }, commands: [] };
+    expect(cacheableCatalog(catalog)).toEqual({ model: catalog.model });
   });
 
   it("toolCall 帧：start 亮起调用指示，end 按 id 匹配熄灭", () => {
@@ -427,5 +495,56 @@ describe("瞬态条目合成 · 喂给同一 buildTranscriptModel 出口（ADR-0
     expect(pending.id).toBe(PENDING_PROMPT_ENTRY_ID);
     expect(pending.parentId).toBe("leaf-1");
     expect((pending as MessageEntry).message.role).toBe("user");
+  });
+});
+
+describe("pendingSendCommands · 懒发送兑付序（补记十二：浏览态选择先 set 后 prompt）", () => {  const bodies = (frames: ReturnType<typeof pendingSendCommands>) =>
+    frames.map((frame) => (frame.type === "drive" ? frame.command.body : frame));
+
+  it("无选择时仅 prompt 序（followUp 兜底，与 sendText 同口径）", () => {
+    const bodies_ = bodies(pendingSendCommands("s1", ["第一条", "第二条"], undefined));
+    expect(bodies_).toEqual([
+      { type: "prompt", text: "第一条", streamingBehavior: "followUp" },
+      { type: "prompt", text: "第二条", streamingBehavior: "followUp" },
+    ]);
+  });
+
+  it("携选择时先 set 模型、再 set 档位、后 prompt——首轮即跑在新模型/档位上", () => {
+    const bodies_ = bodies(
+      pendingSendCommands("s1", ["带选择的发送"], { provider: "anthropic", modelId: "claude-x", thinkingLevel: "high" }),
+    );
+    expect(bodies_).toEqual([
+      { type: "setModel", provider: "anthropic", modelId: "claude-x" },
+      { type: "setThinkingLevel", level: "high" },
+      { type: "prompt", text: "带选择的发送", streamingBehavior: "followUp" },
+    ]);
+  });
+
+  it("provider / modelId 不成对（只改其一）不发 setModel——不成切换", () => {
+    const bodies_ = bodies(pendingSendCommands("s1", ["t"], { provider: "anthropic" }));
+    expect(bodies_[0]).toEqual({ type: "prompt", text: "t", streamingBehavior: "followUp" });
+  });
+
+  it("thinkingLevel 为 off（falsy 陷阱）也必须兑付——档位判定用 !== undefined", () => {
+    const bodies_ = bodies(pendingSendCommands("s1", ["t"], { thinkingLevel: "off" }));
+    expect(bodies_[0]).toEqual({ type: "setThinkingLevel", level: "off" });
+  });
+});
+
+describe("inflightFileOf · attach 在途的定位（补记十三：后续发送必须入列而不是直发）", () => {
+  const pending = new Map([["f1.jsonl", { sessionId: "s1" }]]);
+
+  it("带着 file 的首条：按 file 直查命中", () => {
+    expect(inflightFileOf(pending, "s1", "f1.jsonl")).toBe("f1.jsonl");
+  });
+
+  // 乐观注册后 Composer 切到驱动分支，只传 sessionId——反查是唯一能兜住第二条的路径
+  it("不带 file 的后续发送：按 sessionId 反查命中（否则会直发未 attach 的会话）", () => {
+    expect(inflightFileOf(pending, "s1", undefined)).toBe("f1.jsonl");
+  });
+
+  it("未登记的会话：返回 undefined（走原有 idle / busy 分支）", () => {
+    expect(inflightFileOf(pending, "s2", undefined)).toBeUndefined();
+    expect(inflightFileOf(new Map(), "s1", "f1.jsonl")).toBeUndefined();
   });
 });

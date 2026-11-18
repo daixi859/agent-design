@@ -11,7 +11,7 @@ import { drive, useDriveSession } from "./state/use-drive";
 import { useLocale } from "./state/useLocale";
 import { BrandFloat } from "./features/shell/BrandFloat";
 import { Sidebar } from "./features/sidebar/Sidebar";
-import { SessionBar, type SessionBarAttach } from "./features/sessionbar/SessionBar";
+import { SessionBar, type SessionBarDrive } from "./features/sessionbar/SessionBar";
 import { SessionView } from "./features/session/SessionView";
 import { ComponentGallery } from "./routes/ComponentGallery";
 import { TranscriptLab } from "./features/transcript/lab/TranscriptLab";
@@ -56,29 +56,18 @@ function MainShell({ collapsed }: { collapsed: boolean }) {
     ? (session.name ?? session.title ?? t("untitledSession"))
     : "Pi Studio";
 
-  // 驱动动作区：已驱动的 session 总能解除（含 create 出、尚未进 REST 列表的新会话）；
-  // 未驱动的 session 需要真实文件路径才能接管（取到局部变量，让窄化跨闭包成立）
-  const file = session?.file;
-  const attach: SessionBarAttach | undefined = id
-    ? driveSession
-      ? {
-          attached: true,
-          status: driveSession.status,
-          onAttach: () => file && drive.attach(file),
-          onRelease: () => drive.release(id),
-        }
-      : file
-        ? {
-            attached: false,
-            onAttach: () => drive.attach(file),
-            onRelease: () => drive.release(id),
-          }
-        : undefined
+  // 驱动动作区（ADR-0012 补记十一 Send-to-Attach）：解除侧保留——已驱动的 session 总能解除
+  // （含 create 出、尚未进 REST 列表的新会话）；接管动作已并入首条发送，不再有 attach 钮
+  const barDrive: SessionBarDrive | undefined = id && driveSession
+    ? {
+        status: driveSession.status,
+        onRelease: () => drive.release(id),
+      }
     : undefined;
 
   return (
     <>
-      <SessionBar title={title} branched={detail.view.abandonedCount > 0} collapsed={collapsed} attach={attach} />
+      <SessionBar title={title} branched={detail.view.abandonedCount > 0} collapsed={collapsed} drive={barDrive} />
       <div className={styles.mainContent}>
         <Outlet context={detail satisfies SessionDetailState} />
       </div>

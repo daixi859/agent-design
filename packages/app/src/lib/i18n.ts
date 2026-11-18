@@ -52,11 +52,13 @@ const en = {
   systemPromptEntry: "System prompt",
   systemPromptSections: "{n} sections",
   systemPromptProjectContext: "project context",
-  // Composer（驱动激活；未驱动时保持视觉态；ADR-0017 排队语义：
+  // Composer（驱动即输入：已驱动激活，未驱动可接管走 Send-to-Attach；ADR-0017 排队语义：
   // 「追问/追加」退役，收词 Steer=插话、Follow-up=排队，见 GLOSSARY）
   messagePlaceholder: "Message pi…",
-  attach: "Drive",
-  attachHint: "Attach this session to enable input",
+  undrivableHint: "This session can't be driven from here",
+  drivenByOtherHint: "Being driven in another window — detach there to edit here",
+  // Model Seat 只读态（未驱动浏览态无 catalog，Send-to-Attach）：接管后解锁切换
+  seatReadOnlyHint: "Read-only — send a message to attach and unlock switching",
   detach: "Detach",
   drivenBadge: "driven",
   runningBadge: "running",
@@ -237,10 +239,11 @@ const zh: Record<keyof typeof en, string> = {
   systemPromptEntry: "系统提示词",
   systemPromptSections: "{n} 段",
   systemPromptProjectContext: "项目说明",
-  // Composer（驱动激活；未驱动时保持视觉态；ADR-0017 排队语义）
+  // Composer（驱动即输入：已驱动激活，未驱动可接管走 Send-to-Attach；ADR-0017 排队语义）
   messagePlaceholder: "输入消息…",
-  attach: "驱动",
-  attachHint: "接管此会话后可输入",
+  undrivableHint: "此会话无法在此处驱动",
+  drivenByOtherHint: "正在其它窗口驱动——先在该窗口解除才能输入",
+  seatReadOnlyHint: "只读展示——发送首条消息接管后即可切换",
   detach: "解除驱动",
   drivenBadge: "驱动中",
   runningBadge: "运行中",

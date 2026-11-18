@@ -65,7 +65,7 @@ _Avoid_: 斜杠菜单、命令面板、自动补全
 _Avoid_: 标签、badge、token
 
 **Model Seat**:
-输入框底栏的模型与 thinking 档位选择控件对（两粒按钮）；输入被冻结的时段保持可用——卡住时换模型再发是它的恢复手势语义。
+输入框底栏的模型与 thinking 档位选择控件对（两粒按钮）；输入被冻结的时段保持可用——卡住时换模型再发是它的恢复手势语义。恒渲染：驱动态目录随 attached 帧在场；浏览态退读缓存目录（最近一次 attached 的快照，localStorage 续命跨刷新）仍可选，选择挂起随首条发送兑付（ADR-0012 补记十二）；目录完全缺席（首次浏览 / 他属驱动 / 不可驱动）时只读展示，值取 entries 派生的最后声明。
 _Avoid_: 模型选择器（作为控件对名时）、模型下拉
 
 **Context Ring**:
@@ -75,6 +75,10 @@ _Avoid_: 进度条、token 环、用量饼图
 **Attach**:
 把一个已有 Session 载入内核继续 Drive；接管后该 Session 走驱动事件流，Live Tail 对其失效。
 _Avoid_: 打开、载入、恢复会话
+
+**Send-to-Attach**:
+懒接管：未被驱动的 Session 输入区常开，首条消息的发送动作即触发 Attach——乐观注册顶住空窗，attached 回包后补发 prompt；attach 被拒沿静默退避重试。他属驱动（别的连接持属主）时输入区禁用并提示（REST driven 标志前馈 + 拒绝错误条兜底）。Attach 的同意动作由此从按钮点击变为首次发送（ADR-0012 补记十一）；Session Bar 仅存解除侧。浏览态的模型/档位选择同走挂起—兑付：选择乐观显示、随首条发送先 set 后 prompt（ADR-0012 补记十二）。
+_Avoid_: 自动接管（指进页面即 attach，非本词）、发送即驱动（作为能力名时）、驱动按钮（已退役）
 
 **Running Indicator**:
 Sidebar 条目上的运行状态点：仅运行中（`live`，即 DriveStatus 为 running / retrying）的 Session 亮起（呼吸动画），权威来源是驱动事件流；被驱动但 idle、未被驱动的 Session 均不亮。`live` 一词全应用专指运行态；旧 liveDot 的「全库最近活跃」语义作废，不与运行指示混用。

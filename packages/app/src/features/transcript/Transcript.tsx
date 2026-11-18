@@ -1,7 +1,8 @@
 /** Transcript：对话区本体（ADR-0006 三级结构，ADR-0013 收敛为两级：Turn / Process Group；数据直收 TranscriptModel） */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TranscriptModel, TurnItem } from "../../lib/transcript-model";
-import type { ComposerDrive } from "./Composer";
+import type { SessionCatalog } from "@pi-studio/shared/protocol";
+import type { ComposerDrive, LazyComposer } from "./Composer";
 import { Icon } from "../../components/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
@@ -17,12 +18,18 @@ export function Transcript({
   projectPath,
   view,
   drive,
+  lazy,
+  browsingCatalog,
   sessionId,
 }: {
   projectPath?: string;
   view: TranscriptModel;
   /** 会话被驱动时由 SessionView 下发：输入区激活、状态徽标与中止 */
   drive?: ComposerDrive;
+  /** 未驱动但可接管时下发（GLOSSARY Send-to-Attach）：输入区常开 */
+  lazy?: LazyComposer;
+  /** 浏览态 Model Seat 的缓存目录（补记十二）：驱动态不消费，未驱动时供可选菜单 */
+  browsingCatalog?: SessionCatalog;
   /** 路由 session id：运行态由本组件 selector 直订（ADR-0015），不再经 props 下传；
       下游 TurnView / TuiGroup 收到的是本处派生的布尔（数据走 props、状态走订阅） */
   sessionId?: string;
@@ -150,6 +157,8 @@ export function Transcript({
         model={view.model}
         thinkingLevel={view.thinkingLevel}
         drive={drive}
+        lazy={lazy}
+        browsingCatalog={browsingCatalog}
         sessionId={sessionId}
       />
     </div>
