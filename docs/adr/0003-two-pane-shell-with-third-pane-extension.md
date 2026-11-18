@@ -8,5 +8,5 @@ Pi Studio 的 app shell 固定为 Sidebar（左）+ Transcript（右）两栏。
 
 ## 后果
 
-- 需要第三栏时只增组件、不改 shell 结构与 token 命名。
+- 需要第三栏时只增组件、不改 shell 结构与 token 命名。**2026-11 修订（ADR-0018）**：预留的 detail-pane 令牌组（`--bg-detail-pane` / `--detail-pane-width`）因零引用删除——死预留与「相近就合并」相抵触；第三栏落地时按届时档距规则回补，shell 结构不受影响。
 - Transcript 内的行内展开卡片（工具调用、diff）是本阶段唯一的详情呈现方式，将来第三栏出现后两者并存：卡片摘要在 Transcript、完整详情进第三栏。

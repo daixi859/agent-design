@@ -19,7 +19,7 @@
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
-  color: var(--text-3);
+  color: var(--text-2);
   margin-bottom: var(--space-3);
 }
 
@@ -27,7 +27,7 @@
   margin: 0 0 var(--space-3);
   font-size: var(--text-caption);
   line-height: var(--leading-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 图标全网格：单元随网格列宽自适应 */
@@ -53,7 +53,7 @@
     font-size: var(--text-micro);
     line-height: var(--leading-micro);
     font-family: var(--font-mono);
-    color: var(--text-3);
+    color: var(--text-2);
     /* 截断三件套走全局 .ellipsis 工具类（TSX 挂类） */
     max-inline-size: 100%;
   }
@@ -92,7 +92,7 @@
   & em {
     font-style: normal;
     font-size: var(--text-caption2);
-    color: var(--text-3);
+    color: var(--text-2);
     margin-inline-start: var(--space-3);
   }
 }
@@ -140,7 +140,7 @@
 
 .disclosureChevron {
   display: inline-flex;
-  color: var(--text-3);
+  color: var(--text-2);
   transition: transform var(--duration-fast) var(--ease-standard);
 
   &[data-open] {

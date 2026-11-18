@@ -104,7 +104,7 @@
   }
 
   & svg {
-    color: var(--text-3);
+    color: var(--text-2);
   }
 }
 
@@ -157,7 +157,7 @@
 .itemTime {
   flex: none;
   font-size: var(--text-caption2);
-  color: var(--text-3);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
   /* nav 原语的 medium 不下探到时间戳：保持常规字重 */
   font-weight: var(--weight-regular);
@@ -211,7 +211,7 @@
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
   border-block-start: var(--border-hairline) solid var(--separator);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-caption2);
   font-variant-numeric: tabular-nums;
 }

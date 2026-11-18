@@ -34,7 +34,7 @@
   line-height: var(--leading-caption2);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
-  color: var(--text-3);
+  color: var(--text-2);
   user-select: all;
 }
 
@@ -79,7 +79,7 @@
   align-items: center;
   gap: var(--space-1h);
   font-size: var(--content-font-size-secondary);
-  color: var(--text-3);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 
@@ -141,7 +141,7 @@
   inline-size: 16px;
   block-size: 16px;
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .recapLead svg,
@@ -160,12 +160,12 @@
 }
 
 .recapFacts {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* Draft 标记：文字，不加状态色（ADR-0013「Recap 不发明状态色」） */
 .recapDraft {
-  color: var(--text-3);
+  color: var(--text-2);
   font-style: italic;
 }
 
@@ -215,7 +215,7 @@
   inline-size: 16px;
   block-size: 16px;
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .rowIcon,
@@ -261,7 +261,7 @@
 .rowSummary {
   flex: 1;
   min-inline-size: 0;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--content-font-size-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -274,20 +274,20 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
-.stateRunning { color: var(--text-3); }
-.stateOk      { color: var(--text-3); }
+.stateRunning { color: var(--text-2); }
+.stateOk      { color: var(--text-2); }
 .stateError   { color: var(--danger); }
-.stateStopped { color: var(--text-3); }
+.stateStopped { color: var(--text-2); }
 
 .pulse {
   flex: none;
   inline-size: var(--size-dot);
   block-size: var(--size-dot);
   border-radius: 50%;
-  background: var(--text-3);
+  background: var(--text-2);
   opacity: 1;
   animation: pulse 1.4s var(--ease-standard) infinite;
 }
@@ -313,7 +313,7 @@
   padding-inline-start: calc(var(--row-text-inset, 24px) - var(--space-1));
   font-size: var(--content-font-size-secondary);
   line-height: calc(20px + var(--content-font-delta-secondary));
-  color: var(--text-3);
+  color: var(--text-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -439,7 +439,7 @@
 .rowAction {
   align-self: flex-start;
   padding: var(--space-05) var(--space-2);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-caption2);
 
   &:hover {
@@ -520,7 +520,7 @@
 }
 
 .diffHunk {
-  & .diffText { color: var(--text-3); }
+  & .diffText { color: var(--text-2); }
 }
 
 .diffGap {
@@ -649,8 +649,15 @@
 .composer {
   position: absolute;
   inset-inline: 0;
+  /* 止步于滚动条内缘：背板横贯整列会把右侧细滚动条一起盖住
+     （958ea11 因此整体去渐变）。宽度取 --scrollbar-width，与
+     global.css 的 ::-webkit-scrollbar 共用一个宽度源，永不打架 */
+  inset-inline-end: var(--scrollbar-width);
   bottom: 0;
   padding: var(--space-2) var(--space-6) var(--space-3);
+  /* 底部渐隐恢复：滚动内容从 Composer 下方穿过时融入画布，
+     背板不镂空，卡片四周与下方不再透出行内容 */
+  background: linear-gradient(to top, var(--bg-canvas) 70%, transparent);
   pointer-events: none;
   z-index: calc(var(--z-composer) - 1);
 }
@@ -679,7 +686,7 @@
   color: var(--text-1);
 
   &::placeholder {
-    color: var(--text-3);
+    color: var(--text-2);
   }
   &:focus {
     outline: none;
@@ -732,7 +739,7 @@
 }
 
 .seatMuted {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .ring {
@@ -780,7 +787,7 @@
 }
 
 .ringRow {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-caption);
 }
 
@@ -856,7 +863,7 @@
   padding: 1px var(--space-1);
   border-radius: var(--radius-xs);
   background: var(--bg-inset);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-micro);
 }
 
@@ -887,7 +894,7 @@
 .queueAction {
   gap: var(--space-05);
   padding: var(--space-05) var(--space-1);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-caption2);
   /* icon-only 动作会吃基座 .square 的 28 方形，退回内容自适应 */
   inline-size: auto;
@@ -1034,11 +1041,12 @@
   }
 }
 
+/* 行内代码与代码块共档（ADR-0018）：代码字号固定 12px，不随内容轴缩放 */
 .inlineCode,
 .markdown code {
   font-family: var(--font-mono);
-  font-size: 0.86em;
-  background: var(--inline-code-bg);
+  font-size: var(--text-caption);
+  background: var(--code-bg);
   border-radius: var(--radius-xs);
   padding: var(--space-hairline) var(--space-1);
 }
@@ -1049,6 +1057,8 @@
      .banner padding 9px 14px / space-between / gap 12px / font 11px·18px
      .bannerWrap position sticky top 0 z-index 6
      pre     padding 16px / pre-wrap / break-all / 11px·19px
+   本库取值（ADR-0018 修订）：pre 12px·19px（--text-caption，代码字号基准，DSH 原值 11px）；
+   banner 语言标签保持 11px·18px（caption2 = 代码 −1 密集档）。
    圆角分落 banner 与 pre 两端（wrapper 不能 overflow:hidden，否则 sticky 失效）。 */
 
 .codeShell {
@@ -1121,7 +1131,7 @@
   margin: 0 !important;
   padding: 16px;
   font-family: var(--font-mono);
-  font-size: var(--text-caption2);
+  font-size: var(--text-caption);
   line-height: var(--leading-code);
   color: var(--code-text);
   background: var(--code-bg);
@@ -1140,9 +1150,14 @@
 }
 
 /* Shiki 双主题：dark 下切到 --shiki-dark 变量。
-   span 带默认主题的内联 color，必须 !important 才能压过（Shiki 官方配方）。 */
+   span 带默认主题的内联 color，必须 !important 才能压过（Shiki 官方配方）；
+   pre 的内联背景同理是亮色默认（--shiki-dark-bg 注入但未用），dark 下用 --code-bg 覆盖。 */
 :global([data-theme="dark"]) .codeShell span {
   color: var(--shiki-dark) !important;
+}
+
+:global([data-theme="dark"]) .codeShell pre {
+  background: var(--code-bg) !important;
 }
 
 /* 代码折叠：只收 <pre>，头部栏在折叠态保持可见 */

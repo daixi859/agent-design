@@ -27,7 +27,7 @@
 
 ## 后果
 
-- 新增 `--tui-*` 语义令牌组（浅深双主题成对）；TUI 组件样式一律引用语义层变量。
+- 新增 `--tui-*` 语义令牌组（浅深双主题成对）；TUI 组件样式一律引用语义层变量。**2026-11 修订（ADR-0018）**：该令牌组整组退役并入全局灰阶——正文 `--code-text`、摘要 `--text-2`、时间 `--text-4`、运行态 `--accent-text`，字色阶梯的档位语义由语义层统一承载；上文「令牌只留字色四枚」的决定相应作废，TUI 不再私有配色。
 - 模型层 `GroupRecap` 增分类计数与运行态派生量、`ToolCallItem` 增运行秒数锚点与流式尾巴（`live`）；Standard 不读新字段。
 - 协议扩字段见 [ADR-0012 补记八](0012-pi-kernel-drive-integration.md)：`toolCall` 帧带 `args` / `outputTail`，normalize 放行 `tool_execution_start/update`；Live Tail 路径无 update 流，运行行输出区显示占位——两路径能力差异是明示的，不是缺陷。
 - Settings/Preview 新增 TUI 模式样张（含运行态 mock），截图验收浅深双主题。

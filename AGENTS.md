@@ -25,8 +25,6 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 
 ## 环境与验收
 
-本机 shell 的 fnm 钩子在进入项目目录时以非零退出中断 `&&` 命令链，npx 同样不可用：命令一律从仓库根直接执行（工作目录默认就是根），用内置 Node 跑：
-
 ```
 node node_modules/typescript/bin/tsc -b   # 类型检查（根 tsconfig 引用四个包）
 node node_modules/vitest/vitest.mjs run   # 测试（从根扫描全部包）

@@ -1,7 +1,8 @@
 /* TUI Mode 的 Process Group 渲染（ADR-0014）：终端模拟的文本形态——
    无底无框，等宽小字浅色融入画布；仅以字色与绘制的字形（SVG 对勾/叉、CSS 圆点、
    L 形引导线、chevron 图标）表达结构，不走文本字符（字体回退渲染不一致）。
-   颜色/间距/字号引令牌（primitives + --tui-*）；对齐派生值（37.2px 等，
+   颜色/间距/字号引共享令牌（primitives + text-2/text-4/code-text/accent-text，
+   原 --tui-* 私有色已并入全局灰阶，ADR-0018）；对齐派生值（37.2px 等，
    与字形槽中心的几何关系）保留裸值，注释即文档。 */
 
 .group {
@@ -9,7 +10,7 @@
   font-size: var(--text-caption);
   line-height: 1.7;
   margin: var(--space-1h) 0;
-  color: var(--tui-dim);
+  color: var(--text-2);
   overflow: hidden;
 }
 
@@ -47,7 +48,7 @@
   align-self: flex-start;
   inline-size: 12px;
   block-size: 1.7em;
-  color: var(--tui-dim);
+  color: var(--text-2);
   transition: transform var(--duration-fast) var(--ease-standard);
 }
 
@@ -56,7 +57,7 @@
 }
 
 .head:hover .chevron {
-  color: var(--tui-text);
+  color: var(--code-text);
 }
 
 /* running... 的扫光跑马灯（cc-style 的文字扫光）：高亮段随 background-position 扫过 */
@@ -64,9 +65,9 @@
   color: transparent;
   background-image: linear-gradient(
     100deg,
-    var(--tui-run) 42%,
-    var(--tui-text) 50%,
-    var(--tui-run) 58%
+    var(--accent-text) 42%,
+    var(--code-text) 50%,
+    var(--accent-text) 58%
   );
   background-size: 220% 100%;
   -webkit-background-clip: text;
@@ -75,7 +76,7 @@
 }
 
 .dim {
-  color: var(--tui-dim);
+  color: var(--text-2);
 }
 
 .failed {
@@ -125,7 +126,7 @@
 }
 
 .iconRun {
-  color: var(--tui-run);
+  color: var(--accent-text);
 }
 
 /* spinner 圆弧（Icon "spinner"）的旋转：CSS 动画驱动，不占挂钟 tick；
@@ -156,13 +157,13 @@
 }
 
 .name {
-  color: var(--tui-text);
+  color: var(--code-text);
 }
 
 /* 思考摘要：与工具名同档最强字色（阶梯），但带 ellipsis 收缩——
    超长时自身截断，行尾时间（.elapsed）不被挤出溢出区 */
 .thinkSummary {
-  color: var(--tui-text);
+  color: var(--code-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -171,16 +172,16 @@
 
 /* 摘要：不占满（grow 退役）——行内秒数紧跟其后，不推到行尾（迭代） */
 .summary {
-  color: var(--tui-dim);
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
 
-/* 行内秒数：字色阶梯最浅一档（--tui-faint），紧跟内容、不靠右；不参与压缩（摘要收缩让位） */
+/* 行内秒数：字色阶梯最浅一档（--text-4，装饰级），紧跟内容、不靠右；不参与压缩（摘要收缩让位） */
 .elapsed {
-  color: var(--tui-faint);
+  color: var(--text-4);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex: none;
@@ -188,7 +189,7 @@
 
 /* 活跃思考的「思考中」标签：与工具名同档最强字色 */
 .thinkLabel {
-  color: var(--tui-text);
+  color: var(--code-text);
   white-space: nowrap;
 }
 
@@ -210,7 +211,7 @@
   max-height: calc(var(--think-tail-lines, 3) * 1.7em);
   overflow: hidden;
   margin: var(--space-05) 0 var(--space-1) 37.2px;
-  color: var(--tui-dim);
+  color: var(--text-2);
   line-height: 1.7;
   white-space: pre-wrap;
   /* anywhere 而非弃用的 word-break: break-word；flex 行内 min-width:0 场景
@@ -224,7 +225,7 @@
   margin: var(--space-05) 0 var(--space-1) 24.6px;
   padding-inline-start: 11.6px;
   border-inline-start: 1px solid var(--separator-strong);
-  color: var(--tui-dim);
+  color: var(--text-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -247,7 +248,7 @@
 }
 
 .subCall {
-  color: var(--tui-dim);
+  color: var(--text-2);
   width: auto;
 }
 

@@ -1,47 +1,45 @@
-/* 设计令牌 · 语义层（ADR-0001 分层 / ADR-0005 视觉方向）
+/* 设计令牌 · 语义层（ADR-0001 分层 / ADR-0005 视觉方向 / ADR-0018 档距规则）
    颜色一律引用本层与组件层变量；与主题无关的尺度（字排/间距/圆角/动效）
    直接引用原始值层（ADR-0001 后果段，2026-11 修订）。
    主题切换：index.html 首帧脚本设置 <html data-theme>；
    每个主题同步设置 color-scheme，让原生控件与滚动条跟随（modern-web-guidance）。
-   视觉语言：macOS 骨架 + Claude 式内容面（暖纸中性面、赤陶强调、常暗代码面）。 */
+   视觉语言：macOS 骨架 + Claude 式内容面（暖纸中性面、赤陶强调、常暗代码面）。
+   档距约定（ADR-0018）：同类令牌相邻档表面 ΔL* ≥ 3、文字 ΔL* ≥ 10；
+   达不到档距的两个值必须合并，不允许第三档挤进同一亮度带。 */
 
 :root {
   color-scheme: light;
 
-  /* ---- 表面 ---- */
+  /* ---- 表面（阶梯：canvas 97.9 / inset 94.0 / code 90.5 / bubble 87.2；相邻档 ΔL* ≥ 3）----
+     elevated 不入 L 梯度：浮层身份由阴影 + 发丝环承载，不靠亮度差（macOS 惯例）。
+     --bg-sidebar 是位点别名：侧栏与设置轨复用下沉面档，确需分开时再改值。 */
   --bg-canvas: #faf9f5;
-  --bg-sidebar: #f0eee6;
-  --bg-elevated: #ffffff;
   --bg-inset: #f0eee6;
+  --bg-sidebar: var(--bg-inset);
+  --bg-elevated: #ffffff;
   --bg-hover: rgba(20, 20, 19, 0.05);
-  --bg-active: rgba(20, 20, 19, 0.08);
-  --bg-selected: rgba(20, 20, 19, 0.08);
+  --bg-selected: rgba(20, 20, 19, 0.11);
 
-  /* ---- 文本 ----
-     text-3 是信息性元数据（时间、语言标签）的下限：#73716a 对画布 4.6:1（WCAG 1.4.3）。
+  /* ---- 文本（四档灰阶：text-1 / code-text / text-2 / text-4）----
+     text-2 承接原 text-3 / thinking / tui-dim：次级文本与信息性元数据共档，
+     #6b6a63 对画布 5.2:1（WCAG 1.4.3）。
      text-4 只作装饰性淡字（行号、注解侧线），约 2.9:1，不承载必读信息。 */
   --text-1: #141413;
   --text-2: #6b6a63;
-  --text-3: #73716a;
   --text-4: rgba(20, 20, 19, 0.44);
 
   /* ---- 分隔 ---- */
   --separator: rgba(20, 20, 19, 0.09);
   --separator-strong: rgba(20, 20, 19, 0.16);
 
-  /* ---- 强调（赤陶） ----
-     --accent 供填充与图形；文字场合一律用 --accent-text（对画布 5.3:1）。
+  /* ---- 强调（赤陶）----
+     --accent 供填充与图形；文字、焦点环、运行态一律用 --accent-text
+     （对画布 5.3:1，焦点环满足 WCAG 2.4.11 的 3:1）。
      --selection-bg 延续 accent，替代旧 Apple 蓝选区（ADR-0005）。 */
   --accent: #d97757;
   --accent-text: #a84e30;
-  --accent-hover: #c4633f;
-  --on-accent: #ffffff;
   --accent-subtle: rgba(217, 119, 87, 0.1);
   --selection-bg: color-mix(in srgb, var(--accent) 26%, transparent);
-
-  /* ---- Thinking（暖灰，ADR-0005；#6e6d65 对 subtle 底 4.6:1） ---- */
-  --thinking: #6e6d65;
-  --thinking-subtle: rgba(121, 120, 111, 0.07);
 
   /* ---- 状态（暖调；文字场合对画布均 ≥ 4.5:1） ---- */
   --success: #4d9f4d;
@@ -49,41 +47,37 @@
   --warning: #9c6023;
   --warning-subtle: rgba(156, 96, 35, 0.14);
   --danger: #b04429;
-  --danger-subtle: rgba(176, 68, 41, 0.12);
 
-  /* ---- 用户气泡（中性浅底深字，Claude 式） ---- */
-  --bubble-user-bg: #e8e6dc;
+  /* ---- 用户气泡（浅沙底档，Claude 式；与代码面 ΔL* ≥ 3） ---- */
+  --bubble-user-bg: #dedbc8;
   --on-bubble-user: var(--text-1);
 
-  /* ---- 代码：随主题回暖光（ADR-0007） ---- */
-  --code-bg: #eceae1;
+  /* ---- 代码面：随主题回暖光（ADR-0007）----
+     浅色取值 2026-11 调深（#eceae1 → #e7e4d6）：与下沉面档距 1.4 → 3.5（ADR-0018）。
+     行内代码 chip 与代码块共档（原 --inline-code-bg 并入）。 */
+  --code-bg: #e7e4d6;
   --code-border: rgba(20, 20, 19, 0.1);
   --code-text: #45443f;
-  --inline-code-bg: #e8e6dc;
 
-  /* ---- Diff（暖光面上的柔和水洗色；文字对洗色底 ≥ 4.9:1） ----
-     ADR-0013：按 DSH 的分档补齐 bg / gutter / marker 三档。
-     gutter 是行首 +/− 前缀列，marker 是左侧 3px 竖条——两者都比行底更实。 */
+  /* ---- Diff（暖光面上的柔和水洗色；文字对洗色底 ≥ 4.9:1）----
+     ADR-0013 的 bg / gutter / marker 三档：gutter 是行首 +/− 前缀列，
+     marker 是左侧 3px 竖条——两者都比行底更实；marker 即状态色（角色别名）。 */
   --diff-add-bg: rgba(77, 159, 77, 0.14);
   --diff-add-text: #2d642d;
   --diff-add-gutter: rgba(77, 159, 77, 0.22);
-  --diff-add-marker: #4d9f4d;
+  --diff-add-marker: var(--success);
   --diff-del-bg: rgba(204, 75, 64, 0.12);
   --diff-del-text: #9c382e;
   --diff-del-gutter: rgba(204, 75, 64, 0.2);
-  --diff-del-marker: #b04429;
+  --diff-del-marker: var(--danger);
 
   /* ---- 主按钮（Claude 式墨色） ---- */
   --primary-btn-bg: #141413;
   --primary-btn-fg: #faf9f5;
 
-  /* ---- TUI Mode（ADR-0014：终端模拟的文本形态，无底无框） ----
-     字色三档阶梯（迭代）：工具名/思考最强（text）、摘要中等（dim）、时间最浅（faint）。
-     状态色不另造：运行用赤陶文字档，成功/失败复用 --success / --danger。 */
-  --tui-text: #3f3e39;
-  --tui-dim: #73716a;
-  --tui-faint: #a5a29a;
-  --tui-run: #a84e30;
+  /* ---- TUI Mode（ADR-0014：终端模拟的文本形态，无底无框）----
+     不再私有配色（ADR-0018）：正文 --code-text、摘要 --text-2、
+     时间 --text-4、运行态 --accent-text，与全局灰阶共用档位。 */
 
   /* ---- 滚动条 ----
      thumb 刻意保持 macOS 细滑质感（约 1.8:1）：滚动条不属于 WCAG 1.4.11 的
@@ -92,17 +86,13 @@
   --scroll-track: transparent;
 
   /* ---- 阴影与焦点 ----
-     焦点指示用 outline 承载（global.css），只存颜色不存 shadow：
+     焦点指示用 outline 承载（global.css），颜色用 --accent-text（赤陶文字档），
+     不再单设 --focus-color（ADR-0018 合并近邻档）。
      outline 与装饰 box-shadow 天然可叠加，不再互相覆盖。 */
   --shadow-card: 0 1px 2px rgba(20, 20, 19, 0.05), 0 0 0 0.5px rgba(20, 20, 19, 0.05);
   --shadow-popover: 0 12px 40px rgba(20, 20, 19, 0.16), 0 0 0 0.5px rgba(20, 20, 19, 0.08);
   /* 发丝内描边：浅浮面的标准内框（ Thinking 卡、工具卡、分段控件等共用） */
   --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
-  --focus-color: #b85a38;
-
-  /* ---- 预留：第三栏扩展点（ADR-0003） ---- */
-  --bg-detail-pane: #f0eee6;
-  --detail-pane-width: 360px;
 
   /* ---- 布局常量（ADR-0009：顶栏移除，头部职责由 Brand Float + Session Bar 分担） ---- */
   --sessionbar-height: 44px;
@@ -128,17 +118,18 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
+  /* 暗面阶梯：bubble 24.0 / elevated 19.8 / canvas 15.1 / inset 8.8（L*，相邻档 ΔL* ≥ 3；
+     elevated 同浅色例外靠阴影）。下沉面加深（#1f1e1d → #1a1918）：
+     与 canvas 的档距 3.8 → 6.3（ADR-0018）。 */
   --bg-canvas: #262624;
-  --bg-sidebar: #1f1e1d;
+  --bg-inset: #1a1918;
+  --bg-sidebar: var(--bg-inset);
   --bg-elevated: #30302e;
-  --bg-inset: #1f1e1d;
   --bg-hover: rgba(245, 244, 239, 0.06);
-  --bg-active: rgba(245, 244, 239, 0.1);
-  --bg-selected: rgba(245, 244, 239, 0.1);
+  --bg-selected: rgba(245, 244, 239, 0.13);
 
   --text-1: #f5f4ef;
   --text-2: rgba(235, 233, 224, 0.62);
-  --text-3: rgba(235, 233, 224, 0.54);
   --text-4: rgba(235, 233, 224, 0.4);
 
   --separator: rgba(255, 255, 255, 0.08);
@@ -146,38 +137,31 @@
 
   --accent: #d97757;
   --accent-text: #e0876a;
-  --accent-hover: #e0876a;
-  --on-accent: #ffffff;
   --accent-subtle: rgba(217, 119, 87, 0.16);
   --selection-bg: color-mix(in srgb, var(--accent) 40%, transparent);
-
-  --thinking: #a3a29a;
-  --thinking-subtle: rgba(163, 162, 154, 0.09);
 
   --success: #6fbf67;
   --success-subtle: rgba(111, 191, 103, 0.16);
   --warning: #e0a458;
   --warning-subtle: rgba(224, 164, 88, 0.14);
   --danger: #e07b6f;
-  --danger-subtle: rgba(224, 123, 111, 0.16);
 
   --bubble-user-bg: #3a3937;
   --on-bubble-user: var(--text-1);
 
-  /* ---- 代码：深色主题维持深面（ADR-0007） ---- */
-  --code-bg: #1a1918;
+  /* ---- 代码：暗主题下沉面与代码面同一深铬档（macOS 惯例，ADR-0018） ---- */
+  --code-bg: var(--bg-inset);
   --code-border: rgba(255, 255, 255, 0.08);
   --code-text: #d9d7cd;
-  --inline-code-bg: #3a3937;
 
   --diff-add-bg: rgba(125, 197, 140, 0.18);
   --diff-add-text: #86c592;
   --diff-add-gutter: rgba(125, 197, 140, 0.28);
-  --diff-add-marker: #6fbf67;
+  --diff-add-marker: var(--success);
   --diff-del-bg: rgba(224, 90, 87, 0.16);
   --diff-del-text: #e78c84;
   --diff-del-gutter: rgba(224, 90, 87, 0.26);
-  --diff-del-marker: #e07b6f;
+  --diff-del-marker: var(--danger);
 
   --scroll-thumb: rgba(245, 244, 239, 0.32);
   --scroll-track: transparent;
@@ -189,15 +173,6 @@
   --primary-btn-bg: #f5f4ef;
   --primary-btn-fg: #1f1e1d;
 
-  /* ---- TUI Mode（文本形态，无底无框；字色三档阶梯同浅色） ---- */
-  --tui-text: #d9d7cd;
-  --tui-dim: rgba(235, 233, 224, 0.54);
-  --tui-faint: rgba(235, 233, 224, 0.34);
-  --tui-run: #e0876a;
-
-  --focus-color: #e0876a;
   /* 发丝内描边：值随主题 separator 变化，结构同亮色 */
   --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
-
-  --bg-detail-pane: #1f1e1d;
 }

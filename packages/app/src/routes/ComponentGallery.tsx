@@ -14,18 +14,18 @@ import styles from "./gallery.module.css";
 
 const SURFACES: Array<[string, string]> = [
   ["canvas", "var(--bg-canvas)"],
-  ["sidebar", "var(--bg-sidebar)"],
   ["elevated", "var(--bg-elevated)"],
   ["inset", "var(--bg-inset)"],
+  ["sidebar(=inset)", "var(--bg-sidebar)"],
+  ["code-bg", "var(--code-bg)"],
+  ["bubble-user", "var(--bubble-user-bg)"],
   ["accent", "var(--accent)"],
   ["accent-subtle", "var(--accent-subtle)"],
-  ["thinking", "var(--thinking)"],
   ["success", "var(--success)"],
   ["warning", "var(--warning)"],
   ["danger", "var(--danger)"],
   ["text-1", "var(--text-1)"],
   ["text-2", "var(--text-2)"],
-  ["text-3", "var(--text-3)"],
   ["text-4", "var(--text-4)"],
   ["separator", "var(--separator)"],
 ];

@@ -68,7 +68,7 @@
   inline-size: var(--size-dot);
   block-size: var(--size-dot);
   border-radius: 50%;
-  background: var(--text-3);
+  background: var(--text-2);
 }
 
 .drivePillRunning .driveDot {

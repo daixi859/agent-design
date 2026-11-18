@@ -33,7 +33,7 @@
 
 ## 范围外补充（落地时一并做了，超出本 ADR 的决定清单）
 
-- **代码块几何对齐 DSH**（`Markdown.tsx`：sticky `codeBannerWrap` + `codeBanner` + `codeContent`，复制确认时长 1000ms，新增 `--leading-code*`）。本 ADR 只决定「代码面沿用 ADR-0007 的统一表面语言」，未要求重排代码块；此项是同一轮里按 `dsh-transcript-notes.md` 顺手对齐的，事后记此以免误认为清单内条目。
+- **代码块几何对齐 DSH**（`Markdown.tsx`：sticky `codeBannerWrap` + `codeBanner` + `codeContent`，复制确认时长 1000ms，新增 `--leading-code*`）。本 ADR 只决定「代码面沿用 ADR-0007 的统一表面语言」，未要求重排代码块；此项是同一轮里按 `dsh-transcript-notes.md` 顺手对齐的，事后记此以免误认为清单内条目。**2026-11 修订（ADR-0018）**：`<pre>` 字号 11 → 12px（`12px·19px`，代码字号双基准 `--text-caption`），banner 语言标签保持 11px。
 - **用户消息时钟行**（`MessageViews.tsx` + `clock` 图标）：与 ADR-0006「时间移出正文流」不冲突（时间是消息体的附属标注，不是页脚），但同样不在本清单里。
 
 ## 后果

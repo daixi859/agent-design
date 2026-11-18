@@ -13,16 +13,20 @@
     "Anthropic Mono Web", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
     Consolas, -apple-system, "PingFang SC", "Microsoft YaHei", monospace;
 
-  /* ---- 字号（纯 size；行高用 --leading-*，font-size 引用才合法） ---- */
-  --text-micro: 10px;
-  --text-caption2: 11px;
-  --text-caption: 12px;
-  --text-footnote: 13px;
-  --text-body: 14px;
-  --text-callout: 15px;
-  --text-title3: 17px;
-  --text-title2: 20px;
-  --text-title1: 24px;
+  /* ---- 字号（双基准，ADR-0018）----
+     全库只有两个基准：--text-base 14px（标准字号）与 --text-code 12px（代码字号，
+     不派生、不缩放），其余档位一律 calc 推出，改基准全档联动。
+     --text-caption 即代码字号；caption2 是代码 −1 的密集元数据档。 */
+  --text-base: 14px;
+  --text-code: 12px;
+  --text-micro: calc(var(--text-code) - 2px);
+  --text-caption2: calc(var(--text-code) - 1px);
+  --text-caption: var(--text-code);
+  --text-footnote: calc(var(--text-base) - 1px);
+  --text-body: var(--text-base);
+  --text-callout: calc(var(--text-base) + 1px);
+  --text-title3: calc(var(--text-base) + 3px);
+  --text-title2: calc(var(--text-base) + 6px);
 
   /* ---- 内容字号轴（ADR-0013：DSH 式四轴尺度的最小版） ----
      正文默认 14px；次级 = 正文 − 1px（≤14 时）或 − 2px（>14 时）；
@@ -38,21 +42,17 @@
     var(--content-font-size-secondary) - 13px
   );
 
-  /* ---- 行高 ---- */
-  --leading-micro: 14px;
-  --leading-caption2: 14px;
-  --leading-caption: 16px;
-  --leading-footnote: 18px;
-  --leading-body-tight: 20px;
-  --leading-body: 22px;
-  --leading-callout: 24px;
-  --leading-title3: 24px;
-  --leading-title2: 26px;
-  --leading-title1: 30px;
-  /* 代码面行高（ADR-0013 复刻 DSH：markdown code-block 11/19、
-     工具内 IO 11/16）。11px 是代码字号，行高比正文松，读长行不挤。 */
-  --leading-code: 19px;
-  --leading-code-small: 16px;
+  /* ---- 行高（随字号派生：字号 + 呼吸值，ADR-0013 的 calc 约定）----
+     零引用的 callout/title 系行高已删；标题行高在排版处按 1.3 直写。 */
+  --leading-micro: calc(var(--text-micro) + 4px);
+  --leading-caption2: calc(var(--text-caption2) + 3px);
+  --leading-caption: calc(var(--text-caption) + 4px);
+  --leading-footnote: calc(var(--text-footnote) + 5px);
+  --leading-body-tight: calc(var(--text-body) + 6px);
+  --leading-body: calc(var(--text-body) + 8px);
+  /* 代码面行高（ADR-0013 复刻 DSH 19px；行高比正文松，读长行不挤） */
+  --leading-code: calc(var(--text-code) + 7px);
+  --leading-code-small: calc(var(--text-code) + 4px);
 
   /* ---- 字重 ---- */
   --weight-regular: 400;
@@ -85,6 +85,10 @@
   /* ---- 小件尺寸 ---- */
   /* 运行指示点（GLOSSARY: Running Indicator）等状态点 */
   --size-dot: 6px;
+  /* 滚动条宽度：global.css 的像素级细滚动条与需要避让滚动条的浮层
+     （Composer 背板）共用一个宽度源；Firefox thin 无固定像素，
+     由 global.css 的非 WebKit 分支覆写为近似值 */
+  --scrollbar-width: 6px;
 
   /* ---- 圆角 ---- */
   --radius-xs: 4px;

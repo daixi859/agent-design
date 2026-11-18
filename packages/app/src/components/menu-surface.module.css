@@ -34,7 +34,7 @@
     outline: none;
   }
   &::placeholder {
-    color: var(--text-3);
+    color: var(--text-2);
   }
 }
 
@@ -48,7 +48,7 @@
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
-  color: var(--text-3);
+  color: var(--text-2);
 
   &::before,
   &::after {
@@ -88,7 +88,7 @@
 
 .itemIcon {
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
   margin-block-start: 1px;
 }
 
@@ -112,7 +112,7 @@
 
 .itemDesc {
   margin-block-start: 1px;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-caption);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -136,6 +136,6 @@
 
 .empty {
   padding: var(--space-3) var(--space-2);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--text-caption);
 }

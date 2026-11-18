@@ -71,8 +71,8 @@ select {
     scrollbar-color: auto;
   }
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
   }
   ::-webkit-scrollbar-thumb {
     background: var(--scroll-thumb);
@@ -84,12 +84,20 @@ select {
   }
 }
 
+/* Firefox thin 滚动条无固定像素（Windows 约 8px）：覆写宽度源，
+   供需要避让滚动条的浮层（Composer 背板）取用，近似值即可 */
+@supports not selector(::-webkit-scrollbar) {
+  :root {
+    --scrollbar-width: 8px;
+  }
+}
+
 /* ---- 焦点环 ----
    用 outline 而非 box-shadow：装饰性阴影（卡片、浮层按钮）与焦点环
    互不覆盖，键盘焦点永远不会被元素自身的 box-shadow 吃掉。
    颜色对两主题画布均 ≥ 3:1（WCAG 2.4.11 非文本对比）。 */
 :focus-visible {
-  outline: 2px solid var(--focus-color);
+  outline: 2px solid var(--accent-text);
   outline-offset: 1px;
 }
 
