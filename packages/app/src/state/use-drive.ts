@@ -23,6 +23,11 @@ class DriveClient {
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private reconnectDelay = 500;
+  /** 重连重放的来源标记与退避（2s→32s 五次）：重放被僵尸属主拒时按它静默重试——
+      心跳宽免窗（服务端 2×heartbeat）内属主仍判「活」，重试窗须盖过 60s */
+  private replayFiles = new Set<string>();
+  private replayAttempts = 0;
+  private replayTimer: number | null = null;
 
   constructor() {
     this.connect();
@@ -33,12 +38,15 @@ class DriveClient {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.cancelReplay();
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${proto}//${location.host}/ws`);
     ws.onopen = () => {
       this.reconnectDelay = 500;
-      // 重连后按 file 表重放 attach（attached 幂等保留已有条目）
-      for (const file of new Set(this.files.values())) {
+      // 重连后按 file 表重放 attach（attached 幂等保留已有条目）；被拒走退避重试
+      this.replayFiles = new Set(this.files.values());
+      this.replayAttempts = 0;
+      for (const file of this.replayFiles) {
         this.send({ type: "attach", file });
       }
     };
@@ -48,10 +56,42 @@ class DriveClient {
     ws.onclose = () => {
       // 断线：待定的 create 立即失败，避免调用方永久悬挂
       this.failPendingCreates("驱动连接已断开");
+      this.cancelReplay();
       this.reconnectTimer = window.setTimeout(() => this.connect(), this.reconnectDelay);
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
     };
     this.ws = ws;
+  }
+
+  private cancelReplay(): void {
+    if (this.replayTimer !== null) {
+      window.clearTimeout(this.replayTimer);
+      this.replayTimer = null;
+    }
+  }
+
+  /** 重放被拒（sessionAlreadyDriven）的退避重试：只对 onopen 重放生效（用户手点的
+      attach 失败照旧落错误位，是否重试由人决定）；file 表已清的条目不再重发 */
+  private scheduleReplay(): void {
+    if (this.replayTimer !== null) return;
+    if (this.replayAttempts >= 5) {
+      // 重试窗耗尽仍被拒：属主是活连接，落错误位交还给人
+      this.replayFiles.clear();
+      this.store.setState({
+        connectionError: { message: "该会话正在被其它窗口驱动", code: "sessionAlreadyDriven" },
+      });
+      return;
+    }
+    const delay = Math.min(2000 * 2 ** this.replayAttempts, 32000);
+    this.replayAttempts += 1;
+    this.replayTimer = window.setTimeout(() => {
+      this.replayTimer = null;
+      const pending = [...this.replayFiles].filter((file) => [...this.files.values()].includes(file));
+      this.replayFiles = new Set(pending);
+      for (const file of pending) {
+        this.send({ type: "attach", file });
+      }
+    }, delay);
   }
 
   private send(frame: ClientFrame): void {
@@ -60,6 +100,11 @@ class DriveClient {
 
   private handleFrame(frame: ServerFrame): void {
     if (frame.type === "error") {
+      // 重连重放撞上僵尸属主宽免窗：静默退避重试，不落错误位打断用户
+      if (frame.code === "sessionAlreadyDriven" && this.replayFiles.size > 0) {
+        this.scheduleReplay();
+        return;
+      }
       // 连接级错误（attach/create 被拒、坏帧）：落错误位并兑付待定 create；
       // 错误文案走 i18n（服务端只给 code），无 code 时退回服务端原文
       this.store.setState({ connectionError: { message: frame.message, code: frame.code } });
@@ -72,13 +117,19 @@ class DriveClient {
     }
     switch (frame.type) {
       case "attached":
-        if (frame.file) this.files.set(frame.sessionId, frame.file);
+        if (frame.file) {
+          this.files.set(frame.sessionId, frame.file);
+          this.replayFiles.delete(frame.file);
+        }
         // create 路径无 file：兑付待定的新建导航
         else this.settleCreates({ ok: true, sessionId: frame.sessionId });
         break;
-      case "released":
+      case "released": {
+        const file = this.files.get(frame.sessionId);
         this.files.delete(frame.sessionId);
+        if (file) this.replayFiles.delete(file);
         break;
+      }
     }
     const sessionId = "event" in frame ? frame.event.sessionId : frame.sessionId;
     const current = this.store.getState().sessions.get(sessionId);
@@ -124,8 +175,10 @@ class DriveClient {
     return this.store.getState().connectionError;
   }
 
-  /** 接管已有 session（GLOSSARY: Attach） */
+  /** 接管已有 session（GLOSSARY: Attach）。手点的 attach 失败要见错误条——
+      从重放重试集合摘出，不做静默重试 */
   attach(file: string): void {
+    this.replayFiles.delete(file);
     this.send({ type: "attach", file });
   }
 

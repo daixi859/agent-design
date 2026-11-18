@@ -44,6 +44,14 @@ export class SessionRegistry {
     return this.registrations.get(sessionId)?.host;
   }
 
+  /** 按 attach 文件查已登记的 sessionId（gateway 的重放幂等 / 僵尸接管判定用） */
+  sessionOf(file: string): string | undefined {
+    for (const [sessionId, reg] of this.registrations) {
+      if (reg.file === file) return sessionId;
+    }
+    return undefined;
+  }
+
   isDriven(sessionId: string): boolean {
     return this.registrations.has(sessionId);
   }

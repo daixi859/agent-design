@@ -58,6 +58,8 @@ interface KernelModelLike {
   name?: string;
   contextWindow?: number;
   reasoning?: boolean;
+  /** 输入模态（pi-ai ModelInputModality："image" | "text"），判图片能力用 */
+  input?: readonly string[];
   /** 键为 thinking 档位名（off/minimal/.../max）的映射表 */
   thinkingLevelMap?: unknown;
 }
@@ -121,20 +123,34 @@ function buildCommandCatalog(session: AgentSession): CommandCatalogItem[] {
 function buildModelCatalog(session: AgentSession): ModelCatalog {
   const runtime = session.modelRuntime;
   const current = session.model;
-  const models: ModelCatalogEntry[] = (runtime.getAllModels() as readonly KernelModelLike[]).map((model) => {
-    const isCurrent = current !== undefined && model.provider === current.provider && model.id === current.id;
-    // 当前模型的档位以内核权威口径为准（getAvailableThinkingLevels 已按模型 clamp）
-    const thinkingLevels = isCurrent
-      ? session.getAvailableThinkingLevels()
-      : thinkingLevelsOf(model);
-    return {
-      provider: model.provider,
-      modelId: model.id,
-      ...(model.name && model.name !== model.id ? { name: model.name } : {}),
-      thinkingLevels,
-      ...(typeof model.contextWindow === "number" ? { contextWindow: model.contextWindow } : {}),
-    };
-  });
+  // 目录只列已添加的服务商（ADR-0016 补记）：getAllModels 是 models.dev 全集，
+  // 未配置凭据的服务商既切不过去（getModel 查凭据即 throw）也不该入眼；
+  // 当前模型始终保留（会话正跑在它上面，不因凭据判定时序而消失）
+  const isConfigured = (provider: string) =>
+    current?.provider === provider || runtime.hasConfiguredAuth(provider);
+  const providerName = (provider: string): string | undefined => {
+    const name = runtime.getProvider(provider)?.name;
+    return name && name !== provider ? name : undefined;
+  };
+  const models: ModelCatalogEntry[] = (runtime.getAllModels() as readonly KernelModelLike[])
+    .filter((model) => isConfigured(model.provider))
+    .map((model) => {
+      const isCurrent = current !== undefined && model.provider === current.provider && model.id === current.id;
+      // 当前模型的档位以内核权威口径为准（getAvailableThinkingLevels 已按模型 clamp）
+      const thinkingLevels = isCurrent
+        ? session.getAvailableThinkingLevels()
+        : thinkingLevelsOf(model);
+      const pName = providerName(model.provider);
+      return {
+        provider: model.provider,
+        ...(pName ? { providerName: pName } : {}),
+        modelId: model.id,
+        ...(model.name && model.name !== model.id ? { name: model.name } : {}),
+        thinkingLevels,
+        ...(model.input?.includes("image") ? { supportsImages: true } : {}),
+        ...(typeof model.contextWindow === "number" ? { contextWindow: model.contextWindow } : {}),
+      };
+    });
   return {
     models,
     ...(current ? { current: { provider: current.provider, modelId: current.id } } : {}),

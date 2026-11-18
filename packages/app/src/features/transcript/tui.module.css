@@ -83,13 +83,11 @@
 }
 
 /* 槽位区：全量展开时限高 40vh 内部滚动（迭代反馈），展开/追加都由组件贴底跟随；
-   细滚动条与 transcript 内部容器同款（thumb 派生自 --scroll-thumb，轨道透明融入画布） */
+   细滚动条全局继承（global.css），容器只管滚动几何 */
 .slots {
   padding-bottom: var(--space-05);
   max-height: 40vh;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 /* L 形引导线（↳ 的 CSS 绘制）：竖线下拐，树形缩进的骨架。

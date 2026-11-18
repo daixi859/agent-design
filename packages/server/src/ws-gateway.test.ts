@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { WebSocket } from "ws";
+import { WebSocket, type WebSocket as WsSocket } from "ws";
 import type { ClientFrame, DriveEvent, ServerFrame } from "@pi-studio/shared/protocol";
 import { createWsGateway, type DriveOutcome, type OpenedSession, type WsGatewayDeps } from "./ws-gateway.ts";
 
@@ -21,18 +21,32 @@ function fakeDeps() {
     catalog: () => ({}),
     usage: () => undefined,
   });
+  // 在册表：模拟 registry 的属主语义（attach 即登记、release 即撤销、重复 attach 拒绝）
+  const driven = new Map<string, OpenedSession>();
+  const files = new Map<string, string>();
   const deps: WsGatewayDeps = {
     attach: async (file) => {
       calls.push(`attach:${file}`);
       if (file.endsWith("locked.jsonl")) throw new Error("已被驱动");
-      return snap(`sid-${file}`);
+      if (files.has(file)) throw new Error("已被驱动");
+      const opened = snap(`sid-${file}`);
+      driven.set(opened.sessionId, opened);
+      files.set(file, opened.sessionId);
+      return opened;
     },
     create: async (cwd) => {
       calls.push(`create:${cwd}`);
-      return snap("sid-created");
+      const opened = snap("sid-created");
+      driven.set(opened.sessionId, opened);
+      return opened;
     },
+    get: (sessionId) => driven.get(sessionId),
+    sessionOf: (file) => files.get(file),
     release: (id) => {
       calls.push(`release:${id}`);
+      const file = [...files.entries()].find(([, sid]) => sid === id)?.[0];
+      if (file) files.delete(file);
+      driven.delete(id);
     },
     drive: async (command) => {
       calls.push(`drive:${command.sessionId}:${command.body.type}`);
@@ -42,9 +56,11 @@ function fakeDeps() {
   return { calls, driveOutcomes, deps };
 }
 
-async function startServer(deps: WsGatewayDeps) {
+async function startServer(deps: WsGatewayDeps, opts?: { isLive?(socket: unknown): boolean }) {
   const server = createServer();
-  const gateway = createWsGateway(deps);
+  const gateway = createWsGateway(deps, {
+    ...(opts?.isLive ? { isLive: opts.isLive as (socket: WsSocket) => boolean } : {}),
+  });
   gateway.bind(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
@@ -191,6 +207,80 @@ describe("createWsGateway · 驱动协议传输", () => {
       client.send({ type: "attach", file: "f2.jsonl" });
       await waitFor(() => client.frames.some((f) => f.type === "attached"));
       expect(client.frames).toContainEqual(expect.objectContaining({ type: "attached", sessionId: "sid-f2.jsonl", file: "f2.jsonl" }));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("同连接 attach 重放 → 幂等回 attached，deps.attach 不再被调", async () => {
+    const { calls, deps } = fakeDeps();
+    const server = await startServer(deps);
+    try {
+      const client = connect(server.port);
+      await client.opened;
+      client.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => client.frames.some((f) => f.type === "attached"));
+
+      // 模拟 use-drive 断线重连的 onopen 重放：同一连接重复 attach
+      client.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => client.frames.filter((f) => f.type === "attached").length >= 2);
+      expect(calls.filter((c) => c === "attach:f1.jsonl")).toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("他端属主在册 → attach 被拒；属主断开释放后可重新 attach", async () => {
+    const { deps } = fakeDeps();
+    const server = await startServer(deps);
+    try {
+      const a = connect(server.port);
+      const b = connect(server.port);
+      await Promise.all([a.opened, b.opened]);
+      a.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => a.frames.some((f) => f.type === "attached"));
+
+      b.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => b.frames.some((f) => f.type === "error"));
+      expect(b.frames[0]).toEqual({ type: "error", message: "已被驱动" });
+
+      // 属主断开 → 属主释放 → b 可接管
+      await a.close();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      b.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => b.frames.some((f) => f.type === "attached"));
+      expect(b.frames).toContainEqual(expect.objectContaining({ type: "attached", sessionId: "sid-f1.jsonl", file: "f1.jsonl" }));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("僵尸属主被接管后其 close 迟到 → 不得释放新属主的会话", async () => {
+    const { calls, deps } = fakeDeps();
+    // 注入 isLive=false：任何在册属主都判为僵尸，模拟代理半开、close 迟到的连接
+    const server = await startServer(deps, { isLive: () => false });
+    try {
+      const a = connect(server.port);
+      const b = connect(server.port);
+      await Promise.all([a.opened, b.opened]);
+      a.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => a.frames.some((f) => f.type === "attached"));
+
+      // b 接管（a 的注册被释放、订阅摘除，但 a 的 owned 集合里条目仍在）
+      b.send({ type: "attach", file: "f1.jsonl" });
+      await waitFor(() => b.frames.some((f) => f.type === "attached"));
+      const releasesAfterTakeover = calls.filter((c) => c === "release:sid-f1.jsonl").length;
+      expect(releasesAfterTakeover).toBe(1);
+
+      // 僵尸 a 的 close 迟到触发：不得把 b 正驱动的会话再释放一遍
+      await a.close();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(calls.filter((c) => c === "release:sid-f1.jsonl")).toHaveLength(releasesAfterTakeover);
+
+      // b 的订阅仍在：事件继续到达
+      server.gateway.emit(statusEvent("sid-f1.jsonl"));
+      await waitFor(() => b.frames.some((f) => f.type === "event"));
+      expect(b.frames).toContainEqual({ type: "event", event: statusEvent("sid-f1.jsonl") });
     } finally {
       await server.close();
     }

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ContextUsageInfo, DriveStatus, SessionCatalog } from "@pi-studio/shared/protocol";
 import { Icon, type IconName } from "../../components/Icon";
-import { MenuSurface, hasOpenMenuSurface } from "../../components/MenuSurface";
+import { MenuSurface, MenuSurfaceItem, hasOpenMenuSurface } from "../../components/MenuSurface";
 import { Tooltip } from "../../components/Tooltip";
 import { clearDraft, loadDraft, saveDraft, type PersistedChip } from "../../lib/draft-store";
 import { isBusyStatus } from "../../lib/drive-client";
@@ -75,7 +75,6 @@ export function Composer({
   const [text, setText] = useState("");
   const [chip, setChip] = useState<PersistedChip | null>(null);
   const [menu, setMenu] = useState<{ query: string; highlight: number } | null>(null);
-  const [cardRect, setCardRect] = useState<DOMRect | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const lastEscRef = useRef(0);
@@ -137,7 +136,6 @@ export function Composer({
       setMenu(null);
       return;
     }
-    setCardRect(cardRef.current?.getBoundingClientRect() ?? null);
     const count = filterCommands(commands, query).length;
     setMenu({ query, highlight: count > 0 ? 0 : -1 });
   };
@@ -296,7 +294,6 @@ export function Composer({
           catalog={drive.catalog}
           current={displayModel}
           thinkingLevel={displayThinking}
-          anchorRef={cardRef}
           onSetModel={drive.onSetModel}
           onSetThinkingLevel={drive.onSetThinkingLevel}
         />
@@ -322,7 +319,7 @@ export function Composer({
           disabled={!drive || compacting || (!chip && !text.trim())}
           onClick={() => submit()}
         >
-          <Icon name="arrow-up" size={15} />
+          <Icon name="arrow-up" size={20} />
         </button>
       </Tooltip>
     </div>
@@ -331,91 +328,91 @@ export function Composer({
   return (
     <div className={variant === "overlay" ? styles.composer : styles.composerDocked}>
       {drive && <QueueDock rows={queueRows} running={busy} onRebuild={drive.onRebuildQueue} />}
-      <div className={styles.composerCard} ref={cardRef}>
-        {chip && (
-          <div className={styles.chipRow}>
-            <span className={styles.commandChip}>
-              <Icon name={(chip.source && COMMAND_ICON[chip.source]) || "doc"} size={11} />
-              {chip.name}
-              <button
-                type="button"
-                className={styles.chipRemove}
-                title={t("chipRemoveHint")}
-                aria-label={t("chipRemoveHint")}
-                onClick={removeChip}
-              >
-                <Icon name="xmark" size={9} />
-              </button>
-            </span>
-            {chip.argumentHint && !text && (
-              <span className={styles.chipGhost}>{chip.argumentHint}</span>
+      <MenuSurface
+        open={menu !== null}
+        onClose={() => setMenu(null)}
+        placement="top"
+        matchAnchorWidth
+        closeOnEscape={false}
+        ariaLabel={t("triggerMenuLabel")}
+        // 锚 = composer 卡本体（combobox 口径：菜单与卡同宽、贴卡上方）；卡 ref
+        // 双记——cardRef 供 Esc 聚焦域判定，anchorRef 供浮层定位
+        trigger={(anchorRef) => (
+          <div
+            ref={(node) => {
+              cardRef.current = node;
+              anchorRef.current = node;
+            }}
+            className={styles.composerCard}
+          >
+            {chip && (
+              <div className={styles.chipRow}>
+                <span className={styles.commandChip}>
+                  <Icon name={(chip.source && COMMAND_ICON[chip.source]) || "doc"} size={11} />
+                  {chip.name}
+                  <button
+                    type="button"
+                    className={styles.chipRemove}
+                    title={t("chipRemoveHint")}
+                    aria-label={t("chipRemoveHint")}
+                    onClick={removeChip}
+                  >
+                    <Icon name="xmark" size={9} />
+                  </button>
+                </span>
+                {chip.argumentHint && !text && (
+                  <span className={styles.chipGhost}>{chip.argumentHint}</span>
+                )}
+              </div>
             )}
+            <textarea
+              ref={textareaRef}
+              className={styles.composerInput}
+              placeholder={placeholder}
+              rows={1}
+              value={drive ? text : ""}
+              disabled={!drive}
+              onChange={(event) => {
+                setText(event.target.value);
+                syncMenu(event.target.value, event.target.selectionStart);
+              }}
+              onClick={(event) => syncMenu(event.currentTarget.value, event.currentTarget.selectionStart)}
+              onKeyDown={onKeyDown}
+              role={menu ? "combobox" : undefined}
+              aria-expanded={menu ? true : undefined}
+              aria-controls={menu ? COMMAND_MENU_ID : undefined}
+              aria-activedescendant={menu && menu.highlight >= 0 ? `${COMMAND_MENU_ID}-opt-${menu.highlight}` : undefined}
+              aria-autocomplete="list"
+            />
+            {bar}
           </div>
         )}
-        <textarea
-          ref={textareaRef}
-          className={styles.composerInput}
-          placeholder={placeholder}
-          rows={1}
-          value={drive ? text : ""}
-          disabled={!drive}
-          onChange={(event) => {
-            setText(event.target.value);
-            syncMenu(event.target.value, event.target.selectionStart);
-          }}
-          onClick={(event) => syncMenu(event.currentTarget.value, event.currentTarget.selectionStart)}
-          onKeyDown={onKeyDown}
-          role={menu ? "combobox" : undefined}
-          aria-expanded={menu ? true : undefined}
-          aria-controls={menu ? COMMAND_MENU_ID : undefined}
-          aria-activedescendant={menu && menu.highlight >= 0 ? `${COMMAND_MENU_ID}-opt-${menu.highlight}` : undefined}
-          aria-autocomplete="list"
-        />
-        {bar}
-      </div>
-
-      {menu && cardRect && (
-        <MenuSurface
-          anchor={cardRect}
-          anchorEl={cardRef.current}
-          placement="top"
-          matchAnchorWidth
-          closeOnEscape={false}
-          onClose={() => setMenu(null)}
-          ariaLabel={t("triggerMenuLabel")}
-        >
-          <div role="listbox" id={COMMAND_MENU_ID}>
-            {menuItems.length === 0 && <div className={menuStyles.empty}>{t("menuEmpty")}</div>}
-            {menuItems.map((item, index) => (
-              <button
-                type="button"
-                key={`${item.trigger}-${item.name}`}
-                role="option"
-                id={`${COMMAND_MENU_ID}-opt-${index}`}
-                aria-selected={index === menu.highlight}
-                className={menuStyles.item}
-                onMouseEnter={() => setMenu((current) => (current ? { ...current, highlight: index } : current))}
-                // mousedown 接：焦点不离开编辑器（combobox 口径）
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  pick(index);
-                }}
-              >
-                <span className={menuStyles.itemIcon}>
-                  <Icon name={item.icon} size={13} />
-                </span>
-                <span className={menuStyles.itemBody}>
-                  <span className={menuStyles.itemTitle}>
-                    {item.name}
-                    {item.argumentHint && <span className={menuStyles.itemHint}>{item.argumentHint}</span>}
-                  </span>
-                  {item.description && <span className={menuStyles.itemDesc}>{item.description}</span>}
-                </span>
-              </button>
-            ))}
-          </div>
-        </MenuSurface>
-      )}
+      >
+        <div role="listbox" id={COMMAND_MENU_ID}>
+          {menuItems.length === 0 && <div className={menuStyles.empty}>{t("menuEmpty")}</div>}
+          {menuItems.map((item, index) => (
+            <MenuSurfaceItem
+              key={`${item.trigger}-${item.name}`}
+              role="option"
+              id={`${COMMAND_MENU_ID}-opt-${index}`}
+              selected={index === menu?.highlight}
+              icon={item.icon}
+              onMouseEnter={() => setMenu((current) => (current ? { ...current, highlight: index } : current))}
+              // mousedown 接：焦点不离开编辑器（combobox 口径）
+              onMouseDown={(event) => {
+                event.preventDefault();
+                pick(index);
+              }}
+            >
+              <span className={menuStyles.itemTitle}>
+                {item.name}
+                {item.argumentHint && <span className={menuStyles.itemHint}>{item.argumentHint}</span>}
+              </span>
+              {item.description && <span className={menuStyles.itemDesc}>{item.description}</span>}
+            </MenuSurfaceItem>
+          ))}
+        </div>
+      </MenuSurface>
     </div>
   );
 }

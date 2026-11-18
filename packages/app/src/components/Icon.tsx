@@ -39,7 +39,9 @@ export type IconName =
   | "globe"
   | "code"
   | "users"
-  | "clock";
+  | "clock"
+  /* Model Seat 行内能力徽标（ADR-0016 补记）：模型接受图片输入 */
+  | "image";
 
 const glyphs: Record<IconName, JSX.Element> = {
   "panel-left": (
@@ -184,6 +186,14 @@ const glyphs: Record<IconName, JSX.Element> = {
     <>
       <circle cx="10" cy="10" r="6.75" />
       <path d="M10 6.25V10l2.6 1.6" />
+    </>
+  ),
+  /* 图片输入（SF photo 风格）：相框 + 光点 + 山形 */
+  image: (
+    <>
+      <rect x="2.75" y="4.25" width="14.5" height="11.5" rx="2.75" />
+      <circle cx="7" cy="8" r="1.1" />
+      <path d="m5.25 14.25 3.25-3.5 2.75 2.9 2.25-2.4 2.25 2.3" />
     </>
   ),
 };

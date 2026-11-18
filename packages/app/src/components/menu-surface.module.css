@@ -15,9 +15,14 @@
 }
 
 .search {
+  /* 吸顶：长列表滚动时搜索框钉在滚动区顶（Model Seat 模型列表），垫底色遮住穿行内容 */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: block;
   inline-size: calc(100% - var(--space-2));
-  margin: var(--space-1);
+  /* 吸顶不留纵向缝：上下缝交给外层 surface 的 padding */
+  margin: 0 var(--space-1);
   padding: var(--space-1) var(--space-2);
   border: none;
   border-radius: var(--radius-sm);
@@ -33,13 +38,30 @@
   }
 }
 
+/* 分组头：短分割线 — 服务商名 — 通栏分割线（Model Seat 分组列表） */
 .groupLabel {
-  padding: var(--space-1) var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1h);
+  padding: var(--space-1h) var(--space-2) var(--space-1);
   font-size: var(--text-micro);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   color: var(--text-3);
+
+  &::before,
+  &::after {
+    content: "";
+    flex: none;
+    inline-size: var(--space-2);
+    block-size: 1px;
+    background: var(--separator);
+  }
+  &::after {
+    flex: 1;
+    inline-size: auto;
+  }
 }
 
 .item {
@@ -52,8 +74,9 @@
   background: none;
   border-radius: var(--radius-sm);
   color: var(--text-1);
-  font-size: var(--text-footnote);
-  line-height: var(--leading-footnote);
+  /* 标准字号 14px（--text-body）：模型 / 档位 / 命令行的统一口径 */
+  font-size: var(--text-body);
+  line-height: var(--leading-body-tight);
   text-align: start;
   cursor: pointer;
 
@@ -96,10 +119,19 @@
   white-space: nowrap;
 }
 
-.itemCheck {
+/* 行尾插槽（✓ 等行内末端内容）：推向行尾，随行首对齐 */
+.itemTrailing {
   flex: none;
   color: var(--accent-text);
   margin-block-start: 1px;
+}
+
+/* 行内能力徽标（模型行尾的图片输入标记）：弱化色，随 title 提示语义 */
+.itemFlag {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  color: var(--text-4);
 }
 
 .empty {

@@ -18,3 +18,11 @@
 - 修订 ADR-0012 的延后清单：模型与 thinkingLevel 切换转正；fork、扩展交互、工具审批仍延后。
 - `contextWindow` 由目录下发后 Context Ring 才有分母；目录未达前环不渲染（与 dsh 同口径）。
 - Trigger Menu 的内建映射面（compact 等）是客户端知识，pi 上游若提供 headless 命令面即可归还。
+
+## 补记（Model Seat 验收轮）：模型目录收窄为已添加的服务商
+
+正文「provider 分组的模型列表」落地时补三处明文：
+
+- **目录只列已添加（配置过凭据）的服务商**：内核 `getAllModels()` 是 models.dev 全集，未配置的服务商模型既切不过去（`getModel` 未配凭据即 throw）也不该入眼。core 映射层按 `hasConfiguredAuth(provider)` 过滤（「已添加」的内核口径），当前模型始终保留——会话正跑在它上面，不因凭据判定时序而消失。切换仅会话级的语义不变。
+- **条目扩 `providerName`**（可选，内核 `Provider.name`）：分组头展示服务商名而非裸 id；同名同 id 时缺省。客户端 ModelSeat 按 provider 首现顺序分组渲染，搜索连服务商名一起匹配；行级 provider 描述随分组头退役。分组头为分割线式（短分割线 — 服务商名 — 通栏分割线），搜索框在长列表滚动时吸顶。
+- **条目扩 `supportsImages`**（可选，内核 `Model.input` 含 `"image"`）：Model Seat 行内图片输入徽标，读者据此判断能否贴图提问；纯展示，不做交互过滤。

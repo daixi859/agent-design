@@ -376,8 +376,6 @@
   overflow: auto;
   max-block-size: 224px;
   white-space: pre;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 .terminalOutput[data-error="true"] {
@@ -411,8 +409,6 @@
   overflow: auto;
   max-block-size: 220px;
   white-space: pre;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 .codeBody[data-error="true"] {
@@ -488,8 +484,6 @@
   line-height: var(--leading-caption);
   overflow: auto;
   max-block-size: 320px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 .diffLine {
@@ -1154,8 +1148,6 @@
   word-break: break-all;
   border-end-start-radius: var(--radius-md);
   border-end-end-radius: var(--radius-md);
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 .codeShell pre code,

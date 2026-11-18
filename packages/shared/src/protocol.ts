@@ -55,11 +55,15 @@ export const THINKING_LEVEL_ORDER = ["off", "minimal", "low", "medium", "high", 
 /** 模型目录条目：Model Seat 列表与 Context Ring 分母（contextWindow）的数据源 */
 export interface ModelCatalogEntry {
   provider: string;
+  /** 服务商展示名（内核 Provider.name）；缺省回落 provider id——分组头展示用 */
+  providerName?: string;
   modelId: string;
   /** 展示名；缺省回落 modelId */
   name?: string;
   /** 该模型可用的 thinking 档位（内核 getAvailableThinkingLevels 口径） */
   thinkingLevels: string[];
+  /** 接受图片输入（内核 Model.input 含 "image"）：Model Seat 行内能力徽标 */
+  supportsImages?: boolean;
   /** 上下文窗口 token 数；内核未告知时缺省（此时环不渲染） */
   contextWindow?: number;
 }

@@ -34,6 +34,8 @@ let registry!: SessionRegistry;
 const gateway = createWsGateway({
   attach: (file) => registry.attach(file),
   create: (cwd) => registry.create(cwd),
+  get: (sessionId) => registry.get(sessionId),
+  sessionOf: (file) => registry.sessionOf(file),
   release: (sessionId) => registry.release(sessionId),
   drive: (command) => driveCommand(command),
 });
