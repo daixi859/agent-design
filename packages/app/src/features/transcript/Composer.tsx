@@ -26,7 +26,7 @@ import {
   type MenuCommandGroup,
 } from "../../lib/trigger-menu";
 import type { MessageKey } from "../../lib/i18n";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { usePendingChoice, type QueuedItem } from "../../state/use-drive";
 import { ContextRing } from "./ContextRing";
 import { ModelSeat } from "./ModelSeat";

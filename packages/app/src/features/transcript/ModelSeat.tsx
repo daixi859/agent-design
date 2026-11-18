@@ -12,7 +12,7 @@ import { SelectMenu, type SelectGroup } from "../../components/SelectMenu";
 import { Tag } from "../../components/Tag";
 import { cx } from "../../lib/cx";
 import type { MessageKey } from "../../lib/i18n";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import barStyles from "./transcript.module.css";
 
 /** 未知档位值在正典序里排最后 */

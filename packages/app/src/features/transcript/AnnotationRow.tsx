@@ -13,7 +13,7 @@ import type {
 import { contentText } from "@pi-studio/shared/message-text";
 import { formatTokens } from "../../lib/format";
 import { translate, translateVars, type Locale } from "../../lib/i18n";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { cx } from "../../lib/cx";
 import { Icon, type IconName } from "../../components/Icon";
 import { DisclosureRow } from "../../components/DisclosureRow";

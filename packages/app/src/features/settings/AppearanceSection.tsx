@@ -2,10 +2,10 @@
     主题与 Session Bar 快捷键共用 useTheme；渲染模式共用 useViewMode（ADR-0014）；
     思考尾部行数共用 useTuiThinkLines（ADR-0014：活跃思考行的尾部滚动行数）；
     语言经 useLocale 写 <html lang> 并持久化。 */
-import { useTheme } from "../../state/useTheme";
-import { useLocale } from "../../state/useLocale";
-import { useTuiThinkLines } from "../../state/useTuiThinkLines";
-import { useViewMode } from "../../state/useViewMode";
+import { useTheme } from "../../state/use-theme";
+import { useLocale } from "../../state/use-locale";
+import { useTuiThinkLines } from "../../state/use-tui-think-lines";
+import { useViewMode } from "../../state/use-view-mode";
 import { TUI_THINK_LINES_OPTIONS } from "../../lib/tui-prefs";
 import { cx } from "../../lib/cx";
 import styles from "./settings.module.css";

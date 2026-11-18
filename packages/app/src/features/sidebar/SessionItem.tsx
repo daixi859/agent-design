@@ -3,7 +3,7 @@ import { NavLink } from "react-router";
 import type { SessionSummary } from "@pi-studio/shared/pi-types";
 import { formatRelativeCompact } from "../../lib/format";
 import { useDriveLive } from "../../state/use-drive";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { cx } from "../../lib/cx";
 import nav from "../../components/nav.module.css";
 import styles from "./sidebar.module.css";

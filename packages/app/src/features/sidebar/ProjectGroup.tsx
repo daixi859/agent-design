@@ -8,7 +8,7 @@ import { Button } from "../../components/Button";
 import { SessionItem } from "./SessionItem";
 import styles from "./sidebar.module.css";
 import { cx } from "../../lib/cx";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 
 export function ProjectGroupView({ group, filter }: { group: ProjectGroup; filter: string }) {
   const [collapsed, setCollapsed] = useState(false);

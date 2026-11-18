@@ -5,10 +5,10 @@
 import { useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useSessions, useSessionSummary } from "./state/sessions";
-import { useSessionDetail, type SessionDetailState } from "./state/useSessionDetail";
+import { useSessionDetail, type SessionDetailState } from "./state/use-session-detail";
 import { currentSessionId } from "./state/current-session";
 import { drive, useDriveSession } from "./state/use-drive";
-import { useLocale } from "./state/useLocale";
+import { useLocale } from "./state/use-locale";
 import { BrandFloat } from "./features/shell/BrandFloat";
 import { Sidebar } from "./features/sidebar/Sidebar";
 import { SessionBar, type SessionBarDrive } from "./features/sessionbar/SessionBar";

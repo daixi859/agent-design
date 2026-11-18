@@ -3,7 +3,7 @@
     Settings 壳下动作 = 回主页面（navigate("/")，非 history 回退）。 */
 import { useNavigate } from "react-router";
 import { Icon } from "../../components/Icon";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import styles from "./brand-float.module.css";
 
 export function BrandFloat({

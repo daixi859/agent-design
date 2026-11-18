@@ -23,16 +23,21 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 
 `packages/server`（及后续内核接入层 core）在 Node 原生 type-stripping 下直跑：相对导入一律带 `.ts` 扩展名，只用可擦除语法（无参数属性、enum、namespace）。
 
+## 代码规范
+
+文件命名：组件 `.tsx` 与导出的组件同名（PascalCase），其余 `.ts` 一律 kebab-case（如 `use-locale.ts`；文件名归文件名，导出名仍是 camelCase）；打包器入口（`main.tsx` 等，由 `index.html` 引用）豁免。由 `scripts/check-file-naming.mjs` 兜底（已接钩子与 CI）。测试文件一律就近放置（`foo.test.ts` 与 `foo.ts` 同目录），不设集中测试目录。
+
 ## 环境与验收
 
 ```
 node node_modules/typescript/bin/tsc -b   # 类型检查（根 tsconfig 引用四个包）
 node node_modules/vitest/vitest.mjs run   # 测试（从根扫描全部包）
 node scripts/check-css-tokens.mjs         # 样式令牌：var(--x) 必须有定义
+node scripts/check-file-naming.mjs        # 文件命名：组件 PascalCase，其余 kebab-case
 node packages/server/src/main.ts          # 独立 server（REST /api · WS /ws，裸 node 直跑）
 node node_modules/vite/bin/vite.js packages/app   # dev server，/api 与 /ws 代理到 server 进程
 ```
 
-依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 跑同样的三道：typecheck、test、check:css）。
+依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 跑同样的四道：typecheck、test、check:css、check:naming）。
 
-完成判据：任何改动交付前上面前三道检查全绿；视觉改动另加 dev server 截图自检浅、深两主题通过，并在交付说明里写下截图路径（否则跳过不可见）。
+完成判据：任何改动交付前上面前四道检查全绿；视觉改动另加 dev server 截图自检浅、深两主题通过，并在交付说明里写下截图路径（否则跳过不可见）。

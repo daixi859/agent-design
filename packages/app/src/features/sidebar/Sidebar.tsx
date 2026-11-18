@@ -7,7 +7,7 @@ import { cx } from "../../lib/cx";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { Input } from "../../components/Input";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { ProjectGroupView } from "./ProjectGroup";
 import styles from "./sidebar.module.css";
 

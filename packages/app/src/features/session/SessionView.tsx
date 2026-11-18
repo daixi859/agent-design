@@ -4,7 +4,7 @@
     他属驱动由 REST driven 标志 × 本端驱动表判定（标志是快照，竞态由 attach 拒绝的错误条兜底）。
     错误出口：详情加载失败、驱动会话错误（lastError）与连接级错误都渲染为顶部错误条。 */
 import { useOutletContext, useParams } from "react-router";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { useSessionSummary } from "../../state/sessions";
 import {
   drive,
@@ -16,7 +16,7 @@ import {
 import { mergeBrowsingCatalog } from "../../lib/drive-client";
 import { useGlobalCatalog } from "../../state/global-catalog";
 import { driveErrorText } from "../../lib/drive-errors";
-import type { SessionDetailState } from "../../state/useSessionDetail";
+import type { SessionDetailState } from "../../state/use-session-detail";
 import { Icon } from "../../components/Icon";
 import { Transcript } from "../transcript/Transcript";
 import styles from "../transcript/transcript.module.css";

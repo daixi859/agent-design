@@ -4,3 +4,4 @@
 node node_modules/typescript/bin/tsc -b || exit 1
 node node_modules/vitest/vitest.mjs run || exit 1
 node scripts/check-css-tokens.mjs || exit 1
+node scripts/check-file-naming.mjs || exit 1

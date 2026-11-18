@@ -11,7 +11,8 @@
     "build:preview": "pnpm build && pnpm preview",
     "typecheck": "node node_modules/typescript/bin/tsc -b",
     "test": "node node_modules/vitest/vitest.mjs run",
-    "check:css": "node scripts/check-css-tokens.mjs"
+    "check:css": "node scripts/check-css-tokens.mjs",
+    "check:naming": "node scripts/check-file-naming.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

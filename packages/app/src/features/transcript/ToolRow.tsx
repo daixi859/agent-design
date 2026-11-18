@@ -12,7 +12,7 @@ import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { DisclosureRow } from "../../components/DisclosureRow";
 import { cx } from "../../lib/cx";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { parseToolDiff } from "../../lib/edit-diff";
 import { toolIcon } from "./tool-icons";
 import type { MessageKey } from "../../lib/i18n";

@@ -10,7 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { codeToHtml } from "shiki";
 import { cx } from "../../lib/cx";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import styles from "./transcript.module.css";
 
 /** 折叠预览的最大高度（与 transcript.module.css 的 max-block-size 保持一致） */

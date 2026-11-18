@@ -3,9 +3,9 @@
     浏览器全屏、渲染模式快切（ADR-0014）、主题切换。 */
 import { useEffect, useState } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
-import { useTheme } from "../../state/useTheme";
-import { useLocale } from "../../state/useLocale";
-import { useViewMode } from "../../state/useViewMode";
+import { useTheme } from "../../state/use-theme";
+import { useLocale } from "../../state/use-locale";
+import { useViewMode } from "../../state/use-view-mode";
 import { cx } from "../../lib/cx";
 import { driveBadgeKey } from "../../lib/drive-labels";
 import { Icon } from "../../components/Icon";

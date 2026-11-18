@@ -8,7 +8,7 @@ import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { translateVars } from "../../lib/i18n";
 import { cx } from "../../lib/cx";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import styles from "./transcript.module.css";
 
 export interface QueueRow extends QueuedItem {

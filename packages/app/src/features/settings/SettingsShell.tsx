@@ -3,7 +3,7 @@
 import { NavLink, Outlet, useLocation } from "react-router";
 import { cx } from "../../lib/cx";
 import type { MessageKey } from "../../lib/i18n";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { Icon } from "../../components/Icon";
 import nav from "../../components/nav.module.css";
 import styles from "./settings.module.css";

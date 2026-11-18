@@ -14,11 +14,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "../../components/Icon";
 import { cx } from "../../lib/cx";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import { translateVars } from "../../lib/i18n";
 import { formatDuration } from "../../lib/format";
-import { useTuiThinkLines } from "../../state/useTuiThinkLines";
-import { useStickToBottom } from "../../state/useStickToBottom";
+import { useTuiThinkLines } from "../../state/use-tui-think-lines";
+import { useStickToBottom } from "../../state/use-stick-to-bottom";
 import type {
   GroupItem,
   GroupRecap,

@@ -8,7 +8,7 @@
 import { useMemo, type ReactNode } from "react";
 import type { SessionEntry } from "@pi-studio/shared/pi-types";
 import { buildTranscriptModel } from "../../../lib/transcript-model";
-import { useLocale } from "../../../state/useLocale";
+import { useLocale } from "../../../state/use-locale";
 import { Icon } from "../../../components/Icon";
 import { AnnotationRow } from "../AnnotationRow";
 import { Markdown } from "../Markdown";

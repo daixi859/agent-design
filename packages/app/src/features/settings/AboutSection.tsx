@@ -1,6 +1,6 @@
 /** 设置·关于分区：项目定位、只读 API 约束（ADR-0002）与版本信息。 */
 import packageJson from "../../../package.json";
-import { useLocale } from "../../state/useLocale";
+import { useLocale } from "../../state/use-locale";
 import styles from "./settings.module.css";
 
 export function AboutSection() {

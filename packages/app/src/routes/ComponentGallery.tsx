@@ -7,7 +7,7 @@ import { DisclosureRow } from "../components/DisclosureRow";
 import { Icon, ICON_NAMES } from "../components/Icon";
 import { Input } from "../components/Input";
 import { cx } from "../lib/cx";
-import { useLocale } from "../state/useLocale";
+import { useLocale } from "../state/use-locale";
 import sessionBar from "../features/sessionbar/session-bar.module.css";
 import settings from "../features/settings/settings.module.css";
 import styles from "./gallery.module.css";

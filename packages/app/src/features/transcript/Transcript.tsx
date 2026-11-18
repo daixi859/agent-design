@@ -8,9 +8,9 @@ import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
 import { TuiGroup } from "./TuiGroup";
 import { TurnView } from "./TurnView";
-import { useLocale } from "../../state/useLocale";
-import { useViewMode } from "../../state/useViewMode";
-import { useStickToBottom } from "../../state/useStickToBottom";
+import { useLocale } from "../../state/use-locale";
+import { useViewMode } from "../../state/use-view-mode";
+import { useStickToBottom } from "../../state/use-stick-to-bottom";
 import { useDriveLive } from "../../state/use-drive";
 import styles from "./transcript.module.css";
 
