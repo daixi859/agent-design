@@ -5,8 +5,8 @@
     「memo 依赖必须带基线」这条曾以 ref 形式回归过一次（基线不响应 → 视图永久 undefined）。
     依赖数组是可以写错的，函数内部按参数身份缓存则写不错：
     任何一参数引用变了就重算，调用侧根本没有依赖数组可漏。 */
-import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
-import type { DriveSession } from "./drive-client";
+import type { SessionEntry, SessionSnapshot } from "@pi-studio/shared/pi-types";
+import type { DriveSession, StreamingToolCall } from "./drive-client";
 import { mergeEntries, pendingPromptEntries, streamingEntries, STREAMING_ENTRY_ID } from "./drive-client";
 import {
   activeLeafId,
@@ -25,10 +25,16 @@ let lastBaseline: SessionSnapshot | null | typeof NO_BASELINE = NO_BASELINE;
 let lastView: TranscriptModel | undefined;
 
 /** 驱动状态 → 运行中工具的实时尾巴表（ADR-0012 补记八）：
- *  只搬有 outputTail 的调用，无尾巴时返回 undefined（省一次出口重算的语义负担） */
+ *  只搬有 outputTail 的调用，无尾巴时返回 undefined（省一次出口重算的语义负担）。
+ *  按 streamingToolCalls 引用记忆化（C6）：驱动归约对集合不变帧返回原引用，
+ *  记忆化命中使 buildTranscriptModel 的入参引用跨帧稳定（内容同值折叠的前置）。 */
+const liveToolsMemo = new WeakMap<readonly StreamingToolCall[], LiveTools | undefined>();
+
 function liveToolsOf(driveSession: DriveSession): LiveTools | undefined {
   const calls = driveSession.streamingToolCalls;
-  if (!calls || calls.length === 0) return undefined;
+  if (!calls) return undefined;
+  const memoed = liveToolsMemo.get(calls);
+  if (memoed !== undefined || liveToolsMemo.has(calls)) return memoed;
   let tools: LiveTools | undefined;
   for (const call of calls) {
     if (call.outputTail === undefined) continue;
@@ -38,7 +44,31 @@ function liveToolsOf(driveSession: DriveSession): LiveTools | undefined {
       ...(call.totalLen !== undefined ? { totalLen: call.totalLen } : {}),
     };
   }
+  liveToolsMemo.set(calls, tools);
   return tools;
+}
+
+/** 活动分支叶子的引用级记忆化（C6）：merged 在纯 delta 帧间引用稳定，叶子扫描
+ *  O(n) 的 Set 构建只在权威条目到达（merged 换新数组）时重跑一次 */
+const leafMemo = new WeakMap<readonly SessionEntry[], string | null>();
+
+function leafOf(entries: readonly SessionEntry[]): string | null {
+  if (leafMemo.has(entries)) return leafMemo.get(entries)!;
+  const leaf = activeLeafId(entries);
+  leafMemo.set(entries, leaf);
+  return leaf;
+}
+
+/** 待回显条目的引用级记忆化（C6）：pendingPromptEntries 原样每帧新建（含时间戳），
+ *  按（文本 × 挂靠点）折叠后，纯 delta 帧的数组前缀引用稳定，增量派生的前缀判据
+ *  才能命中。时间戳冻结在首次挂出时刻——待回显气泡的发送时刻本就该定格。 */
+let pendingMemo: { text: string; parentId: string | null; entries: SessionEntry[] } | undefined;
+
+function pendingEntriesOf(text: string | undefined, parentId: string | null): SessionEntry[] {
+  if (pendingMemo && pendingMemo.text === text && pendingMemo.parentId === parentId) return pendingMemo.entries;
+  const entries = pendingPromptEntries(text, parentId);
+  pendingMemo = { ...(text !== undefined ? { text } : { text: "" }), parentId, entries };
+  return entries;
 }
 
 /** 基线 × 驱动条目 × 瞬态叠加 → 视图。
@@ -47,8 +77,8 @@ function liveToolsOf(driveSession: DriveSession): LiveTools | undefined {
  * （实测：transcript 塌缩成只剩草稿一条）。权威条目落盘后叠加自动退场。 */
 function composeDrivenView(driveSession: DriveSession, baseline: SessionSnapshot): TranscriptModel {
   const merged = mergeEntries(baseline.entries, driveSession.entries);
-  const leafId = activeLeafId(merged);
-  const pending = pendingPromptEntries(driveSession.pendingPrompt, leafId);
+  const leafId = leafOf(merged);
+  const pending = pendingEntriesOf(driveSession.pendingPrompt, leafId);
   const draft = streamingEntries(
     driveSession.streaming,
     driveSession.streamingToolCalls,

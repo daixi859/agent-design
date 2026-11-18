@@ -11,6 +11,7 @@ export class FakeSession implements PiSessionLike {
   calls: string[] = [];
   failPromptWith: Error | null = null;
   failSteerWith: Error | null = null;
+  failSetModelWith: Error | null = null;
   /** 脚本化：目录与用量（ADR-0016）；缺省为空目录 / 无用量 */
   catalogValue: SessionCatalog = {};
   usageValue: ContextUsageInfo | undefined;
@@ -56,7 +57,7 @@ export class FakeSession implements PiSessionLike {
 
   setModel(provider: string, modelId: string): Promise<void> {
     this.calls.push(`setModel:${provider}/${modelId}`);
-    return Promise.resolve();
+    return this.failSetModelWith ? Promise.reject(this.failSetModelWith) : Promise.resolve();
   }
 
   setThinkingLevel(level: string): Promise<void> {

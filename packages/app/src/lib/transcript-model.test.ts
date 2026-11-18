@@ -8,7 +8,7 @@ import type {
   SessionEntry,
   SessionHeaderEntry,
 } from "@pi-studio/shared/pi-types";
-import { activeLeafId, buildTranscriptModel } from "./transcript-model";
+import { activeLeafId, buildTranscriptModel, turnGroupAt } from "./transcript-model";
 
 // ---------- 合成 Entry 构造器 ----------
 
@@ -65,7 +65,6 @@ describe("buildTranscriptModel · Active Branch 回溯", () => {
       abandonedCount: 0,
       model: undefined,
       thinkingLevel: undefined,
-      toolCallCount: 0,
     });
   });
 
@@ -356,7 +355,8 @@ describe("buildTranscriptModel · 注解收缩", () => {
     ]);
     const annotations = model.turns[0].items.filter((item) => item.kind === "annotation");
     expect(annotations).toHaveLength(1);
-    expect(annotations[0].kind === "annotation" && annotations[0].entry.id).toBe("cm1");
+    expect(annotations[0].kind === "annotation" && annotations[0].id).toBe("cm1");
+    expect(annotations[0].kind === "annotation" && annotations[0].display.kind).toBe("injection");
   });
 
   // 修复回归：上游清名落 session_info（无 name 字段），此前会渲染「命名为空」
@@ -389,7 +389,8 @@ describe("buildTranscriptModel · 注解收缩", () => {
     expect(model.orphanAnnotations.map((entry) => entry.id)).toEqual(["sys0"]);
     const annotations = model.turns[0].items.filter((item) => item.kind === "annotation");
     expect(annotations).toHaveLength(1);
-    expect(annotations[0].kind === "annotation" && annotations[0].entry.id).toBe("sys1");
+    expect(annotations[0].kind === "annotation" && annotations[0].id).toBe("sys1");
+    expect(annotations[0].kind === "annotation" && annotations[0].display.kind).toBe("systemPrompt");
   });
 });
 
@@ -426,19 +427,7 @@ describe("buildTranscriptModel · Composer 徽标派生", () => {
     expect(model.model).toEqual({ provider: "anthropic", modelId: "claude-a" });
   });
 
-  it("toolCallCount 统计配对/孤儿 toolCall 与 bashExecution，thinking 不计", () => {
-    const model = buildTranscriptModel([
-      header(),
-      user("u1", null),
-      bashExec("b1", "u1"),
-      assistant("m1", "b1", [thinking("hmm"), call("t1")]),
-      toolResult("r1", "m1", "t1"),
-      assistant("m2", "m1", [call("t2")]),
-    ]);
-    expect(model.toolCallCount).toBe(3);
-  });
-
-  it("被弃分支上的调用不计入 toolCallCount", () => {
+  it("被弃分支不计入出口（abandonedCount 只数被弃条目）", () => {
     const model = buildTranscriptModel([
       header(),
       user("u1", null),
@@ -446,7 +435,6 @@ describe("buildTranscriptModel · Composer 徽标派生", () => {
       user("u2", "u1"),
       assistant("m1", "u2", [call("t1")]),
     ]);
-    expect(model.toolCallCount).toBe(1);
     expect(model.abandonedCount).toBe(1);
   });
 });
@@ -841,5 +829,29 @@ describe("buildTranscriptModel · Draft 与落盘条目（ADR-0013）", () => {
       { type: "message", id: "m2", parentId: "m1", timestamp: TS, message: { role: "assistant", content: [text("定稿")], stopReason: "stop" } },
     ]);
     expect(model.turns[0].draft).toBeUndefined();
+  });
+});
+
+// ---------- C5：钻取选择子 ----------
+
+describe("turnGroupAt 选择子", () => {
+  it("按（轮序, 组序）取过程组，越界回 undefined", () => {
+    const model = buildTranscriptModel([
+      header(),
+      user("u1", null),
+      assistant("a1", "u1", [call("t1"), thinking("hmm")]),
+      toolResult("r1", "a1", "t1"),
+      assistant("a2", "a1", [text("回答")]),
+      assistant("a3", "a2", [call("t2")]),
+      toolResult("r2", "a3", "t2"),
+      assistant("a4", "a3", [text("再答")]),
+    ]);
+    const first = turnGroupAt(model, 0, 0);
+    expect(first?.recap.tools).toBe(1);
+    // 分组以 text 块为分隔符：call+thinking 同组；a2 的回答开后才有第二组
+    expect(first?.group.map((item) => item.kind)).toEqual(["toolCall", "thinking"]);
+    expect(turnGroupAt(model, 0, 1)?.group[0].kind).toBe("toolCall");
+    expect(turnGroupAt(model, 0, 2)).toBeUndefined();
+    expect(turnGroupAt(model, 5, 0)).toBeUndefined();
   });
 });

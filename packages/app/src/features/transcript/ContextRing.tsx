@@ -29,8 +29,8 @@ export function ContextRing({
     usage.percent !== null ? Math.min(100, Math.max(0, Math.round(usage.percent))) : null;
   const tone =
     percent === null ? "" : percent > 90 ? styles.ringDanger : percent > 70 ? styles.ringWarning : styles.ringNormal;
-  const usedText = usage.tokens !== null ? `~${formatTokens(usage.tokens)}` : "?";
-  const windowText = formatTokens(usage.contextWindow);
+  const usedText = usage.tokens !== null ? `~${formatTokens(usage.tokens, locale)}` : "?";
+  const windowText = formatTokens(usage.contextWindow, locale);
   const percentText = percent !== null ? String(percent) : "?";
 
   const detail = (

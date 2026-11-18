@@ -10,7 +10,7 @@ import { Icon } from "../../components/Icon";
 import { DisclosureRow } from "../../components/DisclosureRow";
 import { cx } from "../../lib/cx";
 import { translateVars, type MessageKey } from "../../lib/i18n";
-import { formatDuration } from "../../lib/format";
+import { formatDuration, formatTokens } from "../../lib/format";
 import { useLocale } from "../../state/use-locale";
 import { useViewMode } from "../../state/use-view-mode";
 import type { GroupItem, GroupRecap, Turn, TurnItem } from "../../lib/transcript-model";
@@ -23,11 +23,6 @@ import styles from "./transcript.module.css";
 
 function plural(n: number, one: MessageKey, many: MessageKey, t: (k: MessageKey) => string) {
   return `${n} ${t(n === 1 ? one : many)}`;
-}
-
-/** tokens：紧凑记数（1.2K / 3.4M），不手拼单位 */
-function formatTokens(n: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
 /** 思考行：tertiary 灰、无斜体、无左边框（DSH）；正文与标题左缘对齐 */
@@ -179,7 +174,7 @@ function TurnItemView({
     case "quiet":
       return <p className={styles.quietText}>{item.text}</p>;
     case "annotation":
-      return <AnnotationRow entry={item.entry} />;
+      return <AnnotationRow display={item.display} />;
     case "warning":
       // assistant 页脚整体退役（ADR-0006），只保留中止与错误两行警示
       return item.note === "aborted" ? (
@@ -226,10 +221,10 @@ export function TurnView({
   /** TUI 贴底抽取（ADR-0014 迭代）：命中的组不在此渲染，由 Transcript 在滚动区末尾挂出 */
   detachGroupId?: string;
 }) {
-  // 被弃分支只标在首个过程组上，避免每条 Recap 都重复同一个数
-  const firstGroupId = turn.items.find((item) => item.kind === "group")?.id;
-  // Draft 标记只挂在最后一个过程组上（与「只标一次」的收敛一致）
-  const lastGroupId = [...turn.items].reverse().find((item) => item.kind === "group")?.id;
+  // 首组 / 尾组 / 末条 id 是模型层派生量（transcript-model 的 Turn 字段），
+  // 视图不再自扫 items 重复推导（C4 收编）：被弃分支数只标在首组、Draft 标记只挂尾组
+  const firstGroupId = turn.firstGroupId;
+  const lastGroupId = turn.tailGroupId;
   const abandoned = turn.abandonedCount ?? 0;
   // 渲染模式（ADR-0014）：汇总行与明细行显隐是 TUI 结算 turn 的专属结构
   const [mode] = useViewMode();
@@ -240,7 +235,7 @@ export function TurnView({
 
   return (
     <div className={styles.turn}>
-      {turn.user && <UserMessageView entry={turn.user} />}
+      {turn.user && <UserMessageView message={turn.user} />}
       {tuiSettled && (
         <TuiTurnSummary
           count={turn.toolsTotal ?? 0}
@@ -267,7 +262,7 @@ export function TurnView({
             abandoned={item.kind === "group" && item.id === firstGroupId ? abandoned : 0}
             live={live}
             isLastGroup={item.kind === "group" && item.id === lastGroupId}
-            isTurnTail={item.id === turn.items[turn.items.length - 1]?.id}
+            isTurnTail={item.id === turn.tailItemId}
             detachGroupId={detachGroupId}
           />
         );

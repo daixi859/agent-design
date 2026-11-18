@@ -7,11 +7,11 @@ import { readFile } from "node:fs/promises";
 import { join, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SessionRegistry, globalCatalog, openPiSession } from "@pi-studio/core";
-import type { DriveCommand } from "@pi-studio/shared/protocol";
+import type { DriveCommand, DriveOutcome } from "@pi-studio/shared/protocol";
 import { errorMessage } from "@pi-studio/shared/errors";
 import { createPiDataApi, json } from "./pi-data.ts";
 import { staticRelPath, stripApiPrefix } from "./http-routing.ts";
-import { createWsGateway, type DriveOutcome } from "./ws-gateway.ts";
+import { createWsGateway } from "./ws-gateway.ts";
 
 // 默认 3141（π）：3001 与本机常用代理/工具端口相撞（EADDRINUSE）；
 // dev 代理端 packages/app/vite.config.ts 读同一变量联动，改端口只改这一处
@@ -33,53 +33,29 @@ const MIME: Record<string, string> = {
 
 let registry!: SessionRegistry;
 const gateway = createWsGateway({
-  attach: (file) => registry.attach(file),
-  create: (cwd) => registry.create(cwd),
+  attach: (file, owner) => registry.attach(file, owner),
+  create: (cwd, owner) => registry.create(cwd, owner),
   get: (sessionId) => registry.get(sessionId),
   sessionOf: (file) => registry.sessionOf(file),
+  // 属主单表的窄投影（C7）：registry 记账，gateway 只读判定与投喂存活
+  ownerOf: (sessionId) => registry.ownerOf(sessionId),
+  isOwnerAlive: (owner) => registry.isOwnerAlive(owner),
+  markAlive: (owner) => registry.markAlive(owner),
+  markDead: (owner) => registry.markDead(owner),
+  releaseByOwner: (owner) => registry.releaseByOwner(owner),
   release: (sessionId) => registry.release(sessionId),
   drive: (command) => driveCommand(command),
 });
 registry = new SessionRegistry(openPiSession, (event) => gateway.emit(event));
 
-/** drive 帧到 SessionHost 的分发：prompt/abort 不等运行结束（事件流负责反馈） */
-async function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
+/** drive 帧到 SessionHost 的分发：等/不等与错误落点都在 dispatch 一处定
+ *  （ADR-0012 补记十七），组装层只留「未驱动会话」的守卫 */
+function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
   const host = registry.get(command.sessionId);
-  if (!host) return { ok: false, code: "sessionNotDriven", message: `session 未驱动：${command.sessionId}` };
-  const body = command.body;
-  switch (body.type) {
-    case "prompt":
-      // streamingBehavior 透传：客户端与内核的运行状态间存在事件广播窗口，
-      // 窗口内到达的 prompt 由内核排队（steer）而非 throw（ADR-0012 补记六）
-      void host.prompt(body.text, body.streamingBehavior ? { streamingBehavior: body.streamingBehavior } : undefined);
-      return { ok: true };
-    case "abort":
-      void host.abort();
-      return { ok: true };
-    case "steer": {
-      const disposition = await host.steer(body.text);
-      return disposition === "failed" ? { ok: false, message: "steer 被拒，详见事件流 error" } : { ok: true, disposition };
-    }
-    case "followUp": {
-      const disposition = await host.followUp(body.text);
-      return disposition === "failed" ? { ok: false, message: "followUp 被拒，详见事件流 error" } : { ok: true, disposition };
-    }
-    case "setModel":
-      // await：拒绝要走 commandFailed 帧（模型名无效 / 凭据缺失），事件流只兜底
-      await host.setModel(body.provider, body.modelId);
-      return { ok: true };
-    case "setThinkingLevel":
-      await host.setThinkingLevel(body.level);
-      return { ok: true };
-    case "clearQueue":
-      // 清空结果经内核 queue_update 事件回推（ADR-0016 整批重编第一步）
-      host.clearQueue();
-      return { ok: true };
-    case "compact":
-      // 压缩是长任务：不等结束（compaction 事件负责反馈生命周期）
-      void host.compact();
-      return { ok: true };
+  if (!host) {
+    return Promise.resolve({ ok: false, code: "sessionNotDriven", message: `session 未驱动：${command.sessionId}` });
   }
+  return host.dispatch(command.body);
 }
 // ===== HTTP：/api（剥前缀转 pi-data）→ 静态托管 → 404 =====
 

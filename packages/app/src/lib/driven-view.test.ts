@@ -80,7 +80,7 @@ describe("resolveDrivenView", () => {
     const view = resolveDrivenView(session, snap([user("m1", "问：")]));
     expect(view!.turns).toHaveLength(1);
     expect(view!.abandonedCount).toBe(0);
-    expect(view!.turns[0].user?.id).toBe("m1");
+    expect(view!.turns[0].id).toBe("m1");
     const text = JSON.stringify(view);
     // 流序：思考（group）在生成中的正文之前
     expect(text.indexOf("思考中")).toBeLessThan(text.indexOf("正在生成"));
@@ -117,7 +117,7 @@ describe("resolveDrivenView", () => {
     const session: DriveSession = { ...driven([]), status: "idle", pendingPrompt: "你好" };
     const view = resolveDrivenView(session, snap([]));
     expect(view!.turns).toHaveLength(1);
-    expect(view!.turns[0].user?.id).toBe(PENDING_PROMPT_ENTRY_ID);
+    expect(view!.turns[0].id).toBe(PENDING_PROMPT_ENTRY_ID);
     expect(view!.abandonedCount).toBe(0);
   });
 
@@ -130,7 +130,7 @@ describe("resolveDrivenView", () => {
     };
     const view = resolveDrivenView(session, snap([]));
     expect(view!.turns).toHaveLength(1);
-    expect(view!.turns[0].user?.id).toBe(PENDING_PROMPT_ENTRY_ID);
+    expect(view!.turns[0].id).toBe(PENDING_PROMPT_ENTRY_ID);
     expect(JSON.stringify(view)).toContain("正在生成");
     expect(view!.abandonedCount).toBe(0);
   });

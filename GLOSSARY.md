@@ -117,7 +117,7 @@ Turn 内以 assistant text 回答为分隔符的一段连续非文本内容（th
 _Avoid_: 工具组、工具批、步骤组、batch
 
 **TranscriptModel**:
-Transcript 渲染所需的完整派生数据，Session 视图的唯一派生出口：`buildTranscriptModel(entries)` 从 Entry 列表一次算出 Turn 列表（内含按源顺序交替的 Process Group 与回答）、孤儿注解、被弃分支计数、最后模型声明、思考等级与工具调用数；工具条目的四态、`terminal`、`subCalls` 也在本层归一，视图层零伪造。Entry 树本身不对外暴露。
+Transcript 渲染所需的完整派生数据，Session 视图的唯一派生出口：`buildTranscriptModel(entries)` 从 Entry 列表一次算出 Turn 列表（内含按源顺序交替的 Process Group 与回答）、孤儿注解、被弃分支计数、最后模型声明与思考等级；工具条目的四态、`terminal`、`subCalls`、注解与 user 气泡的显示形状也在本层归一，视图层零伪造。Entry 树不对外暴露（注解以 AnnotationDisplay、user 以 UserMessageDisplay 出接口）；钻取走 `turnGroupAt` 选择子。
 _Avoid_: 派生数据、视图状态、session 状态
 
 **Recap**:

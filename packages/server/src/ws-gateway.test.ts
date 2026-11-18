@@ -21,32 +21,48 @@ function fakeDeps() {
     catalog: () => ({}),
     usage: () => undefined,
   });
-  // 在册表：模拟 registry 的属主语义（attach 即登记、release 即撤销、重复 attach 拒绝）
-  const driven = new Map<string, OpenedSession>();
-  const files = new Map<string, string>();
+  // 属主单表的 fake（C7）：attach 即登记（owner + alive）、release 即撤销、
+  // 活属主拒绝 / 判死属主可接管——registry 的窄投影语义
+  const registrations = new Map<string, { opened: OpenedSession; file?: string; owner: object; alive: boolean }>();
   const deps: WsGatewayDeps = {
-    attach: async (file) => {
+    attach: async (file, owner) => {
       calls.push(`attach:${file}`);
       if (file.endsWith("locked.jsonl")) throw new Error("已被驱动");
-      if (files.has(file)) throw new Error("已被驱动");
+      const existing = [...registrations.entries()].find(([, reg]) => reg.file === file);
+      if (existing) {
+        const [, reg] = existing;
+        if (reg.owner === owner) throw new Error("已被驱动");
+        if (reg.alive) throw new Error("已被驱动");
+        deps.release(existing[0]); // 僵尸接管：释放旧宿主
+      }
       const opened = snap(`sid-${file}`);
-      driven.set(opened.sessionId, opened);
-      files.set(file, opened.sessionId);
+      registrations.set(opened.sessionId, { opened, file, owner, alive: true });
       return opened;
     },
-    create: async (cwd) => {
+    create: async (cwd, owner) => {
       calls.push(`create:${cwd}`);
       const opened = snap("sid-created");
-      driven.set(opened.sessionId, opened);
+      registrations.set(opened.sessionId, { opened, owner, alive: true });
       return opened;
     },
-    get: (sessionId) => driven.get(sessionId),
-    sessionOf: (file) => files.get(file),
+    get: (sessionId) => registrations.get(sessionId)?.opened,
+    sessionOf: (file) => [...registrations.entries()].find(([, reg]) => reg.file === file)?.[0],
+    ownerOf: (sessionId) => registrations.get(sessionId)?.owner,
+    isOwnerAlive: (owner) => [...registrations.values()].some((reg) => reg.owner === owner && reg.alive),
+    markAlive: (owner) => {
+      for (const reg of registrations.values()) if (reg.owner === owner) reg.alive = true;
+    },
+    markDead: (owner) => {
+      for (const reg of registrations.values()) if (reg.owner === owner) reg.alive = false;
+    },
+    releaseByOwner: (owner) => {
+      const ids = [...registrations.entries()].filter(([, reg]) => reg.owner === owner).map(([id]) => id);
+      for (const id of ids) deps.release(id);
+      return ids;
+    },
     release: (id) => {
       calls.push(`release:${id}`);
-      const file = [...files.entries()].find(([, sid]) => sid === id)?.[0];
-      if (file) files.delete(file);
-      driven.delete(id);
+      registrations.delete(id);
     },
     drive: async (command) => {
       calls.push(`drive:${command.sessionId}:${command.body.type}`);
@@ -56,10 +72,14 @@ function fakeDeps() {
   return { calls, driveOutcomes, deps };
 }
 
-async function startServer(deps: WsGatewayDeps, opts?: { isLive?(socket: unknown): boolean }) {
+async function startServer(
+  deps: WsGatewayDeps,
+  opts?: { isLive?(socket: unknown): boolean; heartbeatMs?: number },
+) {
   const server = createServer();
   const gateway = createWsGateway(deps, {
     ...(opts?.isLive ? { isLive: opts.isLive as (socket: WsSocket) => boolean } : {}),
+    ...(opts?.heartbeatMs ? { heartbeatMs: opts.heartbeatMs } : {}),
   });
   gateway.bind(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -258,29 +278,31 @@ describe("createWsGateway · 驱动协议传输", () => {
     }
   });
 
-  it("僵尸属主被接管后其 close 迟到 → 不得释放新属主的会话", async () => {
+  it("心跳超期属主被 terminate 后他人可接管（真心跳路径，此前零覆盖）", async () => {
     const { calls, deps } = fakeDeps();
-    // 注入 isLive=false：任何在册属主都判为僵尸，模拟代理半开、close 迟到的连接
-    const server = await startServer(deps, { isLive: () => false });
+    // isLive 只对属主连接判死：首个心跳 tick 即 markDead + terminate（模拟代理半开、
+    // close 迟到）；属主身份在 attach 后从属主表取（OwnerToken 即服务端连接对象）
+    let zombie: unknown = null;
+    const server = await startServer(deps, { heartbeatMs: 40, isLive: (socket) => socket !== zombie });
     try {
       const a = connect(server.port);
       const b = connect(server.port);
       await Promise.all([a.opened, b.opened]);
       a.send({ type: "attach", file: "f1.jsonl" });
       await waitFor(() => a.frames.some((f) => f.type === "attached"));
+      zombie = deps.ownerOf("sid-f1.jsonl") ?? null;
 
-      // b 接管（a 的注册被释放、订阅摘除，但 a 的 owned 集合里条目仍在）
+      // tick：markDead(属主) → terminate → close → releaseByOwner 释放
+      await waitFor(() => calls.some((c) => c === "release:sid-f1.jsonl"), 2000);
+
+      // b 接管成功（活属主拒绝的判定读的是 markDead 后的属主表）
       b.send({ type: "attach", file: "f1.jsonl" });
       await waitFor(() => b.frames.some((f) => f.type === "attached"));
-      const releasesAfterTakeover = calls.filter((c) => c === "release:sid-f1.jsonl").length;
-      expect(releasesAfterTakeover).toBe(1);
+      expect(b.frames).toContainEqual(
+        expect.objectContaining({ type: "attached", sessionId: "sid-f1.jsonl", file: "f1.jsonl" }),
+      );
 
-      // 僵尸 a 的 close 迟到触发：不得把 b 正驱动的会话再释放一遍
-      await a.close();
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      expect(calls.filter((c) => c === "release:sid-f1.jsonl")).toHaveLength(releasesAfterTakeover);
-
-      // b 的订阅仍在：事件继续到达
+      // b 的订阅仍在（后续 tick 判活投喂，不误杀）：事件继续到达
       server.gateway.emit(statusEvent("sid-f1.jsonl"));
       await waitFor(() => b.frames.some((f) => f.type === "event"));
       expect(b.frames).toContainEqual({ type: "event", event: statusEvent("sid-f1.jsonl") });

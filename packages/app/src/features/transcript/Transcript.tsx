@@ -1,8 +1,9 @@
 /** Transcript：对话区本体（ADR-0006 三级结构，ADR-0013 收敛为两级：Turn / Process Group；数据直收 TranscriptModel） */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { TranscriptModel, TurnItem } from "../../lib/transcript-model";
+import { emptyGroupRecap, type TranscriptModel, type TurnItem } from "../../lib/transcript-model";
+import { tuiDetachOf } from "../../lib/tui-view";
 import type { SessionCatalog } from "@pi-studio/shared/protocol";
-import type { ComposerDrive, LazyComposer } from "./Composer";
+import type { ComposerActions, LazyComposer } from "./Composer";
 import { Icon } from "../../components/Icon";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
@@ -17,15 +18,17 @@ import styles from "./transcript.module.css";
 export function Transcript({
   projectPath,
   view,
-  drive,
+  actions,
   lazy,
   browsingCatalog,
   sessionId,
+  foreignDriven,
+  takeover,
 }: {
   projectPath?: string;
   view: TranscriptModel;
-  /** 会话被驱动时由 SessionView 下发：输入区激活、状态徽标与中止 */
-  drive?: ComposerDrive;
+  /** 本端在管的动作插槽（C3 修订：状态数据由 Composer 直订 store，props 只传动作） */
+  actions?: ComposerActions;
   /** 未驱动但可接管时下发（GLOSSARY Send-to-Attach）：输入区常开 */
   lazy?: LazyComposer;
   /** 浏览态 Model Seat 的缓存目录（补记十二）：驱动态不消费，未驱动时供可选菜单 */
@@ -33,6 +36,10 @@ export function Transcript({
   /** 路由 session id：运行态由本组件 selector 直订（ADR-0015），不再经 props 下传；
       下游 TurnView / TuiGroup 收到的是本处派生的布尔（数据走 props、状态走订阅） */
   sessionId?: string;
+  /** 他属驱动（REST driven 标志 × 本端驱动表）：ComposerMode 的 foreign 判据 */
+  foreignDriven?: boolean;
+  /** 可懒接管：file 在场：ComposerMode 的 takeover 判据 */
+  takeover?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
@@ -77,20 +84,17 @@ export function Transcript({
 
   // TUI 模式（ADR-0014 迭代）：运行中的组贴底——从对话流抽出到滚动区末尾渲染，
   // 配合贴底自动跟随，运行状态始终在视口底部，与 DSH 的组顶 Recap 拉开形态。
-  // 抽取条件 = 末轮且（驱动运行中或流式草稿）；历史残留 running 组不动（不发明「已死」态）。
-  // 目标组与空窗锚是模型层派生量（Turn.tailGroupId / userAt），这里只决定是否消费
+  // 抽取判定（末轮且 live/draft、目标组、首 token 前空窗锚）在 lib/tui-view 纯函数层
+  // （C4 收编），这里只决定是否消费
   const [viewMode] = useViewMode();
   const lastTurn = turns.at(-1);
-  const detachGroupId =
-    viewMode === "tui" && lastTurn && (live || lastTurn.draft) ? lastTurn.tailGroupId : undefined;
+  const detach = tuiDetachOf(lastTurn, live, viewMode === "tui");
+  const detachGroupId = detach.groupId;
   const detached: TurnItem | undefined =
     detachGroupId && lastTurn ? lastTurn.items.find((item) => item.id === detachGroupId) : undefined;
   // 首 token 前的空窗（迭代反馈）：turn 已存在（user 已回显）但还没有任何组——
   // 贴底挂一个空组形态的运行指示，计时锚在 user 条目时刻
-  const livePendingAnchor =
-    viewMode === "tui" && lastTurn && (live || lastTurn.draft) && !lastTurn.tailGroupId
-      ? lastTurn.userAt
-      : undefined;
+  const livePendingAnchor = detach.pendingAnchorAt;
 
   const jumpToLatest = useCallback(() => {
     const el = scrollRef.current;
@@ -107,8 +111,8 @@ export function Transcript({
       <div className={`scroll-y ${styles.scroll}`} ref={scrollRef} onScroll={handleScroll}>
         <div className={styles.inner}>
           {projectPath && <p className={styles.projectEyebrow}>{projectPath}</p>}
-          {orphanAnnotations.map((entry) => (
-            <AnnotationRow key={entry.id} entry={entry} />
+          {orphanAnnotations.map((carrier) => (
+            <AnnotationRow key={carrier.id} display={carrier.display} />
           ))}
           {turns.length === 0 ? (
             <div className={styles.emptyState}>
@@ -136,12 +140,7 @@ export function Transcript({
             />
           )}
           {livePendingAnchor !== undefined && (
-            <TuiGroup
-              group={[]}
-              recap={{ tools: 0, thoughts: 0, failed: 0, running: false, toolCounts: [] }}
-              live={live}
-              startedAt={livePendingAnchor}
-            />
+            <TuiGroup group={[]} recap={emptyGroupRecap()} live={live} startedAt={livePendingAnchor} />
           )}
         </div>
       </div>
@@ -156,10 +155,12 @@ export function Transcript({
       <Composer
         model={view.model}
         thinkingLevel={view.thinkingLevel}
-        drive={drive}
+        actions={actions}
         lazy={lazy}
         browsingCatalog={browsingCatalog}
         sessionId={sessionId}
+        foreignDriven={foreignDriven}
+        takeover={takeover}
       />
     </div>
   );

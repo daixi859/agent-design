@@ -11,12 +11,19 @@
  *  spinner 的旋转是 CSS 动画，不占挂钟帧。运行中组默认紧凑态：槽位区只亮最后一个
  *  活动条目，点开头部才全量；活跃思考只有最后一条（其前的早已完成），只报流逝秒数。
  *  本组件只读 TranscriptModel 派生量，不读内核字段。 */
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Icon } from "../../components/Icon";
 import { cx } from "../../lib/cx";
 import { useLocale } from "../../state/use-locale";
-import { translateVars } from "../../lib/i18n";
-import { formatDuration } from "../../lib/format";
+import { translateVars, type Locale } from "../../lib/i18n";
+import { formatClockAt, formatDateAt, formatDuration } from "../../lib/format";
+import {
+  activeThinkingIdOf,
+  compactItemOf,
+  groupElapsedOf,
+  slotElapsedOf,
+  thinkingElapsedOf,
+} from "../../lib/tui-view";
 import { useTuiThinkLines } from "../../state/use-tui-think-lines";
 import { useStickToBottom } from "../../state/use-stick-to-bottom";
 import type {
@@ -33,16 +40,6 @@ const REDRAW_INTERVAL_MS = 100;
 const COUNTS_SHOWN = 3;
 /** 运行结束 → 自动收起的静默期（与 cc-extensions 的 FOLD_SETTLE_MS 对齐） */
 const FOLD_SETTLE_MS = 250;
-
-/** 汇总行时刻：本轮完成时刻的本地短时间（cc-style 的 `1:56 PM`） */
-function formatClock(at: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(at);
-}
-
-/** 汇总行日期：月/日（cc-style 的 `11/17`，与时刻空格相连） */
-function formatDate(at: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric" }).format(at);
-}
 
 /** 结算 turn 的汇总行（ADR-0014 迭代）：`Run {n} commands[ · {m} thinking] · {一轮时间} ·
     done {月/日 时刻}` 一轮一行——结论段整合命令数与思考数（纯思考轮只有 thinking、
@@ -91,8 +88,8 @@ export function TuiTurnSummary({
         <span className={styles.dim}>
           ·{" "}
           {translateVars(locale, "tuiDoneAt", {
-            date: formatDate(endAt, locale),
-            time: formatClock(endAt, locale),
+            date: formatDateAt(endAt, locale),
+            time: formatClockAt(endAt, locale),
           })}
         </span>
       )}
@@ -115,41 +112,21 @@ function useLiveClock(active: boolean): number | undefined {
   return now;
 }
 
-/** 槽位状态字形：一律 Icon 组件的 SVG 字形（ADR-0014 迭代：含 spinner 圆弧，
+/** 槽位状态字形的呈现层：语义（标签键 + 色档）在 lib/tool-state 共享，这里只定
+    TUI 的呈现——一律 Icon 组件的 SVG 字形（ADR-0014 迭代：含 spinner 圆弧，
     旋转由 CSS .iconRun 驱动、只在组容器 [data-live] 作用域转——历史残留 running 组
-    的字形定格）；stopped = CSS 圆点；未知状态留空占位（不伪造）。
-    与 ToolRow 的 STATE_VIEW 同词汇、不同呈现（Standard 文字+图标 / TUI 纯 SVG 字形），
-    不强行收编一张表：新增状态时两处同步。 */
+    的字形定格）；stopped = CSS 圆点。Record 键强制四态补齐，未知状态（不存在于
+    ToolState 联合）在入口即被类型挡住。 */
+const STATE_GLYPH: Record<ToolState, { className?: string; children: ReactElement }> = {
+  running: { className: styles.iconRun, children: <Icon name="spinner" size={10} /> },
+  ok: { className: styles.iconOk, children: <Icon name="check" size={10} /> },
+  error: { className: styles.iconError, children: <Icon name="xmark" size={10} /> },
+  stopped: { className: styles.dim, children: <span className={styles.dotGlyph} /> },
+};
+
 function StatusGlyph({ state }: { state?: ToolState }) {
-  if (state === "running") {
-    return (
-      <span className={cx(styles.icon, styles.iconRun)}>
-        <Icon name="spinner" size={10} />
-      </span>
-    );
-  }
-  if (state === "ok") {
-    return (
-      <span className={cx(styles.icon, styles.iconOk)}>
-        <Icon name="check" size={10} />
-      </span>
-    );
-  }
-  if (state === "error") {
-    return (
-      <span className={cx(styles.icon, styles.iconError)}>
-        <Icon name="xmark" size={10} />
-      </span>
-    );
-  }
-  if (state === "stopped") {
-    return (
-      <span className={cx(styles.icon, styles.dim)}>
-        <span className={styles.dotGlyph} />
-      </span>
-    );
-  }
-  return <span className={styles.icon} />;
+  const glyph = state ? STATE_GLYPH[state] : undefined;
+  return <span className={cx(styles.icon, glyph?.className)}>{glyph?.children}</span>;
 }
 
 /** 槽位行展开体（迭代：cc-style Input/Output 分区）：树形竖线缩进贯穿，
@@ -203,17 +180,11 @@ function TuiSlotBody({ item }: { item: ToolCallItem }) {
 }
 
 /** 槽位行：`<引导线> <状态字形> <工具名> <参数摘要> · <秒数>`，点击展开/收起展开体 */
-function TuiSlot({ item, now, locale }: { item: ToolCallItem; now: number | undefined; locale: string }) {
+function TuiSlot({ item, now, locale }: { item: ToolCallItem; now: number | undefined; locale: Locale }) {
   const [open, setOpen] = useState(false);
-  const running = item.state === "running";
   // 行内秒数（ADR-0014 对 Standard「行内无耗时」的 TUI 专属规则）：
   // 运行中 = 挂钟 − 条目时间戳锚（双路径统一）；结算 = 内核 durationMs；都没有就不显示
-  const elapsed =
-    running && now !== undefined && item.startedAt !== undefined
-      ? formatDuration(Math.max(0, now - item.startedAt), locale)
-      : !running && item.durationMs !== undefined
-        ? formatDuration(item.durationMs, locale)
-        : undefined;
+  const elapsed = slotElapsedOf(item, now, locale);
   return (
     <>
       <button
@@ -250,7 +221,7 @@ function TuiThinking({
   item: Extract<GroupItem, { kind: "thinking" }>;
   active: boolean;
   now: number | undefined;
-  locale: string;
+  locale: Locale;
   tailLines: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -293,10 +264,7 @@ function TuiThinking({
     .filter((line) => line.trim())
     .slice(-Math.max(1, tailLines))
     .join("\n");
-  const elapsed =
-    now !== undefined && item.startedAt !== undefined
-      ? formatDuration(Math.max(0, now - item.startedAt), locale)
-      : undefined;
+  const elapsed = thinkingElapsedOf(item.startedAt, now, locale);
   // 内容块置于「思考中」行下方（迭代反馈）：同行右侧会把文本挤成窄条
   return (
     <div className={styles.thinkRun}>
@@ -353,24 +321,10 @@ export function TuiGroup({
   const [thinkLines] = useTuiThinkLines();
   const { t, locale } = useLocale();
   const anchor = startedAt ?? recap.startedAt;
-  const lastItem = group[group.length - 1];
-  // 活跃思考唯一化（迭代反馈）：只有「组是 turn 尾部」且组内最后一个条目是思考且
-  // 思考尚未定稿（内核 thinking_end，ADR-0012 补记九）时它才活跃——正文 text 流出
-  // 或思考块闭合都意味着思考已完成；其余思考一律静止呈现
-  const activeThinkingId =
-    liveHeader && isTurnTail && lastItem?.kind === "thinking" && !lastItem.thinkingComplete
-      ? lastItem.id
-      : undefined;
-  // 紧凑态亮「最后一个活动条目」（ADR-0014）：倒序找 running 工具，活跃思考次之；
-  // 全静止（历史残留组、纯思考组在活头部）兜底末条——并行调用乱序完成时不亮已结算项
-  const compactItem =
-    [...group]
-      .reverse()
-      .find((item) =>
-        item.kind === "toolCall"
-          ? item.state === "running"
-          : item.id === activeThinkingId,
-      ) ?? lastItem;
+  // 活跃思考唯一化与紧凑态条目（ADR-0014 运行态派生）在 lib/tui-view 纯函数层，
+  // 判定可测、组件只读结果（C4 收编）
+  const activeThinkingId = activeThinkingIdOf(group, liveHeader, isTurnTail);
+  const compactItem = compactItemOf(group, activeThinkingId);
   const slotsRef = useRef<HTMLDivElement | null>(null);
   // 槽位区贴底跟随（useStickToBottom）：展开即贴底（用户点开要的是末尾的活动条目）；
   // 新槽位追加与思考内容增长（重绘 tick）只近底跟随——上滑越过阈值即放手，
@@ -393,10 +347,7 @@ export function TuiGroup({
     return () => clearTimeout(timer);
   }, [liveHeader]);
 
-  const elapsed =
-    liveHeader && anchor !== undefined && now !== undefined
-      ? formatDuration(Math.max(0, now - anchor), locale)
-      : undefined;
+  const elapsed = groupElapsedOf(anchor, liveHeader, now, locale);
   const shown = recap.toolCounts.slice(0, COUNTS_SHOWN);
   const rest = recap.toolCounts.length - shown.length;
 
@@ -459,7 +410,9 @@ export function TuiGroup({
             ? liveHeader
               ? group.filter((item) => item.kind !== "thinking" || item.id === activeThinkingId)
               : group
-            : [compactItem]
+            : compactItem !== undefined
+              ? [compactItem]
+              : []
           ).map((item) =>
             item.kind === "thinking" ? (
               <TuiThinking
