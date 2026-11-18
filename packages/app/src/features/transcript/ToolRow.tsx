@@ -8,6 +8,7 @@
  * 状态只走文字色，无彩色徽标；耗时不在行内（DSH 同款取舍）。
  */
 import { useState, type ReactNode } from "react";
+import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { DisclosureRow } from "../../components/DisclosureRow";
 import { cx } from "../../lib/cx";
@@ -177,9 +178,9 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
             <div className={styles.diff}>
               {item.patch && (
                 <div className={styles.diffHead}>
-                  <button type="button" className={styles.rowAction} onClick={copyPatch}>
+                  <Button className={styles.rowAction} onClick={copyPatch}>
                     {copied ? t("copied") : t("copyDiff")}
-                  </button>
+                  </Button>
                 </div>
               )}
               <div className={styles.diffBody}>
@@ -233,8 +234,7 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
 
           {argsBehindToggle && (
             <>
-              <button
-                type="button"
+              <Button
                 className={styles.rowAction}
                 aria-expanded={showArgs}
                 onClick={() => setShowArgs((value) => !value)}
@@ -243,7 +243,7 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
                   <Icon name="chevron-right" size={11} />
                 </span>
                 {t("inspectArgs")}
-              </button>
+              </Button>
               {showArgs && (
                 <pre className={styles.codeBody}>{prettyArgs(item.args)}</pre>
               )}

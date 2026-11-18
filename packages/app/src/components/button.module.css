@@ -1,8 +1,11 @@
 /* UI 原语：Button（组件层变量就地定义，引用语义层）。
    ghost 配方：透明底 + hover 浅底；icon-only（无 children）挂 .square 成方形控件，
-   带文字形态走 .text 内边距。 */
+   带文字形态走 .text 内边距。
+   配方整体包 :where() 降为零特异性：消费方 className 确定性压过基座（含 hover /
+   active 态，无需 specificity 竞赛），自带视觉的消费方按钮（实心圆等）只写与基座
+   的差；需要自身反馈态的，在消费方类里自带 &:hover。 */
 
-.button {
+:where(.button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -15,22 +18,23 @@
   transition:
     background var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard);
-
-  &:hover {
-    background: var(--bg-hover);
-    color: var(--text-1);
-  }
-  &:active {
-    background: var(--bg-active);
-  }
 }
 
-.square {
+:where(.button:hover) {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+
+:where(.button:active) {
+  background: var(--bg-active);
+}
+
+:where(.square) {
   /* 原 IconButton 的方形控件尺寸：固定 inline/block-size，不设内边距 */
   inline-size: var(--control-size);
   block-size: var(--control-size);
 }
 
-.text {
+:where(.text) {
   padding-inline: var(--space-2);
 }

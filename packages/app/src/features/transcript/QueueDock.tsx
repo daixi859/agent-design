@@ -4,6 +4,7 @@
     全部经整批重编落内核（ADR-0016：clearQueue + 按新列表逐条重入）。 */
 import { useState, type KeyboardEvent } from "react";
 import type { QueuedItem } from "../../state/use-drive";
+import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { translateVars } from "../../lib/i18n";
 import { cx } from "../../lib/cx";
@@ -98,12 +99,10 @@ export function QueueDock({
                 onKeyDown={editorKeyDown}
               />
               <div className={styles.queueActions}>
-                <button type="button" className={styles.queueAction} onClick={saveEdit}>
-                  <Icon name="check" size={11} />
+                <Button className={styles.queueAction} icon="check" iconSize={11} onClick={saveEdit}>
                   {t("queueSave")}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   className={styles.queueAction}
                   onClick={() => {
                     setEditing(null);
@@ -111,7 +110,7 @@ export function QueueDock({
                   }}
                 >
                   {t("queueCancel")}
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -126,34 +125,34 @@ export function QueueDock({
               </span>
               <span className={styles.queueText}>{row.text}</span>
               <span className={styles.queueActions}>
-                <button
-                  type="button"
+                <Button
                   className={styles.queueAction}
+                  icon="arrow-up"
+                  iconSize={11}
                   title={t("steerNowHint")}
                   disabled={row.pending || !running}
                   onClick={() => promote(index)}
                 >
-                  <Icon name="arrow-up" size={11} />
                   {t("steerNow")}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   className={styles.queueAction}
+                  icon="pencil"
+                  iconSize={11}
                   title={t("queueEdit")}
+                  aria-label={t("queueEdit")}
                   disabled={row.pending}
                   onClick={() => editRow(index)}
-                >
-                  <Icon name="pencil" size={11} />
-                </button>
-                <button
-                  type="button"
+                />
+                <Button
                   className={styles.queueAction}
+                  icon="xmark"
+                  iconSize={11}
                   title={t("queueRemove")}
+                  aria-label={t("queueRemove")}
                   disabled={row.pending}
                   onClick={() => remove(index)}
-                >
-                  <Icon name="xmark" size={11} />
-                </button>
+                />
               </span>
             </div>
           ),

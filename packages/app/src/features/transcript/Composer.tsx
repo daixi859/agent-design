@@ -5,6 +5,7 @@
     Ctrl/Cmd+Enter 显式插话。`/` 行首触发 Trigger Menu，命令落定为 Command Chip。 */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ContextUsageInfo, DriveStatus, SessionCatalog } from "@pi-studio/shared/protocol";
+import { Button } from "../../components/Button";
 import { Icon, type IconName } from "../../components/Icon";
 import { MenuSurface, MenuSurfaceItem, hasOpenMenuSurface } from "../../components/MenuSurface";
 import { Tooltip } from "../../components/Tooltip";
@@ -302,25 +303,23 @@ export function Composer({
       <ContextRing usage={drive?.usage} modelLabel={displayModel?.modelId} compacting={compacting} />
       {drive && busy && (
         <Tooltip label={t("stopHint")}>
-          <button
-            type="button"
+          <Button
+            icon="stop"
+            iconSize={13}
             className={styles.stopButton}
             aria-label={t("abort")}
             onClick={() => drive.onAbort()}
-          >
-            <Icon name="stop" size={13} />
-          </button>
+          />
         </Tooltip>
       )}
       <Tooltip label={busy ? t("queueSendHint") : t("sendHint")}>
-        <button
-          type="button"
+        <Button
+          icon="arrow-up"
+          iconSize={24}
           className={styles.sendButton}
           disabled={!drive || compacting || (!chip && !text.trim())}
           onClick={() => submit()}
-        >
-          <Icon name="arrow-up" size={20} />
-        </button>
+        />
       </Tooltip>
     </div>
   );

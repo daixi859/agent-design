@@ -5,7 +5,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  block-size: 100%;
+  /* flex:1 而非 block-size:100%：顶部错误条（errorBar）在场上时按剩余高度取值，
+     不再把 Composer 挤出视口外 */
+  flex: 1;
+  min-block-size: 0;
   background: var(--bg-canvas);
 
   /* Composer 联动几何：四处一个系统，改 Composer 时一起动 */
@@ -432,23 +435,15 @@
   color: var(--diff-add-text);
 }
 
-/* 行内小文字按钮（看参数 / 复制 diff 共用） */
+/* 行内小文字按钮（看参数 / 复制 diff 共用）：Button ghost 基座之上的 caption2 紧凑差 */
 .rowAction {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1h);
   padding: var(--space-05) var(--space-2);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
   color: var(--text-3);
   font-size: var(--text-caption2);
-  cursor: pointer;
 
   &:hover {
     color: var(--text-1);
-    background: var(--bg-hover);
   }
 }
 
@@ -656,7 +651,6 @@
   inset-inline: 0;
   bottom: 0;
   padding: var(--space-2) var(--space-6) var(--space-3);
-  background: linear-gradient(to top, var(--bg-canvas) 70%, transparent);
   pointer-events: none;
   z-index: calc(var(--z-composer) - 1);
 }
@@ -794,16 +788,11 @@
   color: var(--warning);
 }
 
+/* 发送 / 中断：Button ghost 基座之上的实心圆差（尺寸、居中、无边框由基座 .square 出） */
 .sendButton {
-  display: grid;
-  place-items: center;
-  inline-size: var(--control-size);
-  block-size: var(--control-size);
-  border: none;
   border-radius: 50%;
   background: var(--primary-btn-bg);
   color: var(--primary-btn-fg);
-  cursor: pointer;
 
   &:disabled {
     cursor: default;
@@ -812,15 +801,9 @@
 }
 
 .stopButton {
-  display: grid;
-  place-items: center;
-  inline-size: var(--control-size);
-  block-size: var(--control-size);
-  border: none;
   border-radius: 50%;
   background: var(--bg-inset);
   color: var(--danger);
-  cursor: pointer;
 
   &:hover {
     background: var(--bg-hover);
@@ -900,17 +883,15 @@
   margin-inline-start: auto;
 }
 
+/* 行内动作：Button ghost 基座之上的 caption2 紧凑差（基座配方零特异性，这里确定性覆盖） */
 .queueAction {
-  display: inline-flex;
-  align-items: center;
   gap: var(--space-05);
   padding: var(--space-05) var(--space-1);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: none;
   color: var(--text-3);
   font-size: var(--text-caption2);
-  cursor: pointer;
+  /* icon-only 动作会吃基座 .square 的 28 方形，退回内容自适应 */
+  inline-size: auto;
+  block-size: auto;
 
   &:disabled {
     cursor: default;
@@ -980,6 +961,7 @@
 }
 
 .errorBar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--space-1h);
