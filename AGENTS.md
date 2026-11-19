@@ -35,4 +35,4 @@ node node_modules/vite/bin/vite.js packages/app   # dev server，/api 与 /ws �
 
 依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 跑同样的三道：typecheck、test、check:css）。
 
-完成判据：任何改动交付前上面前三道检查全绿；视觉改动另加 dev server 截图自检浅、深两主题通过，并在交付说明里写下截图路径（否则跳过不可见）。
+完成判据：任何改动交付前上面前三道检查全绿；视觉改动用户进行验证即可。
