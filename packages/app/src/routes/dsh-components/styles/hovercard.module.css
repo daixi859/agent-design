@@ -1,0 +1,58 @@
+/* DSH HoverCard（上游 ui-primitives/src/HoverCard.module.css）
+   静态预览：卡片跟随指针定位（position:fixed + JS 测量）不移植，卡片按其视觉尺寸
+   就地铺开；展开/收起的 100ms 淡入仍由本文件给出默认值供演示。 */
+
+.card {
+  --dsh-hover-preview-fade: 100ms;
+
+  position: relative;
+  z-index: 100;
+  box-sizing: border-box;
+  width: 244px;
+  padding: 12px 16px;
+  border-radius: var(--dsh-radius-lg);
+  background: var(--dsh-alias-hovercard-bg);
+  box-shadow: var(--dsh-shadow-lv3);
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--dsh-radius-lg);
+  background: var(--dsh-alias-bg-layer-1);
+  color: var(--dsh-alias-label-primary);
+  box-shadow: var(--dsh-elevation-panel);
+}
+
+/* 上传的 preview 变体是**白卡**（bg-layer-1），文字走常规 label 档；
+   hovercard-label-* 是恒亮三档，只给深色 hovercard-bg 那张卡用。 */
+.copied {
+  padding: 12px 16px;
+  color: var(--dsh-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* 悬停卡正文的三档文字色（上游 hovercard-label-*，恒为深底浅字） */
+.title {
+  color: var(--dsh-alias-hovercard-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.secondary {
+  color: var(--dsh-alias-hovercard-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.tertiary {
+  color: var(--dsh-alias-hovercard-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}

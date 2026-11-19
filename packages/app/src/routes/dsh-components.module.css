@@ -1,0 +1,159 @@
+/* DSH 组件预览页（Settings · DSH Components）：本文件只管**页面清单排版**——
+   每件样张的样式都引用 styles/*.module.css（上游同名文件的移植版），
+   舞台底色用 --dsh-alias-bg-base，让组件看着像在它自己的应用里。
+   页面骨架沿用本项目 gallery 的清单语言（小节标题 + 说明 + 样张块）。 */
+
+.page {
+  block-size: 100%;
+  overflow-y: auto;
+  /* 组件取 --dsh- 令牌，画布换成快照的 bg-base（本项目暖纸色只在最后由 body 露出来） */
+  background: var(--dsh-alias-bg-base);
+  color: var(--dsh-alias-label-primary);
+  font-family: var(--dsh-font-family);
+}
+
+.inner {
+  max-inline-size: 960px;
+  margin-inline: auto;
+  padding: var(--space-6) var(--space-7) var(--space-9);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.intro {
+  margin: 0;
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--dsh-alias-label-tertiary);
+}
+
+/* 小节标题与说明沿用 gallery 的清单层（本项目令牌，页面骨架不属于 DSH 组件） */
+.sectionTitle {
+  font-size: var(--text-caption2);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: var(--space-3);
+}
+
+.sectionNote {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--text-2);
+}
+
+.sample {
+  margin-bottom: var(--space-5);
+}
+
+.sampleLabel {
+  font-size: var(--dsh-font-xs-strong-13-font-size);
+  line-height: var(--dsh-font-xs-strong-13-line-height);
+  font-weight: var(--dsh-font-xs-strong-13-font-weight);
+  color: var(--dsh-alias-label-primary);
+  margin-bottom: var(--space-1);
+}
+
+.sampleNote {
+  margin: 0 0 var(--space-2);
+  font-size: var(--dsh-font-xxxs-11-font-size);
+  line-height: var(--dsh-font-xxxs-11-line-height);
+  color: var(--dsh-alias-label-tertiary);
+}
+
+/* 舞台：一层极淡的下沉面只用来框住样张，不参与任何组件样式 */
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--dsh-radius-md);
+  background: var(--dsh-alias-bg-base);
+  box-shadow: inset 0 0 0 0.5px var(--dsh-alias-border-l1);
+}
+
+/* MenuSurface 的材质演示需要花底才读得出背后的模糊；色块走语义别名，
+   深浅两主题各自成立（静态色板是浅色基准，深色主题下会亮得不像背景）。 */
+.stage[data-stage="material"] {
+  background:
+    linear-gradient(120deg, var(--dsh-alias-state-business-tertiary), var(--dsh-alias-bg-module-platform) 45%, var(--dsh-alias-state-success-tertiary));
+}
+
+.stage[data-stage="surface"] {
+  background: var(--dsh-alias-bg-layer-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.inlineLabel {
+  font-size: var(--dsh-font-xs-13-font-size);
+  line-height: var(--dsh-font-xs-13-line-height);
+  color: var(--dsh-alias-label-secondary);
+}
+
+.tabColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-inline-size: 420px;
+}
+
+.pathRow {
+  display: flex;
+  inline-size: 320px;
+  padding: 4px 8px;
+  border-radius: var(--dsh-radius-sm);
+  background: var(--dsh-alias-bg-layer-2);
+}
+
+.dotCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--dsh-font-xs-13-font-size);
+  line-height: var(--dsh-font-xs-13-line-height);
+  color: var(--dsh-alias-label-secondary);
+}
+
+.modalRow {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.surfaceContent {
+  padding: 6px 8px;
+  border-radius: var(--dsh-radius-md);
+  font-size: var(--dsh-font-xs-13-font-size);
+  line-height: var(--dsh-font-xs-13-line-height);
+  color: var(--dsh-alias-label-primary);
+}
+
+.disclosureBody {
+  margin: 0;
+  padding-inline-start: 22px;
+  font-size: var(--dsh-font-xxs-12-font-size);
+  line-height: var(--dsh-font-xxs-12-line-height);
+  color: var(--dsh-alias-label-tertiary);
+}
+
+.bubbleRow {
+  display: flex;
+  justify-content: flex-end;
+  max-inline-size: 520px;
+  margin-inline-start: auto;
+
+  /* 上游气泡只给背景/圆角/内距，宽度由消费方约束；这里按内容收缩 */
+  & > * {
+    inline-size: fit-content;
+  }
+}

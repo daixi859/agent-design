@@ -14,6 +14,7 @@ const NAV_GROUPS: { label: MessageKey; to: string; icon: IconName; end?: boolean
   [
     { label: "preview", to: "preview", icon: "sparkles", end: true },
     { label: "dshPreview", to: "dsh", icon: "gear" },
+    { label: "dshComponents", to: "dsh-components", icon: "code" },
   ],
   [{ label: "transcript", to: "transcript", icon: "terminal" }],
   [
@@ -27,6 +28,7 @@ type IconName = Parameters<typeof Icon>[0]["name"];
 const TITLES: Record<string, MessageKey> = {
   "/settings/preview": "preview",
   "/settings/dsh": "dshPreview",
+  "/settings/dsh-components": "dshComponents",
   "/settings/transcript": "transcript",
   "/settings/appearance": "appearance",
   "/settings/about": "about",

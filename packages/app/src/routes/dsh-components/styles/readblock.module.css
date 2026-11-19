@@ -1,0 +1,35 @@
+/* DSH ReadBlock（上游 ui-primitives/src/ReadBlock.module.css）
+   上游由组件按返回内容的最大行号宽度注入 --dsl-read-gutter；预览无数据源，钉 4ch。
+   折叠展开（超过 maxLines 换 expand 按钮）与复制工具栏由组件 JS 拥有，静态预览不移植。 */
+
+.block {
+  --dsl-read-gutter: 4ch;
+}
+
+.line {
+  display: flex;
+  min-height: 1lh;
+  white-space: pre;
+}
+
+.gutter {
+  flex: none;
+  width: var(--dsl-read-gutter);
+  margin-right: 12px;
+  text-align: right;
+  color: var(--dsh-alias-label-tertiary);
+  user-select: none;
+}
+
+.content {
+  min-width: 0;
+  color: var(--dsh-alias-label-primary);
+}
+
+.block[data-code-wrap='true'] .line {
+  white-space: pre-wrap;
+}
+
+.block[data-code-wrap='true'] .content {
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,86 @@
+.card {
+  position: relative;
+  margin: 16px 0;
+  color: var(--dsh-alias-label-primary);
+  background: var(--dsh-alias-markdown-code-block);
+  border-radius: var(--dsh-radius-lg);
+  font: var(--dsh-font-markdown-code-block);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px 8px 22px;
+  /* 上游此处接受宿主重绑 --dsl-code-block-background；预览无宿主，直接取代码面 */
+  background: var(--dsh-alias-markdown-code-block);
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  color: var(--dsh-alias-label-secondary);
+  font: 11px/18px var(--dsh-font-family);
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.language {
+  color: var(--dsh-alias-label-tertiary);
+  flex: none;
+  font-family: var(--dsh-font-family-code);
+}
+
+.title {
+  color: var(--dsh-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.status {
+  margin-right: 8px;
+  color: var(--dsh-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsh-radius-sm);
+  color: var(--dsh-alias-label-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .action:hover {
+    background: var(--dsh-alias-interactive-bg-hover);
+  }
+}
+
+.action:focus-visible {
+  outline: 1px solid var(--dsh-focus-ring-color, var(--dsh-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.body {
+  padding: 6px 22px 20px;
+  font: var(--dsh-font-markdown-code-block);
+  overflow-x: auto;
+}

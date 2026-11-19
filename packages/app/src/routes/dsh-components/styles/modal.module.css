@@ -1,0 +1,107 @@
+/* DSH Modal（上游 ui-primitives/src/Modal.module.css）
+   静态预览：整页遮罩层（.root/.mask）依赖 fixed 层级与 Escape 生命周期，不移植；
+   只保留对话框卡片本身，由预览页的舞台底色充当遮罩。
+   帧内安全缩进（--dsh-frame-overlay-top / --dsh-frame-chrome-top）由应用外壳发布，
+   尺寸规则只出现在上游的遮罩层上，卡片本身不引用，故不需要兜底值。 */
+
+.dialog {
+  --dsh-frame-overlay-top: 20px;
+  --dsh-frame-chrome-top: 0px;
+
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(380px, 100%);
+  padding: 0 0 24px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--dsh-radius-panel);
+  background: var(--dsh-alias-bg-layer-2);
+  box-shadow: var(--dsh-elevation-prominent);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 22px 14px 12px 24px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsh-alias-label-primary);
+}
+
+.warning .title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.warningIcon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--dsh-alias-state-warn-primary);
+}
+
+.warning .body {
+  margin-top: 0;
+}
+
+.close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--dsh-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsh-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .close:hover {
+    background: var(--dsh-alias-interactive-bg-hover);
+  }
+}
+
+.description {
+  margin: 0;
+  padding: 0 24px;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  color: var(--dsh-alias-label-primary);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 20px;
+  padding: 0 24px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 24px;
+}

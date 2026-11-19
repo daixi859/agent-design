@@ -1,0 +1,46 @@
+/* DSH Toast（上游 ui-primitives/src/Toast.module.css）
+   静态预览：通知常驻在页面内，不再 fixed 到视口顶部，也不再按 --dsh-toast-hold
+   计时淡出（生命周期由组件 JS 拥有）。深色底在两主题下都保持（上游设计如此）。 */
+
+.toast {
+  position: relative;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: min(640px, 100%);
+  padding: 12px 16px;
+  border-radius: var(--dsh-radius-lg);
+  background: var(--dsh-alias-toast-bg);
+  color: var(--dsh-alias-toast-label);
+  font-size: 14px;
+  line-height: 22px;
+  box-shadow: var(--dsh-shadow-lv3);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--dsh-alias-state-warn-label);
+}
+
+.icon.success {
+  color: var(--dsh-alias-state-success-primary);
+}
+
+.text {
+  min-width: 0;
+}
+
+.action {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsh-alias-toast-action);
+  font: inherit;
+  cursor: pointer;
+  margin-inline: 3px;
+}

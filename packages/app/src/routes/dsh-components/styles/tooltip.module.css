@@ -1,0 +1,36 @@
+/* DSH Tooltip（上游 ui-primitives/src/Tooltip.module.css）
+   静态预览：气泡不再用 fixed 贴合锚点，改为行内气泡；方向对齐（data-side）的
+   transform 与 portal 层级由组件 JS 决定，预览不生效。 */
+
+.bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 100;
+  width: max-content;
+  max-width: min(50vw, 100%);
+  box-sizing: border-box;
+  padding: 3px 7px;
+  border-radius: var(--dsh-radius-sm);
+  background: var(--dsh-alias-tooltip-bg);
+  color: var(--dsh-alias-tooltip-label);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-line;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+.label {
+  min-width: 0;
+}
+
+/* 16px 键帽在 20px 行高的标签旁有 5px 的上下余量 */
+.bubble[data-has-shortcut] {
+  padding-inline-end: 5px;
+}
+
+.bubble[data-has-shortcut]:not(:has(.label)) {
+  padding: 3px;
+}

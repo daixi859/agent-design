@@ -1,0 +1,37 @@
+/* DSH MenuSurface（上游 ui-primitives/src/MenuSurface.module.css）
+   静态预览：只保留菜单面材质（半透明填充 + 背景模糊）与外圆角；macOS 原生背板
+   与进出场阶段动画依赖 portal 与生命周期计时器，不移植。 */
+
+.surface,
+.backing {
+  border-radius: var(--dsh-radius-lg);
+}
+
+.compact {
+  border-radius: var(--dsh-radius-md);
+}
+
+:where(.surface) {
+  position: relative;
+}
+
+.surface {
+  /* 上游由组件按实例 id 写 --dsh-menu-anchor 并以 CSS 锚点定位；预览就地铺开 */
+  isolation: isolate;
+}
+
+/* 只给背景层做滤镜：嵌套菜单与固定浮层因此不会多出 backdrop root 或
+   新的 fixed 包含块。 */
+.material {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--dsh-menu-surface-fill);
+  backdrop-filter: var(--dsh-menu-backdrop-filter);
+  pointer-events: none;
+}
+
+.backing {
+  display: none;
+}
