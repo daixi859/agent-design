@@ -4,6 +4,7 @@ import type { TranscriptModel, TurnItem } from "../../lib/transcript-model";
 import type { SessionCatalog } from "@pi-studio/shared/protocol";
 import type { ComposerDrive, LazyComposer } from "./Composer";
 import { Icon } from "../../components/Icon";
+import { EmptyState } from "../../components/EmptyState";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
 import { TuiGroup } from "./TuiGroup";
@@ -111,11 +112,11 @@ export function Transcript({
             <AnnotationRow key={entry.id} entry={entry} />
           ))}
           {turns.length === 0 ? (
-            <div className={styles.emptyState}>
-              <Icon name="sparkles" size={28} />
-              <strong>{t("emptyBranchTitle")}</strong>
-              <span>{t("emptyBranchHint")}</span>
-            </div>
+            <EmptyState
+              icon="sparkles"
+              title={t("emptyBranchTitle")}
+              hint={t("emptyBranchHint")}
+            />
           ) : (
             turns.map((turn) => (
               // 驱动中且是末轮才视为「生成中」：REST/Live Tail 浏览路径不改变既有折叠行为

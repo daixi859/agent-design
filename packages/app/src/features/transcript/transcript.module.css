@@ -597,25 +597,6 @@
   white-space: pre-wrap;
 }
 
-.emptyState {
-  block-size: 100%;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: var(--space-2);
-  color: var(--text-2);
-  font-size: var(--content-font-size-secondary);
-  text-align: center;
-
-  & svg {
-    color: var(--text-4);
-  }
-  & strong {
-    color: var(--text-1);
-    font-weight: var(--weight-semibold);
-  }
-}
-
 /* ---- 跳到最新 / Composer ---- */
 
 .jumpLatest {

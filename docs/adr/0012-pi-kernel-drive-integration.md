@@ -200,3 +200,15 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 **边界**：Composer 的触发检测条件由「已驱动」放宽为「可输入」（driven / lazy 两态），他属驱动与不可驱动仍不触发；加号以「可输入且有命令可选」在场；驱动态目录仍以 attached 帧为准（新鲜且含扩展命令全集），缓存与全局投影只在浏览态消费。挂起选择（模型/档位）机制不变。
 
 **后果**：core `catalog-map` 增 `promptCommandOf` / `skillCommandOf`（会话与全局两路共用，已测）、`global-catalog` 增 `globalCommandEntries` / `CatalogResourcesLike`（已测）；`globalModelCatalog` 改名 `globalCatalog`；app `drive-client.cacheableCatalog` 带 commands 切片（启动灌入的旧完整 SessionCatalog 经收窄自动迁移）；`Composer` 命令目录改「attached 帧 ?? browsingCatalog.commands」，GLOSSARY Trigger Menu 词条同步。
+
+## 补记十六（审查修复轮）：单客户端租约取代 session 级锁
+
+**问题**：阶段四落地时按「协议多路复用」实现了 session 级互斥——`SessionRegistry` 认文件级属主，同一 JSONL 二次 attach 抛 `sessionAlreadyDriven`，客户端再配一套静默退避重放（2s→32s 五次）去等属主心跳宽免窗。实测这套机制在「一个浏览器、多个标签页」的真实用法下全是负收益：同机会话共享同一份 pi 数据面，第二个标签页既做不到独立驱动（内核只允许单写者），又因为整页不渲染而连只读浏览也拿不到；而那套退避重放要盖过 60s 心跳窗，用户看到的是长时间无反馈的错误条。审查另指出 `isFileDriven` 的拒绝分支在单租约下已不可达，成了死代码。
+
+**决定**：互斥上移到连接级——**一个 server 进程同一时刻只服务一个控制连接**（GLOSSARY: Server Lease）。`wss.on("connection")` 若已有存活持有者，立刻回 `{type:"error", code:"serverBusy"}` 并关闭该连接；持有者连接消亡即释放租约，故刷新可立即重连；持有者心跳超期（代理后的半开连接，close 可迟到数分钟）判为僵尸，新连接先 `evict` 其全部属主与订阅再让位。客户端收到 `serverBusy` 按既有重连退避短重试少量次数（覆盖刷新窗口），用尽后停在整页阻断态，由用户关掉另一窗口后点「重试」——不无限抢占。
+
+随之删除的：`DriveErrorCode` 的 `sessionAlreadyDriven` 与全部文案、`SessionRegistry.open` 的文件级拒绝分支、客户端的 `replayFiles` / `replayAttempts` / `scheduleReplay` 全套退避。保留的：`isFileDriven` / `sessionOf` 作为查询（REST 的 `driven` 标志与 gateway 的 attach 幂等重放仍用），协议按 sessionId 多路复用不变（同连接内多 session 仍并行）。
+
+**边界**：租约是**进程内**的单写者保证，不跨进程——与 pi CLI 并发驱动同一 session 仍只 best-effort 互斥（「属主标记仅存内存」的原决定不变）；判定「存活」用心跳窗口而非操作系统级连接状态，故僵尸接管最坏要等一个心跳周期。整页阻断态下第二窗口失去只读浏览能力，这是明说的取舍：与其给一个半可用界面，不如说清「本服务已被占用」。多个服务实例（不同端口）各持租约，互不影响。
+
+**后果**：`ws-gateway` 的连接生命周期收敛为一个 `evict(socket)`（close 与租约让位共用，属主守卫就地消除重复），`handleFrame` 不再需要 `owned` 集合；阻断页复用 `components/EmptyState`（新抽的 Base Component，同时收编 Home / SessionView / Transcript 的三处同款空态），Brand Float 增 `idle` 形态以满足 ADR-0009「无例外常驻」；客户端租约重试复用既有的 `reconnectDelay` 退避，不再有第二套定时器与 1200ms / 3 次魔数。测试改为：第二连接必被拒且首连接不受影响、持有者断开后可接管、**心跳超期的僵尸被让位且其迟到 close 不误释放新属主**（后者重建了被删的守卫覆盖）。

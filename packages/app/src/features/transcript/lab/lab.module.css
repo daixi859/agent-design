@@ -30,5 +30,5 @@
   color: var(--text-4);
 }
 
-/* 空态复用 ../transcript.module.css 的 .emptyState（App.tsx 同款）——
+/* 空态走 components/EmptyState（Base Component）——
    样张走真实渲染路径，这里不留任何组件样式的第二份定义。 */

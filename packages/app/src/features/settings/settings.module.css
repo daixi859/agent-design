@@ -7,16 +7,33 @@
   block-size: 100%;
 }
 
-.nav {
+/* 侧栏列：整列承担背景与右分隔线；导航在上可滚动，返回动线钉在底部 */
+.navColumn {
   display: flex;
   flex-direction: column;
-  gap: var(--space-05);
   inline-size: var(--sidebar-width);
   min-inline-size: var(--sidebar-width);
   /* 顶部让位 = 标题栏高度：与主侧栏头部带同几何（ADR-0009） */
-  padding: var(--sessionbar-height) var(--space-2) var(--space-3);
+  padding-block: var(--sessionbar-height) var(--space-2);
   background: var(--bg-sidebar);
   border-inline-end: var(--border-hairline) solid var(--separator);
+}
+
+.nav {
+  display: flex;
+  flex: 1;
+  min-block-size: 0;
+  flex-direction: column;
+  gap: var(--space-05);
+  overflow-y: auto;
+  padding-inline: var(--space-2);
+}
+
+/* 返回主壳：贴底、与导航条目同款视觉，上方一条发丝线把它和导航分开 */
+.navFooter {
+  flex: none;
+  padding: var(--space-2) var(--space-2) 0;
+  border-block-start: var(--border-hairline) solid var(--separator);
 }
 
 .group {
@@ -30,8 +47,6 @@
   margin: var(--space-2) var(--space-1);
   background: var(--separator);
 }
-
-/* 导航条目视觉走 ui/nav 原语（与主侧栏 Session 条目共享） */
 
 /* 导航条目视觉走 ui/nav 原语（与主侧栏 Session 条目共享） */
 

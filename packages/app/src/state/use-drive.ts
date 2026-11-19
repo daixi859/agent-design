@@ -20,6 +20,10 @@ import {
 import { loadCachedCatalogs, persistCatalogs } from "../lib/catalog-cache";
 import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
+/** 租约被占时的自动重连次数上限：只为覆盖「刷新时旧连接尚未关净」的窗口，
+    超过即停在阻断页交还给人（点「重试」重置） */
+const BUSY_RETRY_LIMIT = 3;
+
 /** 驱动状态切片：会话快照表 + 连接级错误（无 sessionId 归属）+ 浏览态缓存（补记十二） */
 interface DriveState {
   sessions: ReadonlyMap<string, DriveSession>;
@@ -50,11 +54,9 @@ class DriveClient {
   private ws: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private reconnectDelay = 500;
-  /** 重连重放的来源标记与退避（2s→32s 五次）：重放被僵尸属主拒时按它静默重试——
-      心跳宽免窗（服务端 2×heartbeat）内属主仍判「活」，重试窗须盖过 60s */
-  private replayFiles = new Set<string>();
-  private replayAttempts = 0;
-  private replayTimer: number | null = null;
+  /** 租约被占的自动重连计数：只为覆盖「刷新时旧连接尚未关闭」的窗口，用尽后交还给人。
+      次数上限与退避都复用上面那套重连参数——不为它另开第二套定时器 */
+  private busyRetries = 0;
 
   constructor() {
     this.connect();
@@ -65,16 +67,13 @@ class DriveClient {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.cancelReplay();
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${proto}//${location.host}/ws`);
     ws.onopen = () => {
       this.reconnectDelay = 500;
-      // 重连后按 known file 集重放 attach（attached 幂等保留已有条目）；被拒走退避重试。
+      // 重连后按 known file 集重放 attach（attached 幂等保留已有条目）。
       // 懒发送的待接管 file 一并重放（attached 后按序补发，消息不丢）
-      this.replayFiles = this.knownFiles();
-      this.replayAttempts = 0;
-      for (const file of this.replayFiles) {
+      for (const file of this.knownFiles()) {
         this.send({ type: "attach", file });
       }
     };
@@ -82,52 +81,27 @@ class DriveClient {
       this.handleFrame(JSON.parse(String(message.data)) as ServerFrame);
     };
     ws.onclose = () => {
+      // 已被新连接取代的旧 socket：其 onclose 迟到会误排一次重连，直接忽略
+      if (this.ws !== ws) return;
       // 断线：待定的 create 立即失败，避免调用方永久悬挂。
       // 懒发送不失败：乐观回显顶住断线窗口，重连重放后补发（消息不丢）
       this.failPendingCreates("驱动连接已断开");
-      this.cancelReplay();
+      // 单客户端租约被占：旧页面的连接可能还没关净（刷新窗口），按同一套退避短重试；
+      // 用尽后停在阻断页，由用户关掉另一页后点「重试」——不无限抢占
+      const busy = this.store.getState().connectionError?.code === "serverBusy";
+      if (busy) {
+        if (this.busyRetries >= BUSY_RETRY_LIMIT) return;
+        this.busyRetries += 1;
+      }
       this.reconnectTimer = window.setTimeout(() => this.connect(), this.reconnectDelay);
       this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
     };
     this.ws = ws;
   }
 
-  private cancelReplay(): void {
-    if (this.replayTimer !== null) {
-      window.clearTimeout(this.replayTimer);
-      this.replayTimer = null;
-    }
-  }
-
-  /** 重连重放与退避重试的 known 集合：已登记 file + 懒发送在途 file */
+  /** 重连重放的 known 集合：已登记 file + 懒发送在途 file */
   private knownFiles(): Set<string> {
     return new Set([...this.files.values(), ...this.pendingSends.keys()]);
-  }
-
-  /** 重放被拒（sessionAlreadyDriven）的退避重试：只对 onopen 重放与懒发送 attach 生效
-      （用户手点的 attach 已随驱动按钮退役）；file 表已清且待发送已兑付的条目不再重发 */
-  private scheduleReplay(): void {
-    if (this.replayTimer !== null) return;
-    if (this.replayAttempts >= 5) {
-      // 重试窗耗尽仍被拒：属主是活连接，落错误位交还给人；待发送一并兑付失败（回显让位）
-      this.replayFiles.clear();
-      this.failPendingSends();
-      this.store.setState({
-        connectionError: { message: "该会话正在被其它窗口驱动", code: "sessionAlreadyDriven" },
-      });
-      return;
-    }
-    const delay = Math.min(2000 * 2 ** this.replayAttempts, 32000);
-    this.replayAttempts += 1;
-    this.replayTimer = window.setTimeout(() => {
-      this.replayTimer = null;
-      const known = this.knownFiles();
-      const pending = [...this.replayFiles].filter((file) => known.has(file));
-      this.replayFiles = new Set(pending);
-      for (const file of pending) {
-        this.send({ type: "attach", file });
-      }
-    }, delay);
   }
 
   private send(frame: ClientFrame): void {
@@ -136,13 +110,6 @@ class DriveClient {
 
   private handleFrame(frame: ServerFrame): void {
     if (frame.type === "error") {
-      // 重连重放或懒发送 attach 撞上僵尸属主宽免窗：静默退避重试，不落错误位打断用户
-      // （待发送的 file 并入重试集合；其乐观回显与 pendingSends 登记都原地保留）
-      if (frame.code === "sessionAlreadyDriven" && (this.replayFiles.size > 0 || this.pendingSends.size > 0)) {
-        for (const file of this.pendingSends.keys()) this.replayFiles.add(file);
-        this.scheduleReplay();
-        return;
-      }
       // attach 被拒（error 帧携 file 回显，ADR-0012 补记十一）：该 file 的待发送按序兑付
       // 失败——撤乐观会话、回显让位，错误条兜底；无 file 关联的连接级错误不撤待发送
       if (frame.file) this.failPendingSend(frame.file);
@@ -156,11 +123,12 @@ class DriveClient {
     if (this.store.getState().connectionError !== undefined) {
       this.store.setState({ connectionError: undefined });
     }
+    // 真正连上（收到非错误帧）才重置租约重试计数：busy 被拒的连接同样会 open
+    this.busyRetries = 0;
     switch (frame.type) {
       case "attached":
         if (frame.file) {
           this.files.set(frame.sessionId, frame.file);
-          this.replayFiles.delete(frame.file);
           // 懒发送兑付：attach 成功即按序补发全部待发送 prompt——第一条新起一轮，
           // 后续由内核经 streamingBehavior "followUp" 排队（与 sendText 同口径）。
           // 乐观会话的 pendingPrompt 不动——它顶住到权威 user 条目回传（Pending Echo 语义不变）
@@ -177,9 +145,7 @@ class DriveClient {
         else this.settleCreates({ ok: true, sessionId: frame.sessionId });
         break;
       case "released": {
-        const file = this.files.get(frame.sessionId);
         this.files.delete(frame.sessionId);
-        if (file) this.replayFiles.delete(file);
         break;
       }
     }
@@ -213,14 +179,6 @@ class DriveClient {
   /** 连接断开：待定的 create 立即失败，避免调用方的 .then 永久悬挂 */
   private failPendingCreates(message: string): void {
     for (const pending of this.pendingCreates.splice(0)) pending.reject(new Error(message));
-  }
-
-  /** 重试窗耗尽：全部待发送兑付失败——撤乐观会话（回显让位），错误条由调用方落 */
-  private failPendingSends(): void {
-    if (this.pendingSends.size === 0) return;
-    const ids = [...this.pendingSends.values()].map((pending) => pending.sessionId);
-    this.pendingSends.clear();
-    this.dropOptimistic(ids);
   }
 
   /** 单个 file 的待发送兑付失败（attach 被拒，error 帧携 file 回显）：撤该 file 的
@@ -258,6 +216,15 @@ class DriveClient {
 
   get connectionError(): { message: string; code?: DriveErrorCode } | undefined {
     return this.store.getState().connectionError;
+  }
+
+  /** 手动重连（租约被占错误条上的「重试」）：清错误位并重置计数后重新连 */
+  reconnect(): void {
+    this.busyRetries = 0;
+    this.store.setState({ connectionError: undefined });
+    // 先关旧连接：connect() 会覆盖 this.ws，旧 socket 的 onclose 若存活会再排一次重连
+    this.ws?.close();
+    this.connect();
   }
 
   /** 在项目 cwd 新建 session（GLOSSARY: Drive）；resolve 为 attached 帧带回的新 sessionId */

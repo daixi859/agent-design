@@ -16,11 +16,11 @@ export type StreamingBehavior = "steer" | "followUp";
 
 /** 服务端自造错误的机器码：客户端据此映射 i18n，避免把中文文案硬编码在服务端 */
 export type DriveErrorCode =
-  | "sessionAlreadyDriven"
   | "sessionConflict"
   | "sessionNotDriven"
   | "badFrame"
-  | "unknownFrame";
+  | "unknownFrame"
+  | "serverBusy";
 
 /** 客户端 → 内核命令体（sessionId 在信封上，WS 按其多路复用） */
 export type DriveCommandBody =

@@ -1,0 +1,27 @@
+/* 空态 / 阻断态原语：撑满父容器高度，居中一列（图标 / 标题 / 说明 / 动作）。
+   配色与字阶引用语义层令牌（ADR-0001）：图标弱化、标题加粗提亮。 */
+
+.emptyState {
+  block-size: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--content-font-size-secondary);
+  text-align: center;
+}
+
+.icon {
+  color: var(--text-4);
+}
+
+.title {
+  color: var(--text-1);
+  font-weight: var(--weight-semibold);
+}
+
+/* 动作区与说明拉开一档，按钮不贴住文案 */
+.action {
+  margin-block-start: var(--space-2);
+}

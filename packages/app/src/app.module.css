@@ -21,6 +21,17 @@
   flex-direction: column;
 }
 
+/* 租约被占的整页阻断态（ADR-0012 补记十六）：骨架来自 EmptyState，
+   此处只补「撑满整页 + 阻断态标题提一档字号」两项覆盖，不穿透其槽位内部 */
+.busy {
+  flex: 1;
+  padding: var(--space-6);
+}
+
+.busyTitle {
+  font-size: var(--text-title3);
+}
+
 /* Session Bar 下方的路由内容区：吃掉剩余高度，滚动交给各视图自身 */
 .mainContent {
   flex: 1;
