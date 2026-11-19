@@ -106,25 +106,25 @@ describe("SessionHost · 单会话驱动语义", () => {
     expect(emitted[1].body.type).toEqual("entry");
   });
 
-  it("prompt 转发文本；正常路径不额外产出事件", async () => {
+  it("prompt 经 dispatch 转发文本；正常路径不额外产出事件", async () => {
     const { host, session, emitted } = makeHost();
-    await host.prompt("hi");
+    expect(await host.dispatch({ type: "prompt", text: "hi" })).toEqual({ ok: true });
     expect(session.calls).toContain("prompt:hi");
     expect(emitted).toEqual([]);
   });
 
   it("prompt 透传 streamingBehavior（窗口竞态兜底）", async () => {
     const { host, session } = makeHost();
-    await host.prompt("插队", { streamingBehavior: "steer" });
+    await host.dispatch({ type: "prompt", text: "插队", streamingBehavior: "steer" });
     expect(session.calls).toContain("prompt:插队:steer");
-    await host.prompt("普通");
+    await host.dispatch({ type: "prompt", text: "普通" });
     expect(session.calls).toContain("prompt:普通");
   });
 
-  it("prompt 被拒 → error 事件 + 回到 idle", async () => {
+  it("prompt 被拒 → error 事件 + 回到 idle；dispatch 本身回 ok（fire-and-forget）", async () => {
     const { host, session, emitted } = makeHost();
     session.failPromptWith = new Error("no model");
-    await host.prompt("hi");
+    expect(await host.dispatch({ type: "prompt", text: "hi" })).toEqual({ ok: true });
     expect(emitted).toEqual([
       { sessionId: "s1", body: { type: "error", message: "no model" } },
       { sessionId: "s1", body: { type: "status", status: "idle" } },
@@ -134,25 +134,56 @@ describe("SessionHost · 单会话驱动语义", () => {
 
   it("steer / followUp 转发并回传 disposition", async () => {
     const { host, session } = makeHost();
-    expect(await host.steer("补一句")).toBe("queued");
-    expect(await host.followUp("接着说")).toBe("handled");
+    expect(await host.dispatch({ type: "steer", text: "补一句" })).toEqual({ ok: true, disposition: "queued" });
+    expect(await host.dispatch({ type: "followUp", text: "接着说" })).toEqual({ ok: true, disposition: "handled" });
     expect(session.calls).toContain("steer:补一句");
     expect(session.calls).toContain("followUp:接着说");
   });
 
-  it("steer 被拒 → error 事件、状态不动（运行不受影响）、disposition 回 failed", async () => {
+  // 补记十七：待应答命令被拒只回 {ok:false}（传输层转 commandFailed），不再另发
+  // error 事件——同一失败两种信号的双轨自此消除
+  it("steer 被拒 → 只回 {ok:false}，不发 error 事件、状态不动（运行不受影响）", async () => {
     const { host, session, emitted } = makeHost();
     session.emitEvent({ type: "agent_start" } as AgentSessionEvent);
     emitted.length = 0;
     session.failSteerWith = new Error("extension command");
-    expect(await host.steer("/cmd")).toBe("failed");
-    expect(emitted).toEqual([{ sessionId: "s1", body: { type: "error", message: "extension command" } }]);
+    expect(await host.dispatch({ type: "steer", text: "/cmd" })).toEqual({
+      ok: false,
+      message: "extension command",
+    });
+    expect(emitted).toEqual([]);
     expect(host.status).toBe("running");
   });
 
-  it("abort 转发", async () => {
+  it("setModel / setThinkingLevel 转发并 drain 条目", async () => {
+    const { host, session, emitted } = makeHost();
+    session.pendingEntries = [
+      { type: "message", id: "mc1", parentId: null, timestamp: "T0", message: { role: "assistant", content: "换模后" } },
+    ];
+    expect(await host.dispatch({ type: "setModel", provider: "p", modelId: "m" })).toEqual({ ok: true });
+    expect(session.calls).toContain("setModel:p/m");
+    expect(emitted.map((e) => e.body.type)).toEqual(["entry"]);
+    expect(await host.dispatch({ type: "setThinkingLevel", level: "high" })).toEqual({ ok: true });
+    expect(session.calls).toContain("setThinkingLevel:high");
+  });
+
+  it("setModel 被拒 → 只回 {ok:false}，不发 error 事件", async () => {
+    const { host, session, emitted } = makeHost();
+    session.failSetModelWith = new Error("unknown model");
+    expect(await host.dispatch({ type: "setModel", provider: "x", modelId: "y" })).toEqual({
+      ok: false,
+      message: "unknown model",
+    });
+    expect(emitted).toEqual([]);
+  });
+
+  it("clearQueue / compact / abort 经 dispatch 转发", async () => {
     const { host, session } = makeHost();
-    await host.abort();
+    expect(await host.dispatch({ type: "clearQueue" })).toEqual({ ok: true });
+    expect(await host.dispatch({ type: "compact" })).toEqual({ ok: true });
+    expect(await host.dispatch({ type: "abort" })).toEqual({ ok: true });
+    expect(session.calls).toContain("clearQueue");
+    expect(session.calls).toContain("compact");
     expect(session.calls).toContain("abort");
   });
 

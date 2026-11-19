@@ -14,28 +14,26 @@ import { DisclosureRow } from "../../components/DisclosureRow";
 import { cx } from "../../lib/cx";
 import { useLocale } from "../../state/use-locale";
 import { parseToolDiff } from "../../lib/edit-diff";
+import { TOOL_STATE_VIEW } from "../../lib/tool-state";
 import { toolIcon } from "./tool-icons";
-import type { MessageKey } from "../../lib/i18n";
 import type { SubCallItem, ToolCallItem, ToolState } from "../../lib/transcript-model";
 import styles from "./transcript.module.css";
 
-/** 状态 → 呈现的唯一映射（新增状态只改这里）。
+/** 状态的呈现层（Standard 形态）：语义（行内标签键 + 色档）在 lib/tool-state 共享
+    （两形态一张语义表，新增状态编译期强制两处补齐）。
     行内状态只走文字色（ADR-0013）：运行中 / 取消与摘要同档 tertiary，失败用 danger，
     因此只有 error 需要额外类名；字形负责区分同色的三态。
     gutter 状态点（终端块）是 ADR-0013 明列的例外，保留分档颜色。 */
-const STATE_VIEW: Record<
-  ToolState,
-  { label: MessageKey; dot: string; className?: string; glyph?: ReactNode }
-> = {
-  running: { label: "stateRunning", dot: styles.dotRunning, glyph: <span className={styles.pulse} /> },
-  ok: { label: "stateOk", dot: styles.dotOk },
-  error: { label: "stateError", dot: styles.dotError, className: styles.stateError, glyph: <Icon name="warning" size={13} /> },
-  stopped: { label: "stateStopped", dot: styles.dotStopped, glyph: <Icon name="pause" size={13} /> },
+const STATE_PRESENTATION: Record<ToolState, { dot: string; className?: string; glyph?: ReactNode }> = {
+  running: { dot: styles.dotRunning, glyph: <span className={styles.pulse} /> },
+  ok: { dot: styles.dotOk },
+  error: { dot: styles.dotError, className: styles.stateError, glyph: <Icon name="warning" size={13} /> },
+  stopped: { dot: styles.dotStopped, glyph: <Icon name="pause" size={13} /> },
 };
 
 /** 终端 gutter 的状态点：固定 8px，随状态变色（DSH StateDot 的最小版） */
 function RunDot({ state }: { state: ToolState }) {
-  return <span className={cx(styles.runDot, STATE_VIEW[state].dot)} />;
+  return <span className={cx(styles.runDot, STATE_PRESENTATION[state].dot)} />;
 }
 
 /** 内核把 args 存成 JSON **字符串**：能解析就美化，脏数据原样返回，绝不丢行 */
@@ -55,7 +53,7 @@ function SubCallRow({ call }: { call: SubCallItem }) {
   const { t } = useLocale();
   const state = call.status;
   const pretty = prettyArgs(call.args);
-  const view = state ? STATE_VIEW[state] : undefined;
+  const view = state ? STATE_PRESENTATION[state] : undefined;
 
   return (
     <div className={styles.row}>
@@ -63,7 +61,7 @@ function SubCallRow({ call }: { call: SubCallItem }) {
         className={styles.rowHead}
         open={open}
         onClick={() => setOpen((value) => !value)}
-        title={view ? t(view.label) : undefined}
+        title={state ? t(TOOL_STATE_VIEW[state].label) : undefined}
       >
         <span className={styles.rowLead}>
           <span className={styles.rowIcon}>
@@ -131,7 +129,7 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
       <DisclosureRow
         className={styles.rowHead}
         open={open}
-        title={t(STATE_VIEW[item.state].label)}
+        title={t(TOOL_STATE_VIEW[item.state].label)}
         onClick={() => setOpen((value) => !value)}
       >
         <span className={styles.rowLead}>
@@ -146,8 +144,8 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
         <span className={styles.dot} aria-hidden="true" />
         <span className={styles.rowSummary}>{item.summary}</span>
         {item.state !== "ok" && (
-          <span className={cx(styles.rowState, STATE_VIEW[item.state].className)}>
-            {STATE_VIEW[item.state].glyph}
+          <span className={cx(styles.rowState, STATE_PRESENTATION[item.state].className)}>
+            {STATE_PRESENTATION[item.state].glyph}
           </span>
         )}
       </DisclosureRow>

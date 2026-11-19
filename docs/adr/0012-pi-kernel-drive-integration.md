@@ -151,7 +151,7 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 
 **问题**：显式驱动按钮把「同意」放在「意图」之前：进入老会话必先点一下才能输入，高频路径摩擦大；且按钮态（play）与他属冲突的实际判定（点击才报错）脱节。浏览只读的边界本身没有争议，争议的只是边界的表达方式。
 
-**决定**：未驱动的落盘会话输入区常开，**首条发送即接管**（GLOSSARY Send-to-Attach）：客户端乐观注册最小 DriveSession（`pendingPrompt` 挂待回显；`attached` 分支以 `base = prev` 展开合并，乐观状态天然存活，纯归约零改动），并发 `attach` 帧；attach 在途的**后续发送入列**（file → 待补发消息序列，本地 `pendingQueue` 顶住显示），`attached` 回包到达即按 file 兑付、按序补发 prompt（第二条起内核经 `streamingBehavior: "followUp"` 兜底排队，与 sendText 同口径）。attach 被拒（`sessionAlreadyDriven`，属主心跳宽免窗）沿重连重放的**静默退避重试**（重试窗耗尽才落错误位并兑付失败）；其它拒绝按 file **精确**兑付失败——gateway 的 attach 错误帧携 `file` 回显（协议 error 帧扩可选 `file`），无 file 关联的连接级错误不撤待发送。他属驱动的前馈由 REST 下发：`/sessions` 列表加 `driven` 标志（组装层把 `registry.isFileDriven` 注入 pi-data），为真且本端驱动表无此会话时输入区禁用、占位符与发送钮 tooltip 提示「正在其它窗口驱动」。可接管的 file 依据以 REST 详情（`fetchSession` 一次取数）为主、5s 轮询摘要为辅——常开语义不依赖轮询命中。SessionBar 收敛为纯解除侧（pill + 解除钮），attach 钮退役；断线时待发送**不**兑付失败（乐观回显顶住，重连重放后续发）。
+**决定**：未驱动的落盘会话输入区常开，**首条发送即接管**（GLOSSARY Send-to-Attach）：客户端乐观注册最小 DriveSession（`pendingPrompt` 挂待回显；`attached` 分支以 `base = prev` 展开合并，乐观状态天然存活，纯归约零改动），并发 `attach` 帧；attach 在途的**后续发送入列**（file → 待补发消息序列，本地 `pendingQueue` 顶住显示），`attached` 回包到达即按 file 兑付、按序补发 prompt（第二条起内核经 `streamingBehavior: "followUp"` 兜底排队，与 sendText 同口径）。attach 被拒（`sessionAlreadyDriven`，属主心跳宽免窗）沿重连重放的**静默退避重试**（重试窗耗尽才落错误位并兑付失败）——此退避已由补记十六的单客户端租约取代，`sessionAlreadyDriven` 退役；其它拒绝按 file **精确**兑付失败——gateway 的 attach 错误帧携 `file` 回显（协议 error 帧扩可选 `file`），无 file 关联的连接级错误不撤待发送。他属驱动的前馈由 REST 下发：`/sessions` 列表加 `driven` 标志（组装层把 `registry.isFileDriven` 注入 pi-data），为真且本端驱动表无此会话时输入区禁用、占位符与发送钮 tooltip 提示「正在其它窗口驱动」。可接管的 file 依据以 REST 详情（`fetchSession` 一次取数）为主、5s 轮询摘要为辅——常开语义不依赖轮询命中。SessionBar 收敛为纯解除侧（pill + 解除钮），attach 钮退役；断线时待发送**不**兑付失败（乐观回显顶住，重连重放后续发）。
 
 **边界**：属主排他与互斥语义不变——内存属主标记、文件级/sessionId 级标记、僵尸接管全部照旧，本补记只挪动**同意时机**（按钮点击 → 首条发送）。`driven` 标志是轮询快照（5s），发送瞬间的竞态（他属刚接管）由 attach 拒绝路径兜底，两道防线缺一不可。Trigger Menu 依赖 catalog（随 attached 帧下发），仍属驱动态功能，懒接管态不出现；create 路径仍 eager attach（快照只随 attached 帧走）；无 file 的会话不可驱动，输入区维持只读提示。
 
@@ -212,3 +212,49 @@ Pi Studio 从只读查看器进入驱动阶段（修订 ADR-0002 的只读边界
 **边界**：租约是**进程内**的单写者保证，不跨进程——与 pi CLI 并发驱动同一 session 仍只 best-effort 互斥（「属主标记仅存内存」的原决定不变）；判定「存活」用心跳窗口而非操作系统级连接状态，故僵尸接管最坏要等一个心跳周期。整页阻断态下第二窗口失去只读浏览能力，这是明说的取舍：与其给一个半可用界面，不如说清「本服务已被占用」。多个服务实例（不同端口）各持租约，互不影响。
 
 **后果**：`ws-gateway` 的连接生命周期收敛为一个 `evict(socket)`（close 与租约让位共用，属主守卫就地消除重复），`handleFrame` 不再需要 `owned` 集合；阻断页复用 `components/EmptyState`（新抽的 Base Component，同时收编 Home / SessionView / Transcript 的三处同款空态），Brand Float 增 `idle` 形态以满足 ADR-0009「无例外常驻」；客户端租约重试复用既有的 `reconnectDelay` 退避，不再有第二套定时器与 1200ms / 3 次魔数。测试改为：第二连接必被拒且首连接不受影响、持有者断开后可接管、**心跳超期的僵尸被让位且其迟到 close 不误释放新属主**（后者重建了被删的守卫覆盖）。
+## 补记二十（架构收敛轮）：DriveClient 注入缝与 in-flight 簿记单账本
+
+**问题**：客户端编排层（`use-drive.ts` 的 DriveClient）直接 `new WebSocket` / `window.setTimeout` / 读 `location`，无任何注入缝——重连退避、重放、attach 竞态、在途兑付全在这层，却完全不可测（此前文件头明文「组装层不做单测」）；补记十三的三个审查 bug 全诞生在这里。簿记侧，`pendingSends`（file 键 Map）与 `pendingCreates`（FIFO 数组）是两套平行账、`failPendingCreates / failPendingSends / failPendingSend` 三个失败函数同构异码。
+
+**决定**：两条注入缝——`DriveClientDeps { socketFactory?, schedule?, cancel? }`，缺省真 WebSocket + 全局定时器；无浏览器全局且未注入时 `connect()` 跳过（node 导入安全），`DriveClient` 类转导出、测试经 `new DriveClient(deps)` 用假 socket + 可手推时钟穿过接口测（重连退避序列、attach 在途入列、懒发送兑付、断线语义等编排契约，`use-drive.test.ts`）。簿记收敛为 `lib/inflight.ts` 单账本（`InflightBook`）：懒发送与 create 待定应答的登记与兑付一处声明，兑付一律「取出并返回」，副作用（撤乐观壳、发帧）归调用方——账本不碰 store、不持连接，三胞胎 fail 函数消失。行为零变化，纯归约层（drive-client）不动。
+
+**边界**：`pendingPrompt / pendingQueue / pendingChoices` 不入账本——它们已是已测纯接口（applyEvent 归约、store 切片）的一部分，搬动只是挪位置；「inflight 账本」收拢的仅是编排层的登记与兑付表。
+
+**后果**：文件头「组装层不做单测」的旧口径废止；server 侧的 WS 半边集成测试（ws-gateway.test）与客户端编排测试自此分工对称。
+
+## 补记二十一（架构收敛轮续）：SessionHost 收缩为 dispatch 单入口，错误 policy 一处定
+
+**问题**：SessionHost 的命令接口是 PiSessionLike 的逐方法镜像——10 个方法、10 段同构的转发加 catch；等/不等策略（prompt/abort/compact 不等、steer/followUp/setModel 等）与错误转应答住在 server 组装层 `main.ts` 的 switch 里，同一命令枚举在四个包各抄一遍（新增一个命令横跨四包 30+ 触点）。错误信号双轨：steer 失败 `SessionHost.fail` 落 error 事件、组装层又把 failed 转 commandFailed 帧——客户端两处分别动 pendingPrompt。
+
+**决定**：SessionHost 命令面收缩为单一 `dispatch(body): Promise<DriveOutcome>`，策略表在 dispatch 一处定——fire-and-forget（prompt / abort / compact）立即回 ok、被拒不发应答只落 error 事件（事件流是唯一反馈通道）；待应答（steer / followUp / setModel / setThinkingLevel / clearQueue）被拒**只**回 `{ok:false}`（传输层转 commandFailed 帧），不再另发 error 事件，双轨消除；setModel / setThinkingLevel resolve 后的 drain 随迁入 dispatch（原 setModel 方法内）。`DriveOutcome` 形状随之归协议层（shared/protocol，core 与 server 两端共用）；「哪些命令承载文本」定为协议层谓词 `isTextCommand`（prompt / steer / followUp，undefined 按文本处理）——app 归约层的手抄枚举 `isTextCommandFailure` 删除，改消费协议谓词；新增命令类型必须先在谓词处归类。
+
+**边界**：PiSessionLike 不动——它仍是内核接缝（pi-session-source 适配器 + 测试 fake 双适配器），SessionHost 只是把「命令怎么转发、失败怎么落点」从调用方挪进实现吸收；clearQueue 失败的应答从「error 事件 + ok」统一为 commandFailed（原语义不一致，属收敛的修正而非行为漂移）。
+
+**后果**：新命令扇出减半——组装层 switch 消失（`driveCommand` 只剩「未驱动会话」守卫），SessionHost 方法面不再随命令集增长；session-host.test 命令用例全部改走 dispatch。
+
+## 补记二十二（架构收敛轮）：派生出口内开增量缝，delta 帧只重算尾部
+
+**问题**：applyEvent 对每个 delta 帧返回新 DriveSession，驱动画面的合成链（mergeEntries → activeLeafId → buildTranscriptModel）每帧全量 O(n) 重建。实测 1500 条目会话下每帧 3.06ms——30 帧/秒的流式即 ~92ms/s CPU 常驻，5000 条目会话线性放大到 ~10ms/帧。「瞬态帧只应惊动草稿叶」此前靠各消费点自律，不是结构保证。
+
+**决定**：buildTranscriptModel 内开增量缝——模块级单槽缓存按帧判据续算，判据不满足即整体重建（全量路径与旧实现逐行同构）：
+
+- **瞬态入参引用稳定化**（判据的前提）：待回显条目按（文本 × 挂靠点）记忆化（时间戳冻结在首次挂出时刻——发送时刻本就该定格）、liveTools 按 streamingToolCalls 引用记忆化；出口侧另有内容同值折叠（liveTools / draft 换引用不换内容不作失效）。
+- **分支链线性延展检查**：新尾部每个非 session 条目的 parent 必须等于链尾 id（权威条目与瞬态叠加都挂叶子）——中途分支点 / 挂弃枝即放弃增量；链元素携带原始数组下标，raw 前缀分歧可映射回链下标。
+- **预扫表只增不删**：条目 id 全局唯一永不复用，尾部换帧后旧尾残留键无害，从链分歧点续扫即可。
+- **turn 按 checkpoint 回退重建**：构建态住 TurnsBuilder，仅在 turn 关闭（user 边界）打点；delta 帧的分歧点落在末轮（待回显 + 草稿），恢复到该轮起点只重算尾部那一轮。
+
+实测同会话 delta 帧均 3.06ms → 0.19ms（16 倍；30 帧/秒 CPU 92ms/s → 6ms/s）。
+
+**边界**：「全量与增量产出深度一致」由增量等价测试锁定（append / 尾部换帧 / 分支切换 / liveTools 折叠 / 截尾清空五组逐帧比对）；liveTools 内容变化仍全量重算（运行中调用可能在任何已关闭轮——按内容判据折叠后仅真变化帧重建）。Live Tail 路径与驱动路径共享同一条缝（轮询追加同样走增量）。
+
+**后果**：接口签名不变（buildTranscriptModel 三参照旧）；调用方无需感知增量——「同一出口」的 ADR 原决定不被破坏。
+
+## 补记二十三（架构收敛轮）：属主单表——registry 记账，gateway 只路由与投喂存活
+
+**问题**：「属主」一个概念两个真相源——gateway 的 owners Map（socket 维度）与 registry 的 registrations（file/sessionId 维度），靠调用序维持一致；attach 判定横跨两包（gateway 先查 registry 再查自己的表，再手工编排 release + owners.delete + unsubscribe 三步）；close 时还要加「别释放新属主会话」的僵尸迟到守卫。「属主 = 连接」的 bug（浏览器刷新残留标记，补记六前身）已在这条双记账上发生过一次。
+
+**决定**：属主身份收进 registry 单表——`OwnerToken`（传输连接的透明对象，只要求身份比较）随 attach / create 入册，登记项带心跳存活位；registry 新增窄投影 `ownerOf / isOwnerAlive / markAlive / markDead / releaseByOwner`。gateway 删 owners Map，降为纯路由（subscriptions）+ 心跳传感器：tick 里 ping 后 `markAlive`、terminate 前 `markDead`；活属主拒绝与僵尸接管都由 `registry.open` 按存活位判定（僵尸先在 gateway 摘其订阅路由）；连接 close 走 `releaseByOwner`——新属主接管后登记的 owner 已换人，迟到 close 的守卫由单表结构性保证（原「别释放新属主会话」的手工守卫删除）。
+
+**边界**：「属主标记仅存内存」「属主生命周期是连接」「对 pi CLI 仅 best-effort 互斥」三条原决定全部不动——本补记只挪动记账位置，不换语义。同连接重放的幂等判定改读 `ownerOf`（连接对象同一性）；同连接重复 attach 穿透到 registry 属异常流，以 sessionConflict 拒绝。
+
+**后果**：第三个「等 attached」路径（fork / 恢复）或 desktop IPC 适配器到场时，属主语义随 registry 直接复用；心跳 terminate 路径首次有测试覆盖（isLive 注入 + heartbeatMs 40ms 真实 tick）；ws-gateway.test 的 fake deps 升级为属主单表语义的窄投影。

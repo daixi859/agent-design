@@ -112,6 +112,20 @@ export interface DriveCommand {
   body: DriveCommandBody;
 }
 
+/** 宿主层命令处理结果（core SessionHost.dispatch 的产出，传输层映射为
+ *  commandFailed / disposition 帧）：失败 message 为调试兜底、code 为机器码（客户端走 i18n） */
+export type DriveOutcome =
+  | { ok: true; disposition?: InputDisposition }
+  | { ok: false; message: string; code?: DriveErrorCode };
+
+/** 该命令是否承载文本（prompt / steer / followUp；undefined = 旧服务端未携 command 字段，
+ *  按文本处理——留下永不回显的气泡比误撤更糟，ADR-0012 补记十三）：只有文本命令被拒才让
+ *  客户端的待回显与待确认队列让位（GLOSSARY Pending Echo / Queue Dock）。app 归约与服务端
+ *  应答共用这一份判定；新增命令类型时必须在此归类，不许在消费端手抄枚举 */
+export function isTextCommand(command: DriveCommandBody["type"] | undefined): boolean {
+  return command === undefined || command === "prompt" || command === "steer" || command === "followUp";
+}
+
 /** 内核 → 客户端事件体 */
 export type DriveEventBody =
   /** 权威条目：与落盘 JSONL 行同构，追加进客户端条目树 */

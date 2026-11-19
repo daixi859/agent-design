@@ -42,8 +42,8 @@ function TurnSample({ turn }: { turn: MockTurn }) {
       {model.turns.map((parsed) => (
         <TurnView key={parsed.id} turn={parsed} />
       ))}
-      {model.orphanAnnotations.map((entry) => (
-        <AnnotationRow key={entry.id} entry={entry} />
+      {model.orphanAnnotations.map((carrier) => (
+        <AnnotationRow key={carrier.id} display={carrier.display} />
       ))}
     </Sample>
   );

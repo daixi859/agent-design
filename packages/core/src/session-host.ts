@@ -1,18 +1,30 @@
 // SessionHost：单个被驱动 Session 的宿主（ADR-0012）。命令进、协议事件出；
-// 错误一律落事件流（宿主层不必区分 WS/IPC），prompt 失败伴随回到 idle，
-// steer/followUp 失败不动状态（运行中会话不受影响）。
+// 命令接口是单一 dispatch（ADR-0012 补记十七）：等/不等策略与错误落点在一处定——
+// 待应答命令失败回 {ok:false}（传输层转 commandFailed 帧，不再另发 error 事件，
+// 双轨信号消除）；fire-and-forget 命令失败仍落 error 事件（无人在等应答，事件流
+// 是唯一反馈通道），prompt 失败伴随回到 idle，steer/followUp 失败不动状态。
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { errorMessage } from "@pi-studio/shared/errors";
-import type { ContextUsageInfo, DriveEvent, DriveStatus, SessionCatalog } from "@pi-studio/shared/protocol";
+import type {
+  ContextUsageInfo,
+  DriveCommandBody,
+  DriveEvent,
+  DriveOutcome,
+  DriveStatus,
+  SessionCatalog,
+} from "@pi-studio/shared/protocol";
 import type { SessionSnapshot } from "@pi-studio/shared/pi-types";
 import { normalizeSessionEvent } from "./normalize.ts";
-import type { InputDisposition, PiSessionLike, PromptOptions } from "./types.ts";
+import type { PiSessionLike } from "./types.ts";
 
 export interface SessionHostOptions {
   session: PiSessionLike;
   /** 事件出口由宿主注入（server 广播、IPC 桥或测试收集器） */
   emit: (event: DriveEvent) => void;
 }
+
+const done = (): DriveOutcome => ({ ok: true });
+const failed = (err: unknown): DriveOutcome => ({ ok: false, message: errorMessage(err) });
 
 export class SessionHost {
   readonly sessionId: string;
@@ -37,38 +49,6 @@ export class SessionHost {
     return this.session.snapshot();
   }
 
-  /** 发起一轮对话；resolve 即本轮结束，被拒时落 error + 回到 idle。
-   *  streamingBehavior 透传内核：运行中到达的 prompt 转排队而非 throw（窗口竞态兜底）。 */
-  prompt(text: string, options?: PromptOptions): Promise<void> {
-    return this.session.prompt(text, options).catch((err: unknown) => {
-      this.fail(err);
-      this.setStatus("idle");
-    });
-  }
-
-  /** 运行中插话：当前 assistant 轮结束后、下次模型调用前送达 */
-  steer(text: string): Promise<InputDisposition | "failed"> {
-    return this.session.steer(text).catch((err: unknown) => {
-      this.fail(err);
-      return "failed" as const;
-    });
-  }
-
-  /** 追问：本轮运行彻底结束后送达 */
-  followUp(text: string): Promise<InputDisposition | "failed"> {
-    return this.session.followUp(text).catch((err: unknown) => {
-      this.fail(err);
-      return "failed" as const;
-    });
-  }
-
-  /** 中止当前运行；settled(aborted) 事件随后到达 */
-  abort(): Promise<void> {
-    return this.session.abort().catch((err: unknown) => {
-      this.fail(err);
-    });
-  }
-
   /** 模型与命令目录（ADR-0016）：attach 回包用；失败落事件流、回空目录 */
   catalog(): SessionCatalog {
     try {
@@ -85,34 +65,62 @@ export class SessionHost {
     return this.session.contextUsage();
   }
 
-  /** 切换模型（ADR-0016）：resolve 后主动拉条目——内核只落 model_change entry、
-   *  不发 session 事件，不 drain 则 UI 要等下一轮边界才能看到新模型 */
-  async setModel(provider: string, modelId: string): Promise<void> {
-    await this.session.setModel(provider, modelId);
-    this.flushEntries();
-  }
-
-  /** 调整 thinking 档位（ADR-0016）：内核有 thinking_level_changed 事件（宿主已在该
-   *  边界 drain），这里再 drain 一次是幂等的（条目按计数水位，无新条目零开销） */
-  async setThinkingLevel(level: string): Promise<void> {
-    await this.session.setThinkingLevel(level);
-    this.flushEntries();
-  }
-
-  /** 清空两条队列（ADR-0016 整批重编第一步）：清空结果经内核 queue_update 回推 */
-  clearQueue(): void {
-    try {
-      this.session.clearQueue();
-    } catch (err) {
-      this.fail(err);
+  /**
+   * 命令单入口。策略表（等/不等 × 错误落点，一处定）：
+   * - fire-and-forget（prompt / abort / compact）：立即回 ok；被拒落 error 事件
+   *   （prompt 另回 idle）——生命周期经事件流反馈，无应答帧；
+   * - 待应答（steer / followUp）：resolve 回 disposition，被拒不发事件只回 {ok:false}；
+   * - 待应答（setModel / setThinkingLevel）：resolve 后 drain 条目（内核只落盘不发事件，
+   *   ADR-0016），被拒同上；
+   * - 同步（clearQueue）：清空结果经 queue_update 回推，被拒回 {ok:false}。
+   */
+  dispatch(body: DriveCommandBody): Promise<DriveOutcome> {
+    switch (body.type) {
+      case "prompt":
+        // streamingBehavior 透传内核（ADR-0012 补记六）：运行中到达的 prompt 转排队而非 throw
+        void this.session
+          .prompt(body.text, body.streamingBehavior ? { streamingBehavior: body.streamingBehavior } : undefined)
+          .catch((err: unknown) => {
+            this.fail(err);
+            this.setStatus("idle");
+          });
+        return Promise.resolve(done());
+      case "abort":
+        // settled(aborted) 事件随后到达
+        void this.session.abort().catch((err: unknown) => this.fail(err));
+        return Promise.resolve(done());
+      case "compact":
+        // 压缩是长任务：不等结束（compaction 事件负责反馈生命周期）
+        void this.session.compact().catch((err: unknown) => this.fail(err));
+        return Promise.resolve(done());
+      case "clearQueue":
+        // 清空结果经内核 queue_update 事件回推（ADR-0016 整批重编第一步）
+        try {
+          this.session.clearQueue();
+          return Promise.resolve(done());
+        } catch (err) {
+          return Promise.resolve(failed(err));
+        }
+      case "steer":
+        // 当前 assistant 轮结束后、下次模型调用前送达
+        return this.session.steer(body.text).then((disposition) => ({ ok: true as const, disposition }), failed);
+      case "followUp":
+        // 本轮运行彻底结束后送达
+        return this.session.followUp(body.text).then((disposition) => ({ ok: true as const, disposition }), failed);
+      case "setModel":
+        // resolve 后主动拉条目：内核只落 model_change entry、不发 session 事件，
+        // 不 drain 则 UI 要等下一轮边界才能看到新模型
+        return this.session.setModel(body.provider, body.modelId).then(() => {
+          this.flushEntries();
+          return done();
+        }, failed);
+      case "setThinkingLevel":
+        // 内核有 thinking_level_changed 事件（宿主已在该边界 drain），这里再 drain 是幂等的
+        return this.session.setThinkingLevel(body.level).then(() => {
+          this.flushEntries();
+          return done();
+        }, failed);
     }
-  }
-
-  /** 手动压缩上下文（ADR-0016）：生命周期经 compaction 事件回推；被拒落 error 事件 */
-  compact(): Promise<void> {
-    return this.session.compact().catch((err: unknown) => {
-      this.fail(err);
-    });
   }
 
   dispose(): void {

@@ -1,10 +1,17 @@
-// SessionRegistry：多 Session 并存的属主表（ADR-0012）。
-// 内存属主标记随**连接**消亡即释放（对 pi CLI 仅 best-effort）。互斥只按 sessionId：
-// 同一 session 重复登记是 bug，故拒绝；同一 JSONL 的重复 attach 由 gateway 的
-// 单客户端租约 + 幂等重放挡在前面（ADR-0012 补记十六），此处不再单独设文件级闸门。
+// SessionRegistry：多 Session 并存的属主表（ADR-0012；C7 属主单表收敛）。
+// 内存属主标记是唯一互斥手段（**连接**消亡即释放，对 pi CLI 仅 best-effort）：
+// 文件级标记防同一 JSONL 被重开双写，sessionId 级标记防事件流串流。
+// 属主身份住本表（owner token = 传输连接的透明对象），gateway 只投喂心跳存活——
+// 「属主 = 连接」一个概念一处记账，僵尸接管与迟到 close 的守卫由单表结构性保证。
+// 单客户端租约（ADR-0012 补记十六）在 gateway 层：同一时刻只有一个控制连接，
+// 因此本表不再以「活属主」拒绝跨连接重开——旧属主已由租约让位撤销，残留登记即僵尸，释放后接管。
 import type { DriveErrorCode, DriveEvent } from "@pi-studio/shared/protocol";
 import { SessionHost } from "./session-host.ts";
 import type { PiSessionFactory, PiSessionRequest } from "./types.ts";
+
+/** 属主身份（C7）：传输层连接的透明令牌——只要求对象身份，不感知传输类型
+ *  （WS socket / 未来 IPC 端口），registry 仅做同一性比较与存活投喂 */
+export type OwnerToken = object;
 
 /** 属主表错误：文案与机器码分离，客户端按 code 走 i18n（ADR-0011） */
 export class RegistryError extends Error {
@@ -19,6 +26,10 @@ interface Registration {
   host: SessionHost;
   /** attach 而来的文件路径；create 为 undefined */
   file?: string;
+  /** 属主连接（单表记账的唯一真相源，C7） */
+  owner: OwnerToken;
+  /** 心跳存活（gateway 投喂）：仅作查询，不再参与拒绝判定 */
+  alive: boolean;
 }
 
 export class SessionRegistry {
@@ -31,14 +42,14 @@ export class SessionRegistry {
     this.emit = emit;
   }
 
-  /** 接管已有 session（GLOSSARY: Attach） */
-  attach(file: string): Promise<SessionHost> {
-    return this.open({ kind: "attach", file });
+  /** 接管已有 session（GLOSSARY: Attach）；owner 即发起连接 */
+  attach(file: string, owner: OwnerToken): Promise<SessionHost> {
+    return this.open({ kind: "attach", file }, owner);
   }
 
-  /** 在真实项目 cwd 新建 session（GLOSSARY: Drive） */
-  create(cwd: string): Promise<SessionHost> {
-    return this.open({ kind: "create", cwd });
+  /** 在真实项目 cwd 新建 session（GLOSSARY: Drive）；owner 即发起连接 */
+  create(cwd: string, owner: OwnerToken): Promise<SessionHost> {
+    return this.open({ kind: "create", cwd }, owner);
   }
 
   get(sessionId: string): SessionHost | undefined {
@@ -53,6 +64,11 @@ export class SessionRegistry {
     return undefined;
   }
 
+  /** 会话的属主连接（gateway 的幂等重放判定用；未驱动回 undefined） */
+  ownerOf(sessionId: string): OwnerToken | undefined {
+    return this.registrations.get(sessionId)?.owner;
+  }
+
   isDriven(sessionId: string): boolean {
     return this.registrations.has(sessionId);
   }
@@ -62,6 +78,42 @@ export class SessionRegistry {
       if (reg.file === file) return true;
     }
     return false;
+  }
+
+  /** 该属主是否仍有存活登记（查询用） */
+  isOwnerAlive(owner: OwnerToken): boolean {
+    for (const reg of this.registrations.values()) {
+      if (reg.owner === owner && reg.alive) return true;
+    }
+    return false;
+  }
+
+  /** 心跳投喂（gateway ping 后）：该连接名下登记全部判活 */
+  markAlive(owner: OwnerToken): void {
+    for (const reg of this.registrations.values()) {
+      if (reg.owner === owner) reg.alive = true;
+    }
+  }
+
+  /** 心跳投喂（gateway terminate 前）：该连接名下登记全部判死 */
+  markDead(owner: OwnerToken): void {
+    for (const reg of this.registrations.values()) {
+      if (reg.owner === owner) reg.alive = false;
+    }
+  }
+
+  /** 连接消亡（close / terminate 后）：释放该属主名下全部会话，返回释放的 sessionId。
+   *  新属主接管后登记的 owner 已换人——本方法天然不触及，迟到 close 的守卫是结构性的。 */
+  releaseByOwner(owner: OwnerToken): string[] {
+    const released: string[] = [];
+    for (const [sessionId, reg] of this.registrations) {
+      if (reg.owner === owner) {
+        reg.host.dispose();
+        this.registrations.delete(sessionId);
+        released.push(sessionId);
+      }
+    }
+    return released;
   }
 
   /** 释放单个会话并撤标记；未知 id 静默 */
@@ -77,15 +129,27 @@ export class SessionRegistry {
     this.registrations.clear();
   }
 
-  private async open(request: PiSessionRequest): Promise<SessionHost> {
+  private async open(request: PiSessionRequest, owner: OwnerToken): Promise<SessionHost> {
     const file = request.kind === "attach" ? request.file : undefined;
+    if (file) {
+      const existing = this.sessionOf(file);
+      if (existing !== undefined) {
+        const reg = this.registrations.get(existing)!;
+        // 同连接重放被 gateway 幂等拦截，到达此处属异常流；拒绝重开而非静默复用
+        if (reg.owner === owner) {
+          throw new RegistryError("sessionConflict", `同连接重复 attach，拒绝重开：${file}`);
+        }
+        // 跨连接：租约保证旧属主已让位撤销，残留登记视为僵尸，释放后由本次 attach 接管
+        this.release(existing);
+      }
+    }
     const session = await this.factory(request);
     if (this.registrations.has(session.sessionId)) {
       session.dispose();
       throw new RegistryError("sessionConflict", `sessionId 冲突，拒绝登记：${session.sessionId}`);
     }
     const host = new SessionHost({ session, emit: this.emit });
-    this.registrations.set(host.sessionId, { host, file });
+    this.registrations.set(host.sessionId, { host, file, owner, alive: true });
     return host;
   }
 }

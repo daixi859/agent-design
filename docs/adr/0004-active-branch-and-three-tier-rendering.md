@@ -17,3 +17,11 @@ pi 的 session 条目是树且类型多样（十余种 Entry 类型）。我们�
 
 - 客户端需实现 leaf→root 回溯，思路对照 pi 的 `buildContextEntries`，但不做 compaction 投影（那是 LLM 上下文重建，不是 UI 渲染）。
 - 新增 Entry 类型时默认落入隐藏级，需显式决定其呈现层级。
+
+## 补记（架构收敛轮）：注解与 user 气泡的显示形状归一，Entry 树真正不出接口
+
+**问题**：本 ADR 的三级呈现策略由模型层分类（哪些条目落注解通道），但注解条目以裸 `SessionEntry` 越接口外泄——AnnotationRow 持 wire 类型的 switch、`as` 强转 4 种类型、手解析 `message.sections`；Turn.user 同样外泄裸 `MessageEntry`。模块头「Entry 树只在实现内部流转，不对外暴露」自相矛盾，视图被迫持有条目分类知识。`toolCallCount`（Composer 徽标退役后的死输出）仍被计算与测试锁定。
+
+**决定**：注解与 user 气泡照 GroupItem 的先例归一成显示形状——`AnnotationDisplay` 判别联合（sessionInfo / branchSummary / compaction / injection / systemPrompt 五类，含各自显示数据）与 `UserMessageDisplay`（text / image 显示块 + 条目时间戳）；分类与过滤口径（display:false 隐藏、空名跳过、空 sections 跳过）收拢在模型层 `annotationDisplayOf` 一处。视图只做「哪类注解 → 图标与文案」的呈现映射，模型层零 i18n 的纪律不变。`toolCallCount` 随退役徽标删除；出口补 `turnGroupAt(model, turnIndex, groupIndex)` 钻取选择子（测试 19 处 kind 判别钻取、三份互不共享的取数 helper 随之消失）。
+
+**后果**：orphanAnnotations 以 `AnnotationCarrier`（id + display）出接口；TranscriptLab / Transcript / TurnView 的 AnnotationRow 传参随改；GLOSSARY TranscriptModel 词条同步。

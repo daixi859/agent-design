@@ -32,3 +32,13 @@
 - 协议扩字段见 [ADR-0012 补记八](0012-pi-kernel-drive-integration.md)：`toolCall` 帧带 `args` / `outputTail`，normalize 放行 `tool_execution_start/update`；Live Tail 路径无 update 流，运行行输出区显示占位——两路径能力差异是明示的，不是缺陷。
 - Settings/Preview 新增 TUI 模式样张（含运行态 mock），截图验收浅深双主题。
 - i18n 新增词条（viewStandard / viewTui / recapMoreTools / outputPending / outputGrowing 等），en/zh 双侧。
+
+## 补记（架构收敛轮）：运行态派生归家 tui-view，四态语义一张表
+
+**问题**：ADR-0014 的运行态派生没有家——tailGroupId / recap.startedAt 进了共享 TranscriptModel（Standard 不消费），compactItem、activeThinkingId、detach 判定、运行秒数三段式判定（组头 / 槽位行 / 思考行各一份）内联在 Transcript / TurnView / TuiGroup 组件体里，与计时 hook 纠缠而不可测；四态映射两份（ToolRow 的 STATE_VIEW 表 vs TuiGroup 的 StatusGlyph if 链，注释自认「新增状态时两处同步」）；formatTokens / formatClock 同名本地版各一份且已漂移（lib 的 formatClock 硬编码 en，中文界面用户气泡仍显 PM）。
+
+**决定**：TUI 运行态判定整体收进 `lib/tui-view.ts` 纯函数层——输入纯数据（TranscriptModel 派生量 + now + 布尔）、无 hook 无 DOM，组件只读结果：activeThinkingIdOf / compactItemOf / slotElapsedOf / thinkingElapsedOf / groupElapsedOf / tuiDetachOf。Turn 增模型层派生量 firstGroupId / tailItemId（与既有 tailGroupId 同一批），TurnView 不再自扫 items 重复推导。四态拆两层：语义层 `lib/tool-state.ts`（标签键 + 色档，`Record<ToolState,…>` 编译期强制补齐），呈现层各形态自选（ToolRow 的 glyph/dot、TuiGroup 的 SVG 字形 Record）。呈现格式化收编 `lib/format.ts` 唯一实现（formatClockAt / formatDateAt / formatTokens 全部 locale 可穿），组件同名本地版删除；`emptyGroupRecap()` 成为首 token 空窗锚组的正典空值，Transcript 不再现场捏造字面量。
+
+**边界**：计时纪律不变（tick 只触发重绘、取值现场挂钟，纯函数不存秒数 state）；「模型算了视图不算」的既有 TUI 专属字段（tailGroupId / recap.startedAt 等）保持原位——归家的是组件内联的那一半，不是把 Standard 不消费的字段再搬一次。
+
+**后果**：ADR-0014 运行态行为首次有可测接口（tui-view.test）；formatClock 的 locale 缺陷随收编修复（中文界面用户气泡与 TUI done 段走 Intl locale）；formatTokens 换 Intl compact（en `1.2k`→`1.2K`、zh 万进制），消费点（Recap / Context Ring / 注解行）随统一。

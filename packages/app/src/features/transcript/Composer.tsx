@@ -1,22 +1,27 @@
-/** Composer：会话输入区（ADR-0017 重设计；ADR-0012 补记十一懒接管）。
-    已驱动即激活；未驱动但有 file 的会话输入区常开（Send-to-Attach：首条发送即接管，
-    由 DriveClient 懒发送兑付），仅他属驱动（别的连接持属主）时禁用并提示。
+/** Composer：会话输入区（ADR-0017 重设计；ADR-0012 补记十一懒接管；C3 搬运层拆除）。
+    状态切片（DriveSession、attach 在途）经 store selector 直订（ADR-0015 修订：
+    数据走订阅、动作走 props）——props 只承载绑定路由 id 的动作闭包与两个模式输入
+    （foreignDriven / takeover）。五态显式状态机（lib/composer-mode，已测）：
+    driven / attaching / lazy / foreign / locked，attaching 不再藏在 driven 名下。
+    未驱动但有 file 的会话输入区常开（Send-to-Attach：首条发送即接管，由 DriveClient
+    懒发送兑付），仅他属驱动（别的连接持属主）时禁用并提示。
     动作与状态各归其位：底栏左 = 加号（命令插入）+ Model Seat + Context Ring
     （thinking 后），右 = 发送/中断一元钮（busy 时变终止方块，中断保留队列）。
     运行态占位符化（排队 / 重试 / 压缩），双击 Esc（500ms）与终止钮等价。
     发送语义：idle → prompt（兜底 followUp），busy → followUp 排队，
     Ctrl/Cmd+Enter 显式插话。Trigger Menu（`/` 行首或加号触发）按来源分三组——
-    技能、提示词、命令（内建：compact，仅驱动态），选中落定为 Command Chip。 */
+    技能、提示词、命令（内建：compact，仅本端在管态），选中落定为 Command Chip。 */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { ContextUsageInfo, DriveStatus, SessionCatalog } from "@pi-studio/shared/protocol";
+import type { SessionCatalog } from "@pi-studio/shared/protocol";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { MenuSurface, MenuSurfaceGroup, MenuSurfaceItem, hasOpenMenuSurface } from "../../components/MenuSurface";
 import { Tooltip } from "../../components/Tooltip";
 import { clearDraft, loadDraft, saveDraft, type PersistedChip } from "../../lib/draft-store";
+import { composerCanInput, composerModeOf, placeholderStateOf, type ComposerMode } from "../../lib/composer-mode";
 import { isBusyStatus } from "../../lib/drive-client";
 import { cx } from "../../lib/cx";
-import { translateVars } from "../../lib/i18n";
+import { translateVars, type MessageKey } from "../../lib/i18n";
 import {
   detectSlashTrigger,
   filterCommands,
@@ -25,20 +30,44 @@ import {
   type MenuCommand,
   type MenuCommandGroup,
 } from "../../lib/trigger-menu";
-import type { MessageKey } from "../../lib/i18n";
 import { useLocale } from "../../state/use-locale";
-import { usePendingChoice, type QueuedItem } from "../../state/use-drive";
+import { useDriveAttaching, useDriveSession, usePendingChoice, type QueuedItem } from "../../state/use-drive";
 import { ContextRing } from "./ContextRing";
 import { ModelSeat } from "./ModelSeat";
 import { QueueDock, type QueueRow } from "./QueueDock";
 import styles from "./transcript.module.css";
 import menuStyles from "../../components/menu-surface.module.css";
 
-/** 输入区的四态（一元状态机，避免多个布尔各自编码同一状态而互相飘移） */
-type ComposerMode = "driven" | "lazy" | "foreign" | "locked";
+const COMMAND_MENU_ID = "composer-trigger-menu";
 
-export interface ComposerDrive {
-  status: DriveStatus;
+/** 分组头文案映射（ADR-0016 补记三）：技能 → 提示词 → 命令（内建） */
+const GROUP_LABELS: Record<MenuCommandGroup["source"], MessageKey> = {
+  skill: "groupSkills",
+  prompt: "groupPrompts",
+  builtin: "groupCommands",
+};
+
+/** 占位符判定表（ADR-0017 状态化占位符）：判定谓词在 lib/composer-mode（已测），
+    这里只把状态映射到文案键——retrying 的第 n 次经 translateVars 现场插值 */
+function placeholderKey(state: ReturnType<typeof placeholderStateOf>): { key: MessageKey; retry?: boolean } | null {
+  switch (state) {
+    case "compacting":
+      return { key: "compactingPlaceholder" };
+    case "retrying":
+      return { key: "retryingPlaceholder", retry: true };
+    case "busy":
+      return { key: "queuePlaceholder" };
+    case "chip":
+      return { key: "chipArgsPlaceholder" };
+    default:
+      return null;
+  }
+}
+
+/** 输入区的动作插槽（ADR-0015 修订）：只承载绑定路由 id 的动作闭包——状态切片
+    （DriveSession、attach 在途）由 Composer 经 store selector 直订，props 链不再
+    中转数据。存在 = 本端在管（driven / attaching）；他属驱动与不可驱动时缺省。 */
+export interface ComposerActions {
   /** 语义发送：idle → prompt；busy → followUp 排队（Queue Dock）。返回 false = 没接手
    *  （连接未就绪等），输入框与草稿不得清 */
   onSend(text: string): boolean;
@@ -51,33 +80,12 @@ export interface ComposerDrive {
   onSetThinkingLevel(level: string): void;
   /** 内建命令兑付（GLOSSARY Trigger Menu「命令」组，ADR-0016 补记三）：compact 等客户端本地动作 */
   onCompact(): void;
-  /** 内核排队快照 + 本地待确认发送：Queue Dock 数据源 */
-  queued?: { steering: string[]; followUp: string[] };
-  pendingQueue?: readonly string[];
-  /** 目录与用量（ADR-0016）：Model Seat / Context Ring 数据源 */
-  catalog?: SessionCatalog;
-  usage?: ContextUsageInfo;
-  /** 内核正在压缩上下文：期间新 prompt 被内核拒绝 */
-  compacting?: boolean;
-  /** 仅 retrying：第几次自动重试（占位符文案） */
-  retryAttempt?: number;
 }
 
-const COMMAND_MENU_ID = "composer-trigger-menu";
-
-/** 分组头文案映射（ADR-0016 补记三）：技能 → 提示词 → 命令（内建） */
-const GROUP_LABELS: Record<MenuCommandGroup["source"], MessageKey> = {
-  skill: "groupSkills",
-  prompt: "groupPrompts",
-  builtin: "groupCommands",
-};
-
-/** 懒接管插槽（GLOSSARY Send-to-Attach）：会话未驱动但可接管时由 SessionView 下发；
-    foreignDriven = 他属驱动（REST driven 标志 × 本端驱动表），输入区禁用并提示 */
+/** 懒接管插槽（GLOSSARY Send-to-Attach）：会话未驱动但可接管时由 SessionView 下发。
+ *  语义发送（未驱动恒为 prompt 语义；attach + 补发由 DriveClient 兑付）。
+ *  返回 false = 没接手（连接未就绪 / 无 file），输入框与草稿不得清 */
 export interface LazyComposer {
-  foreignDriven: boolean;
-  /** 语义发送（未驱动恒为 prompt 语义；attach + 补发由 DriveClient 兑付）。
-   *  返回 false = 没接手（连接未就绪 / 无 file），输入框与草稿不得清 */
   onSend(text: string): boolean;
   /** 浏览态选择（补记十二）：挂起待发送兑付；缓存目录在场才可达 */
   onSetModel?(provider: string, modelId: string): void;
@@ -88,18 +96,20 @@ export function Composer({
   model,
   thinkingLevel,
   variant = "overlay",
-  drive,
+  actions,
   lazy,
   browsingCatalog,
   sessionId,
+  foreignDriven = false,
+  takeover = false,
 }: {
   /** 当前模型声明（entries 派生优先；create 出的会话回落 catalog.current） */
   model?: { provider?: string; modelId?: string };
   thinkingLevel?: string;
   /** overlay：钉在 Transcript 底部；docked：文档流内（组件总览用） */
   variant?: "overlay" | "docked";
-  /** 存在即激活：会话已被驱动（GLOSSARY: Attach） */
-  drive?: ComposerDrive;
+  /** 本端在管的动作插槽（driven / attaching 两态共用）：状态数据不经 props */
+  actions?: ComposerActions;
   /** 未驱动但可接管时存在（GLOSSARY Send-to-Attach） */
   lazy?: LazyComposer;
   /** 浏览态 Model Seat 的目录（补记十二/十四）：驱动态不消费，未驱动时供可选菜单
@@ -107,6 +117,10 @@ export function Composer({
   browsingCatalog?: SessionCatalog;
   /** 草稿持久化键（GLOSSARY「Queue Dock」同族的会话恢复件） */
   sessionId?: string;
+  /** 他属驱动（REST driven 标志 × 本端驱动表）：输入区禁用并提示 */
+  foreignDriven?: boolean;
+  /** 可懒接管：file 在场（Send-to-Attach 的接管依据） */
+  takeover?: boolean;
 }) {
   const { locale, t } = useLocale();
   const [text, setText] = useState("");
@@ -117,21 +131,24 @@ export function Composer({
   const lastEscRef = useRef(0);
   const restoredRef = useRef(false);
 
-  const retrying = drive?.status === "retrying";
-  const busy = Boolean(drive && isBusyStatus(drive.status));
-  const compacting = Boolean(drive?.compacting);
-  // 输入区的一元状态机（不再用三个互相编码的布尔）：
-  //   driven = 本端已驱动；lazy = 浏览态可懒接管；foreign = 他属驱动；locked = 不可驱动
-  const mode: ComposerMode = drive
-    ? "driven"
-    : lazy
-      ? lazy.foreignDriven
-        ? "foreign"
-        : "lazy"
-      : "locked";
-  const foreignDriven = mode === "foreign";
-  // 可输入 = 已驱动，或未驱动但可接管（他属驱动与不可驱动会话除外）
-  const canInput = mode === "driven" || mode === "lazy";
+  // —— 状态切片直订（ADR-0015 修订）：DriveSession 与 attach 在途是全局订阅层的数据，
+  //    不再经 props 搬运（原 ComposerDrive 16 字段镜像由 SessionView 每渲染内联新建，
+  //    delta 帧换新对象使下游 memo 依赖恒失效——搬运层拆除后此痼疾随之消失） ——
+  const driveSession = useDriveSession(sessionId);
+  const attaching = useDriveAttaching(sessionId);
+  // 输入区的一元状态机（lib/composer-mode，已测）：attaching 显式入态，
+  // driven 态名下不再藏 driven-or-attaching；连接就绪度不入态（断线时输入区依设计保持可用，
+  // 就绪与否只在发送瞬间由 sendText 兜底，不改变任何渲染分支）
+  const mode: ComposerMode = composerModeOf({
+    driven: driveSession != null,
+    attaching,
+    takeover,
+    foreignDriven,
+  });
+  const foreign = mode === "foreign";
+  const canInput = composerCanInput(mode);
+  const busy = Boolean(driveSession && isBusyStatus(driveSession.status));
+  const compacting = Boolean(driveSession?.compacting);
 
   // —— 草稿持久化（ADR-0017）：可输入即恢复（含懒接管的浏览态），之后随改随存，发送即清 ——
 
@@ -156,15 +173,15 @@ export function Composer({
   //    驱动态目录随 attached 帧在场；浏览态退会话缓存 / 全局目录兜底（补记十五） ——
 
   const commands: MenuCommand[] = useMemo(() => {
-    const cataloged = menuCommandsFromCatalog(drive?.catalog?.commands ?? browsingCatalog?.commands ?? []);
-    // builtin 命令的描述走 i18n（纯逻辑层不持文案），故在此构造
-    const driven = drive != null;
-    const builtin: MenuCommand[] = driven
+    const cataloged = menuCommandsFromCatalog(driveSession?.catalog?.commands ?? browsingCatalog?.commands ?? []);
+    // builtin 命令的描述走 i18n（纯逻辑层不持文案），故在此构造；仅本端在管入菜单
+    // （compact 的兑付通道在驱动连接上——attaching 空窗也能兑付，attach 先到）
+    const managed = driveSession != null;
+    const builtin: MenuCommand[] = managed
       ? [{ name: "compact", trigger: "/compact", description: t("cmdCompactDesc"), source: "builtin" }]
       : [];
     return [...cataloged, ...builtin];
-    // 依赖只取 drive 的在亮度（SessionView 每渲染内联新建 drive 对象，整对象依赖恒失效）
-  }, [drive != null, drive?.catalog?.commands, browsingCatalog?.commands, t]);
+  }, [driveSession?.catalog?.commands, browsingCatalog?.commands, t, driveSession != null]);
 
   /** 展示序 = 分组序（技能在前、提示词在后），高亮下标即该序的下标 */
   const menuGroups = useMemo(
@@ -205,18 +222,18 @@ export function Composer({
     if (!outgoing) return;
     // 没接手的发送（连接未就绪）不清草稿——否则用户刚写的字被静默吐掉
     let accepted = false;
-    if (drive && chip?.source === "builtin") {
+    if (actions && chip?.source === "builtin") {
       // 内建命令（compact）：客户端本地动作，不透传内核 prompt()（内核不解释 /compact）；
       // 参数文本一并弃置（compact 无参）。浏览态无兑付通道——菜单本就不列（见 commands）
-      drive.onCompact();
+      actions.onCompact();
       accepted = true;
-    } else if (drive) {
+    } else if (actions) {
       // chip 透传不走插话（内核排队路径不做斜杠展开，罕见路径接受，ADR-0016 执行语义）
       if (steer && !chip) {
-        drive.onSteer(outgoing);
+        actions.onSteer(outgoing);
         accepted = true;
       } else {
-        accepted = drive.onSend(outgoing);
+        accepted = actions.onSend(outgoing);
       }
     } else {
       // 未驱动（懒接管）：无运行态，插话语义不存在，恒走发送（attach + 补发在 DriveClient）
@@ -311,35 +328,34 @@ export function Composer({
       const now = Date.now();
       if (now - lastEscRef.current < 500) {
         lastEscRef.current = 0;
-        drive?.onAbort();
+        actions?.onAbort();
       } else {
         lastEscRef.current = now;
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [menu, chip, busy, drive]);
+  }, [menu, chip, busy, actions]);
 
   // —— 渲染 ——
 
-  const placeholder = !canInput
-    ? foreignDriven
-      ? t("drivenByOtherHint")
-      : t("undrivableHint")
-    : compacting
-      ? t("compactingPlaceholder")
-      : retrying
-        ? translateVars(locale, "retryingPlaceholder", { n: String(drive.retryAttempt ?? 1) })
-        : busy
-          ? t("queuePlaceholder")
-          : chip
-            ? t("chipArgsPlaceholder")
-            : t("messagePlaceholder");
+  // 占位符：禁用态走 mode 分流（他属 / 不可驱动），可输入态走判定表
+  // （lib/composer-mode 的优先级 compacting > retrying > busy > chip，显式成序）
+  const disabledHint = !canInput ? (foreign ? t("drivenByOtherHint") : t("undrivableHint")) : null;
+  const placeholderHint = disabledHint ?? (() => {
+    const state = placeholderStateOf(driveSession, chip != null, canInput);
+    const hint = placeholderKey(state);
+    if (!hint) return t("messagePlaceholder");
+    return hint.retry
+      ? translateVars(locale, hint.key, { n: String(driveSession?.retryAttempt ?? 1) })
+      : t(hint.key);
+  })();
+  const placeholder = placeholderHint;
 
   const queueRows: QueueRow[] = [
-    ...(drive?.queued?.steering ?? []).map((value) => ({ text: value, channel: "steer" as const })),
-    ...(drive?.queued?.followUp ?? []).map((value) => ({ text: value, channel: "followUp" as const })),
-    ...(drive?.pendingQueue ?? []).map((value) => ({ text: value, channel: "followUp" as const, pending: true })),
+    ...(driveSession?.queued?.steering ?? []).map((value) => ({ text: value, channel: "steer" as const })),
+    ...(driveSession?.queued?.followUp ?? []).map((value) => ({ text: value, channel: "followUp" as const })),
+    ...(driveSession?.pendingQueue ?? []).map((value) => ({ text: value, channel: "followUp" as const, pending: true })),
   ];
 
   // 浏览态（补记十二）：挂起选择乐观覆盖 entries 派生值；驱动态不消费挂起选择
@@ -351,18 +367,18 @@ export function Composer({
       ? { ...(pendingChoice.provider ? { provider: pendingChoice.provider } : {}), modelId: pendingChoice.modelId }
       : model?.modelId
         ? model
-        : drive?.catalog?.model?.current;
+        : driveSession?.catalog?.model?.current;
   const displayThinking =
     browsing && pendingChoice?.thinkingLevel !== undefined
       ? pendingChoice.thinkingLevel
-      : (thinkingLevel ?? drive?.catalog?.model?.thinkingLevel);
+      : (thinkingLevel ?? driveSession?.catalog?.model?.thinkingLevel);
 
-  // 模型 / 档位切换的唯一分流点（驱动态走真通道，浏览态走挂起选择）——两粒按钮共用，
+  // 模型 / 档位切换的唯一分流点（本端在管走真通道，浏览态走挂起选择）——两粒按钮共用，
   // 不在 JSX 里两份三元各写一遍
   const selectModel = (provider: string, modelId: string) =>
-    drive ? drive.onSetModel(provider, modelId) : lazy?.onSetModel?.(provider, modelId);
+    actions ? actions.onSetModel(provider, modelId) : lazy?.onSetModel?.(provider, modelId);
   const selectThinkingLevel = (level: string) =>
-    drive ? drive.onSetThinkingLevel(level) : lazy?.onSetThinkingLevel?.(level);
+    actions ? actions.onSetThinkingLevel(level) : lazy?.onSetThinkingLevel?.(level);
 
   const bar = (
     <div className={styles.composerBar}>
@@ -373,11 +389,11 @@ export function Composer({
           加号与 `/` 同一 Trigger Menu：驱动态随 attached 帧，浏览态随缓存/全局目录
           （补记十五），有命令可选才在场 */}
       <ModelSeat
-        catalog={drive?.catalog ?? browsingCatalog}
+        catalog={driveSession?.catalog ?? browsingCatalog}
         current={displayModel}
         thinkingLevel={displayThinking}
         disabled={mode === "foreign" || mode === "locked"}
-        disabledHint={mode === "foreign" ? t("drivenByOtherHint") : undefined}
+        disabledHint={foreign ? t("drivenByOtherHint") : undefined}
         onSetModel={selectModel}
         onSetThinkingLevel={selectThinkingLevel}
         addon={
@@ -395,17 +411,17 @@ export function Composer({
         }
       />
       {/* Context Ring：thinking tag 之后（视觉简化轮）；usage 缺席（未驱动）不渲染 */}
-      <ContextRing usage={drive?.usage} modelLabel={displayModel?.modelId} compacting={compacting} />
+      <ContextRing usage={driveSession?.usage} modelLabel={displayModel?.modelId} compacting={compacting} />
       <span className={styles.barSpacer} />
       {/* 发送 / 中断一元钮：busy 时变终止方块（原独立 Stop 钮撤销，中断保留队列） */}
-      <Tooltip label={foreignDriven ? t("drivenByOtherHint") : busy ? t("stopHint") : t("sendHint")}>
+      <Tooltip label={foreign ? t("drivenByOtherHint") : busy ? t("stopHint") : t("sendHint")}>
         <Button
           icon={busy ? "stop" : "arrow-up"}
           iconSize={busy ? 16 : 24}
           className={cx(styles.sendButton, busy && styles.stopButton)}
           disabled={!canInput || compacting || (!busy && !chip && !text.trim())}
           aria-label={busy ? t("abort") : t("sendHint")}
-          onClick={() => (busy ? drive?.onAbort() : submit())}
+          onClick={() => (busy ? actions?.onAbort() : submit())}
         />
       </Tooltip>
     </div>
@@ -413,7 +429,9 @@ export function Composer({
 
   return (
     <div className={variant === "overlay" ? styles.composer : styles.composerDocked}>
-      {drive && <QueueDock rows={queueRows} running={busy} onRebuild={drive.onRebuildQueue} />}
+      {driveSession && actions && (
+        <QueueDock rows={queueRows} running={busy} onRebuild={actions.onRebuildQueue} />
+      )}
       <MenuSurface
         open={menu !== null}
         onClose={() => setMenu(null)}

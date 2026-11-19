@@ -1,8 +1,11 @@
-// DriveClient：浏览器侧驱动连接（ADR-0012 阶段四）。组装层不做单测——
-// 帧到状态的纯逻辑与判定谓词都在 lib/（drive-client / catalog-cache，已测），
-// WS 半边由 server 侧集成测试覆盖。
+// DriveClient：浏览器侧驱动连接（ADR-0012 阶段四）。帧到状态的纯逻辑与判定谓词都在
+// lib/（drive-client / catalog-cache / inflight，已测）；编排层（本文件）经两条注入缝
+// 可测：socketFactory（真 WebSocket / 测试假 socket）与时钟（退避重连、重放定时）——
+// 重连退避、attach 竞态、在途兑付从此穿过接口测，不再只测纯归约。
 // 连接管理：断线指数退避重连；重连后按 file 表 re-attach（create 出的会话无 file，
 // 由附着回包的快照支撑渲染，断线后从侧栏重新接管）。
+// 单客户端租约（ADR-0012 补记十六）：被占（serverBusy）时按同一套退避短重试少量次数
+// （覆盖刷新窗口），用尽停在整页阻断态，由用户点「重试」重置——不无限抢占。
 // 状态壳（ADR-0015）：会话快照表与连接错误住 zustand vanilla store，React 端
 // 经 useStore + selector 取切片（组件级更新）；本类只管 WS 生命周期与状态归约。
 import { useStore } from "zustand";
@@ -10,13 +13,13 @@ import { createStore } from "zustand/vanilla";
 import {
   applyServerFrame,
   cacheableCatalog,
-  inflightFileOf,
   isBusyStatus,
   pendingSendCommands,
   type CachedCatalog,
   type DriveSession,
   type ModelChoice,
 } from "../lib/drive-client";
+import { InflightBook } from "../lib/inflight";
 import { loadCachedCatalogs, persistCatalogs } from "../lib/catalog-cache";
 import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
 
@@ -24,88 +27,144 @@ import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, Server
     超过即停在阻断页交还给人（点「重试」重置） */
 const BUSY_RETRY_LIMIT = 3;
 
+// ===== 注入缝（两个适配器让接缝站得住）：生产用真 WebSocket 与全局定时器，测试注入假件 =====
+
+/** 连接事件的回调面：DriveClient 只依赖这三个时点，不感知 WebSocket 本体 */
+export interface DriveSocketHandlers {
+  onOpen(): void;
+  onMessage(data: string): void;
+  onClose(): void;
+}
+
+/** 连接适配器接口：ready = 帧可发（真 WS 即 readyState === OPEN） */
+export interface DriveSocket {
+  send(data: string): void;
+  readonly ready: boolean;
+}
+
+export type SocketFactory = (handlers: DriveSocketHandlers) => DriveSocket;
+export type Schedule = (fn: () => void, ms: number) => unknown;
+export type CancelTimer = (handle: unknown) => void;
+
+export interface DriveClientDeps {
+  /** 缺省用真 WebSocket 连 `${location.host}/ws` */
+  socketFactory?: SocketFactory;
+  /** 缺省用全局 setTimeout（退避重连共用） */
+  schedule?: Schedule;
+  cancel?: CancelTimer;
+}
+
+const browserSocketFactory: SocketFactory = (handlers) => {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen = () => handlers.onOpen();
+  ws.onmessage = (message) => handlers.onMessage(String(message.data));
+  ws.onclose = () => handlers.onClose();
+  return {
+    send: (data) => ws.send(data),
+    get ready() {
+      return ws.readyState === WebSocket.OPEN;
+    },
+  };
+};
+
 /** 驱动状态切片：会话快照表 + 连接级错误（无 sessionId 归属）+ 浏览态缓存（补记十二） */
 interface DriveState {
   sessions: ReadonlyMap<string, DriveSession>;
   connectionError: { message: string; code?: DriveErrorCode } | undefined;
   /** 浏览态 Model Seat 的目录缓存（补记十二）：sessionId → 最近一次 attached 的目录
-      （只有 `model` 切片——命令目录不缓存）；release 不清（浏览态可选仍需菜单），
+      （只有 `model`/`commands` 切片，补记十五扩界）；release 不清（浏览态可选仍需菜单），
       刷新由 localStorage 续命，attach 覆盖刷新 */
   catalogs: ReadonlyMap<string, CachedCatalog>;
   /** 浏览态挂起的模型/档位选择（补记十二）：发送随懒发送兑付并清；不持久化（未发送的意图不承诺存活） */
   pendingChoices: ReadonlyMap<string, ModelChoice>;
+  /** attach 在途的 sessionId 集合（C3）：inflight 账本的响应式镜像——账本是真相源
+      （lib/inflight），镜像只服务订阅端（ComposerMode 的 attaching 判据） */
+  attaching: ReadonlySet<string>;
 }
 
-class DriveClient {
+export class DriveClient {
   /** 状态壳（ADR-0015）：UI 订阅端一律 useStore(drive.store, selector) 取切片 */
   readonly store = createStore<DriveState>(() => ({
     sessions: new Map(),
     connectionError: undefined,
     catalogs: new Map(),
     pendingChoices: new Map(),
+    attaching: new Set(),
   }));
   /** sessionId → attach 时的 file（重连 re-attach 依据；create 会话不登记） */
   private files = new Map<string, string>();
-  /** 懒发送（GLOSSARY Send-to-Attach）：file → 待补发消息序列（首条乐观注册时入列，
-      attach 在途的后续发送追加；携浏览态的选择挂起，补记十二）。attached 回包到达
-      即按序兑付（先 set 后 prompt）；被拒按 file 精确兑付失败，静默退避重试期间
-      序列原地保留，断线保留（重连后续发） */
-  private pendingSends = new Map<string, { sessionId: string; texts: string[]; choice?: ModelChoice }>();
-  private ws: WebSocket | null = null;
-  private reconnectTimer: number | null = null;
+  /** 在途簿记（lib/inflight，已测）：懒发送与 create 待定应答的唯一账本；
+   *  兑付一律「取出并返回」，撤乐观壳、发帧等副作用由本类执行 */
+  private readonly inflight = new InflightBook();
+  private ws: DriveSocket | null = null;
+  private reconnectTimer: unknown = null;
   private reconnectDelay = 500;
   /** 租约被占的自动重连计数：只为覆盖「刷新时旧连接尚未关闭」的窗口，用尽后交还给人。
       次数上限与退避都复用上面那套重连参数——不为它另开第二套定时器 */
   private busyRetries = 0;
+  private readonly socketFactory: SocketFactory | undefined;
+  private readonly schedule: Schedule;
+  private readonly cancel: CancelTimer;
 
-  constructor() {
+  constructor(deps: DriveClientDeps = {}) {
+    // 缺省用真 WebSocket；无浏览器全局且未注入（node 导入单例）时不连接——导入安全
+    const browser = typeof WebSocket !== "undefined" && typeof location !== "undefined";
+    this.socketFactory = deps.socketFactory ?? (browser ? browserSocketFactory : undefined);
+    this.schedule = deps.schedule ?? ((fn, ms) => globalThis.setTimeout(fn, ms));
+    this.cancel = deps.cancel ?? ((handle) => globalThis.clearTimeout(handle as number));
     this.connect();
   }
 
   private connect(): void {
+    // node / 无浏览器全局且未注入适配器：模块级单例在测试环境导入必须安全，不连接
+    if (this.socketFactory === undefined) return;
     if (this.reconnectTimer !== null) {
-      window.clearTimeout(this.reconnectTimer);
+      this.cancel(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/ws`);
-    ws.onopen = () => {
-      this.reconnectDelay = 500;
-      // 重连后按 known file 集重放 attach（attached 幂等保留已有条目）。
-      // 懒发送的待接管 file 一并重放（attached 后按序补发，消息不丢）
-      for (const file of this.knownFiles()) {
-        this.send({ type: "attach", file });
-      }
-    };
-    ws.onmessage = (message) => {
-      this.handleFrame(JSON.parse(String(message.data)) as ServerFrame);
-    };
-    ws.onclose = () => {
-      // 已被新连接取代的旧 socket：其 onclose 迟到会误排一次重连，直接忽略
-      if (this.ws !== ws) return;
-      // 断线：待定的 create 立即失败，避免调用方永久悬挂。
-      // 懒发送不失败：乐观回显顶住断线窗口，重连重放后补发（消息不丢）
-      this.failPendingCreates("驱动连接已断开");
-      // 单客户端租约被占：旧页面的连接可能还没关净（刷新窗口），按同一套退避短重试；
-      // 用尽后停在阻断页，由用户关掉另一页后点「重试」——不无限抢占
-      const busy = this.store.getState().connectionError?.code === "serverBusy";
-      if (busy) {
-        if (this.busyRetries >= BUSY_RETRY_LIMIT) return;
-        this.busyRetries += 1;
-      }
-      this.reconnectTimer = window.setTimeout(() => this.connect(), this.reconnectDelay);
-      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
-    };
-    this.ws = ws;
+    this.ws = this.socketFactory({
+      onOpen: () => {
+        this.reconnectDelay = 500;
+        // 重连后按 known file 集重放 attach（attached 幂等保留已有条目）。
+        // 懒发送的待接管 file 一并重放（attached 后按序补发，消息不丢）
+        for (const file of this.knownFiles()) {
+          this.send({ type: "attach", file });
+        }
+      },
+      onMessage: (data) => {
+        this.handleFrame(JSON.parse(data) as ServerFrame);
+      },
+      onClose: () => {
+        // 断线：待定的 create 立即失败，避免调用方永久悬挂。
+        // 懒发送不失败：乐观回显顶住断线窗口，重连重放后补发（消息不丢）
+        this.inflight.failAllCreates("驱动连接已断开");
+        // 单客户端租约被占：旧页面的连接可能还没关净（刷新窗口），按同一套退避短重试；
+        // 用尽后停在阻断页，由用户关掉另一页后点「重试」——不无限抢占
+        const busy = this.store.getState().connectionError?.code === "serverBusy";
+        if (busy) {
+          if (this.busyRetries >= BUSY_RETRY_LIMIT) return;
+          this.busyRetries += 1;
+        }
+        this.reconnectTimer = this.schedule(() => this.connect(), this.reconnectDelay);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
+      },
+    });
+  }
+
+  /** 阻断页的「重试」：用户关掉另一窗口后手动重连，重置租约重试计数（ADR-0012 补记十六） */
+  reconnect(): void {
+    this.busyRetries = 0;
+    this.connect();
   }
 
   /** 重连重放的 known 集合：已登记 file + 懒发送在途 file */
   private knownFiles(): Set<string> {
-    return new Set([...this.files.values(), ...this.pendingSends.keys()]);
+    return new Set([...this.files.values(), ...this.inflight.sendFiles()]);
   }
 
   private send(frame: ClientFrame): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(frame));
+    if (this.ws?.ready) this.ws.send(JSON.stringify(frame));
   }
 
   private handleFrame(frame: ServerFrame): void {
@@ -113,10 +172,10 @@ class DriveClient {
       // attach 被拒（error 帧携 file 回显，ADR-0012 补记十一）：该 file 的待发送按序兑付
       // 失败——撤乐观会话、回显让位，错误条兜底；无 file 关联的连接级错误不撤待发送
       if (frame.file) this.failPendingSend(frame.file);
-      // 连接级错误（attach/create 被拒、坏帧）：落错误位并兑付待定 create；
+      // 连接级错误（attach/create 被拒、坏帧、serverBusy）：落错误位并兑付待定 create；
       // 错误文案走 i18n（服务端只给 code），无 code 时退回服务端原文
       this.store.setState({ connectionError: { message: frame.message, code: frame.code } });
-      this.settleCreates({ ok: false, message: frame.message });
+      this.inflight.settleCreate({ ok: false, message: frame.message });
       return;
     }
     // 非错误帧到达即连接恢复：仅在错误位挂起时清位，避免同值通知
@@ -132,9 +191,9 @@ class DriveClient {
           // 懒发送兑付：attach 成功即按序补发全部待发送 prompt——第一条新起一轮，
           // 后续由内核经 streamingBehavior "followUp" 排队（与 sendText 同口径）。
           // 乐观会话的 pendingPrompt 不动——它顶住到权威 user 条目回传（Pending Echo 语义不变）
-          const pendingSend = this.pendingSends.get(frame.file);
+          const pendingSend = this.inflight.consumeSend(frame.file);
           if (pendingSend) {
-            this.pendingSends.delete(frame.file);
+            this.mirrorAttaching([pendingSend.sessionId], []);
             // 兑付序（补记十二）：浏览态选择先 set 后 prompt——首轮即跑在新模型/档位上
             for (const outgoing of pendingSendCommands(frame.sessionId, pendingSend.texts, pendingSend.choice)) {
               this.send(outgoing);
@@ -142,7 +201,7 @@ class DriveClient {
           }
         }
         // create 路径无 file：兑付待定的新建导航
-        else this.settleCreates({ ok: true, sessionId: frame.sessionId });
+        else this.inflight.settleCreate({ ok: true, sessionId: frame.sessionId });
         break;
       case "released": {
         this.files.delete(frame.sessionId);
@@ -165,32 +224,16 @@ class DriveClient {
     });
   }
 
-  // —— 新建会话的待定应答（create 无 file，靠 attached/error 帧兑付；断线也要兑付） ——
-
-  private pendingCreates: Array<{ resolve: (sessionId: string) => void; reject: (err: Error) => void }> = [];
-
-  private settleCreates(outcome: { ok: true; sessionId: string } | { ok: false; message: string }): void {
-    const pending = this.pendingCreates.shift();
-    if (!pending) return;
-    if (outcome.ok) pending.resolve(outcome.sessionId);
-    else pending.reject(new Error(outcome.message));
-  }
-
-  /** 连接断开：待定的 create 立即失败，避免调用方的 .then 永久悬挂 */
-  private failPendingCreates(message: string): void {
-    for (const pending of this.pendingCreates.splice(0)) pending.reject(new Error(message));
-  }
-
   /** 单个 file 的待发送兑付失败（attach 被拒，error 帧携 file 回显）：撤该 file 的
       乐观会话并清登记；未知 file 静默 */
   private failPendingSend(file: string): void {
-    const pending = this.pendingSends.get(file);
+    const pending = this.inflight.dropSend(file);
     if (!pending) return;
-    this.pendingSends.delete(file);
     this.dropOptimistic([pending.sessionId]);
+    this.mirrorAttaching([pending.sessionId], []);
   }
 
-  /** 撤乐观会话壳（懒发送兑付失败 / 用户解除的唯一落点）：pendingSends 登记由调用方清，
+  /** 撤乐观会话壳（懒发送兑付失败 / 用户解除的唯一落点）：in-flight 登记由调用方清，
       这里只管 sessions 切片；一次删除多个 id 时只建一次新 Map */
   private dropOptimistic(sessionIds: readonly string[]): void {
     this.store.setState((state) => {
@@ -202,11 +245,36 @@ class DriveClient {
     });
   }
 
+  /** attach 在途镜像的同步点：账本（inflight）是真相源，这里只跟着记账——
+      订阅端（ComposerMode 的 attaching 判据）据此重渲；无变化回原 state（避免同值通知） */
+  private mirrorAttaching(remove: readonly string[], add: readonly string[]): void {
+    this.store.setState((state) => {
+      let changed = false;
+      const next = new Set(state.attaching);
+      for (const id of remove) {
+        if (next.delete(id)) changed = true;
+      }
+      for (const id of add) {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      }
+      return changed ? { attaching: next } : state;
+    });
+  }
+
   // —— 对 UI 的命令面 ——
 
   /** 该 session 当前是否被驱动（Live Tail 停用判定、Composer 活性判定共用） */
   isDriven(sessionId: string): boolean {
     return this.store.getState().sessions.has(sessionId);
+  }
+
+  /** 该 session 是否有 attach 在途（C3）：ComposerMode 的 attaching 判据；
+   *  响应式消费走 useDriveAttaching，这里供非响应的一次性取值 */
+  isAttaching(sessionId: string): boolean {
+    return this.store.getState().attaching.has(sessionId);
   }
 
   /** 非响应读取单个会话快照（effect 里的一次性取值；响应式消费走 useDriveSession） */
@@ -218,33 +286,22 @@ class DriveClient {
     return this.store.getState().connectionError;
   }
 
-  /** 手动重连（租约被占错误条上的「重试」）：清错误位并重置计数后重新连 */
-  reconnect(): void {
-    this.busyRetries = 0;
-    this.store.setState({ connectionError: undefined });
-    // 先关旧连接：connect() 会覆盖 this.ws，旧 socket 的 onclose 若存活会再排一次重连
-    this.ws?.close();
-    this.connect();
-  }
-
   /** 在项目 cwd 新建 session（GLOSSARY: Drive）；resolve 为 attached 帧带回的新 sessionId */
   create(cwd: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-      this.pendingCreates.push({ resolve, reject });
-      if (this.ws?.readyState !== WebSocket.OPEN) {
-        this.pendingCreates.pop();
+      if (!this.ws?.ready) {
         reject(new Error("驱动连接未就绪"));
         return;
       }
+      this.inflight.registerCreate(resolve, reject);
       this.send({ type: "create", cwd });
     });
   }
 
   release(sessionId: string): void {
     // 懒发送在途的会话被解除：待发送一并撤（attached 回包不得再补发 prompt）
-    for (const [file, pending] of this.pendingSends) {
-      if (pending.sessionId === sessionId) this.pendingSends.delete(file);
-    }
+    this.inflight.dropSendsForSession(sessionId);
+    this.mirrorAttaching([sessionId], []);
     this.files.delete(sessionId);
     this.dropOptimistic([sessionId]);
     this.send({ type: "release", sessionId });
@@ -280,16 +337,14 @@ class DriveClient {
     // （乐观注册后 Composer 已切到驱动分支，只传 sessionId），一律追加进待补发序列——
     // 否则第二条会以 drive prompt 直发未 attach 的 sessionId，服务端回 sessionNotDriven，
     // commandFailed 反把首条待回显抹掉（ADR-0012 补记十一「后续发送入列」）
-    const inflight = this.inflightFile(sessionId, file);
-    if (inflight !== undefined) {
+    const inflightFile = this.inflight.fileFor(sessionId, file);
+    if (inflightFile !== undefined) {
       // attach 帧不重发——重入 open 会撞 sessionId 冲突；本地待确认排队顶住显示，
       // 内核 queue 快照到达或回 idle 即让位；在途期间的新选择 merge 进待补发序列
       // 并清挂起（兑付以最新选择为准）
-      const pending = this.pendingSends.get(inflight)!;
-      pending.texts.push(text);
       const latest = this.store.getState().pendingChoices.get(sessionId);
+      this.inflight.appendSend(inflightFile, text, latest);
       if (latest) {
-        pending.choice = { ...pending.choice, ...latest };
         this.store.setState((state) => {
           const pendingChoices = new Map(state.pendingChoices);
           pendingChoices.delete(sessionId);
@@ -302,7 +357,7 @@ class DriveClient {
     const session = this.store.getState().sessions.get(sessionId);
     if (!session) {
       // 懒接管：连接未就绪或无 file 时不挂凭证（发送帧会被静默丢弃 / 会话不可驱动）
-      if (!file || this.ws?.readyState !== WebSocket.OPEN) return false;
+      if (!file || !this.ws?.ready) return false;
       // 挂起选择先读后清：发送即随懒发送入列（兑付序见 pendingSendCommands），
       // 乐观显示让位给内核权威
       const choice = this.store.getState().pendingChoices.get(sessionId);
@@ -319,20 +374,21 @@ class DriveClient {
           return next;
         })(),
       }));
-      this.pendingSends.set(file, { sessionId, texts: [text], ...(choice ? { choice } : {}) });
+      this.inflight.registerSend(file, { sessionId, texts: [text], ...(choice ? { choice } : {}) });
+      this.mirrorAttaching([], [sessionId]);
       this.send({ type: "attach", file });
       return true;
     }
     if (isBusyStatus(session.status)) {
       // 排队（GLOSSARY Queue Dock）：本地待确认 echo 顶住发送→快照回推间的空窗，
       // 内核 queue 帧到达即让位。连接未就绪时 send 静默丢弃，echo 不能先亮
-      if (this.ws?.readyState === WebSocket.OPEN) this.pushPendingQueue(sessionId, text);
+      if (this.ws?.ready) this.pushPendingQueue(sessionId, text);
       this.send({ type: "drive", command: { sessionId, body: { type: "followUp", text } } });
       return true;
     }
     // 待回显（GLOSSARY「Pending Echo」）：权威 user 条目要等内核 assistant 的 message_start
     // 才回传（ADR-0012 补记四），这期间由本地气泡顶住内容区。
-    if (session && this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.ready) {
       this.store.setState((state) => ({
         sessions: new Map(state.sessions).set(sessionId, { ...session, pendingPrompt: text }),
       }));
@@ -344,11 +400,6 @@ class DriveClient {
     return true;
   }
 
-  /** 该 sessionId 是否有 attach 在途：先按 file 直查（懒接管首条），再反查（乐观注册后
-      调用方只剩 sessionId）——两条路径都是「待补发」而不是「直发」（判定在 lib，已测） */
-  private inflightFile(sessionId: string, file: string | undefined): string | undefined {
-    return inflightFileOf(this.pendingSends, sessionId, file);
-  }
   /** 本地待确认排队行（Queue Dock 的 pending 行）：会话壳不在时静默跳过 */
   private pushPendingQueue(sessionId: string, text: string): void {
     this.store.setState((state) => {
@@ -415,7 +466,8 @@ export interface QueuedItem {
   channel: "steer" | "followUp";
 }
 
-/** 模块级单例：驱动状态跨组件共享，一个页一条 WS 连接 */
+/** 模块级单例：驱动状态跨组件共享，一个页一条 WS 连接。
+ *  node / 无浏览器全局时 connect() 自动跳过（导入安全），测试经 new DriveClient(deps) 注入假件 */
 export const drive = new DriveClient();
 
 // —— 浏览态目录缓存的持久化（补记十二/十三）：读写纯逻辑在 lib/catalog-cache（已测），
@@ -456,6 +508,11 @@ export function useCachedCatalog(id: string | undefined): CachedCatalog | undefi
 /** 浏览态挂起的模型/档位选择（补记十二）：Model Seat 乐观显示的数据源；发送即清 */
 export function usePendingChoice(id: string | undefined): ModelChoice | undefined {
   return useStore(drive.store, (s) => (id ? s.pendingChoices.get(id) : undefined));
+}
+
+/** attach 在途（C3）：ComposerMode 的 attaching 判据；selector 出原始布尔 */
+export function useDriveAttaching(id: string | undefined): boolean {
+  return useStore(drive.store, (s) => (id ? s.attaching.has(id) : false));
 }
 
 /** 运行指示的订阅原语（GLOSSARY: Running Indicator）：该 session 是否 live（running / retrying）。

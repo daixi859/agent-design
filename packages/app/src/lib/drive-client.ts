@@ -13,12 +13,12 @@ import type {
 import type {
   ClientFrame,
   ContextUsageInfo,
-  DriveCommandBody,
   DriveEvent,
   DriveStatus,
   ServerFrame,
   SessionCatalog,
 } from "@pi-studio/shared/protocol";
+import { isTextCommand } from "@pi-studio/shared/protocol";
 
 /** 「调用中」指示的形状（协议 toolCall 帧的字段子集，状态与消费方共用同名形状）。
  *  args / outputTail 为执行期数据（ADR-0012 补记八）：并行调用各占集合一项 */
@@ -251,10 +251,11 @@ export function applyServerFrame(
       // 命令被拒：文本命令（prompt / steer / followUp）不会再有权威回显，待回显与待确认队列
       // 一并让位；setModel / setThinkingLevel 被拒只是切换失败——prompt 照发（ADR-0012 补记十二
       // 「prompt 不阻断」），绝不能抹掉顶住首条消息的保命气泡。帧未携 command（旧服务端）
-      // 时按文本命令处理：留下永不回显的气泡比误撤更糟
+      // 时按文本命令处理：留下永不回显的气泡比误撤更糟。
+      // 文本命令的归类在协议层谓词 isTextCommand（唯一真相源，补记十七）
       if (!prev) return prev;
       const { message } = frame;
-      if (!isTextCommandFailure(frame.command)) return { ...prev, lastError: message };
+      if (!isTextCommand(frame.command)) return { ...prev, lastError: message };
       return { ...prev, lastError: message, pendingPrompt: undefined, pendingQueue: undefined };
     }
     case "disposition":
@@ -263,12 +264,6 @@ export function applyServerFrame(
     default:
       return prev;
   }
-}
-
-/** 该次命令失败是否会让待回显失效：prompt / steer / followUp 承载文本，其余（setModel /
-    setThinkingLevel / clearQueue / compact / abort）不碰待回显。缺省按文本处理（旧服务端） */
-export function isTextCommandFailure(command: DriveCommandBody["type"] | undefined): boolean {
-  return command === undefined || command === "prompt" || command === "steer" || command === "followUp";
 }
 
 function applyEvent(prev: DriveSession | undefined, event: DriveEvent): DriveSession | undefined {

@@ -1,6 +1,6 @@
-/** SessionRegistry 契约：多 Session 并存、按 id 属主标记、释放与收尾（ADR-0012）。
- *  文件级互斥已上移到 gateway 的单客户端租约与 attach 幂等（补记十六），
- *  本层只按 sessionId 去重。 */
+/** SessionRegistry 契约：多 Session 并存、属主单表记账、释放与收尾（ADR-0012；
+ *  C7 属主单表：owner token 记账 + 心跳存活投喂 + 迟到 close 守卫）。
+ *  单客户端租约在 gateway 层（补记十六），本层不以跨连接活属主拒绝重开。 */
 import { describe, expect, it } from "vitest";
 import { SessionRegistry } from "./session-registry.ts";
 import { FakeSession } from "./testing/fake-session.ts";
@@ -37,7 +37,7 @@ function makeRegistry(ids: string[] = []) {
 describe("SessionRegistry · 多会话属主与复用", () => {
   it("create：经工厂新建并按 sessionId 登记", async () => {
     const { registry, factory } = makeRegistry(["new-1"]);
-    const host = await registry.create("D:/proj");
+    const host = await registry.create("D:/proj", {});
     expect(factory.requests).toEqual([{ kind: "create", cwd: "D:/proj" }]);
     expect(host.sessionId).toBe("new-1");
     expect(registry.get("new-1")).toBe(host);
@@ -46,29 +46,26 @@ describe("SessionRegistry · 多会话属主与复用", () => {
 
   it("attach：带 file 打开并登记文件归属（isFileDriven 查询供 REST 用）", async () => {
     const { registry, factory } = makeRegistry(["old-1"]);
-    const host = await registry.attach("D:/proj/.pi/session.jsonl");
+    const host = await registry.attach("D:/proj/.pi/session.jsonl", {});
     expect(factory.requests).toEqual([{ kind: "attach", file: "D:/proj/.pi/session.jsonl" }]);
     expect(host.sessionId).toBe("old-1");
     expect(registry.isFileDriven("D:/proj/.pi/session.jsonl")).toBe(true);
     expect(registry.sessionOf("D:/proj/.pi/session.jsonl")).toBe("old-1");
   });
 
-  it("文件级幂等不在此层：重复 attach 照常开宿主，网关的租约负责挡重", async () => {
+  it("同连接重复 attach 在此层拒绝（gateway 幂等拦截后的异常流）", async () => {
     const { registry, factory } = makeRegistry(["a-1", "a-2"]);
-    await registry.attach("f1.jsonl");
-    await registry.attach("f1.jsonl");
-    expect(factory.requests).toHaveLength(2);
-    // 两次都登记（按 sessionId 各一条），sessionOf 取先登记者——单租约下重复 attach
-    // 只会来自同连接重放，gateway 的幂等分支已在此之前拦下（补记十六）
-    expect(registry.isDriven("a-1")).toBe(true);
-    expect(registry.isDriven("a-2")).toBe(true);
+    const owner = {};
+    await registry.attach("f1.jsonl", owner);
+    await expect(registry.attach("f1.jsonl", owner)).rejects.toThrow("拒绝重开");
+    expect(factory.requests).toHaveLength(1);
     expect(registry.sessionOf("f1.jsonl")).toBe("a-1");
   });
 
   it("sessionId 冲突：第二会话立即释放且不入册", async () => {
     const { registry, factory } = makeRegistry(["dup", "dup"]);
-    const first = await registry.attach("f1.jsonl");
-    await expect(registry.attach("f2.jsonl")).rejects.toThrow("冲突");
+    const first = await registry.attach("f1.jsonl", {});
+    await expect(registry.attach("f2.jsonl", {})).rejects.toThrow("冲突");
     expect(factory.requests[1]).toEqual({ kind: "attach", file: "f2.jsonl" });
     expect(registry.get("dup")).toBe(first);
     expect(factory.sessions[1].calls).toContain("dispose");
@@ -76,7 +73,7 @@ describe("SessionRegistry · 多会话属主与复用", () => {
 
   it("release：释放会话并撤双标记；未知 id 静默", async () => {
     const { registry } = makeRegistry(["r-1"]);
-    await registry.attach("f1.jsonl");
+    await registry.attach("f1.jsonl", {});
     registry.release("r-1");
     expect(registry.isDriven("r-1")).toBe(false);
     expect(registry.isFileDriven("f1.jsonl")).toBe(false);
@@ -86,8 +83,8 @@ describe("SessionRegistry · 多会话属主与复用", () => {
 
   it("disposeAll：全部释放并清空标记", async () => {
     const { registry, factory } = makeRegistry(["d-1", "d-2"]);
-    await registry.attach("f1.jsonl");
-    await registry.attach("f2.jsonl");
+    await registry.attach("f1.jsonl", {});
+    await registry.attach("f2.jsonl", {});
     registry.disposeAll();
     expect(registry.isDriven("d-1")).toBe(false);
     expect(registry.isFileDriven("f2.jsonl")).toBe(false);
@@ -98,7 +95,45 @@ describe("SessionRegistry · 多会话属主与复用", () => {
   it("工厂失败：错误上抛，registry 不留残册", async () => {
     const { registry, factory } = makeRegistry();
     factory.failWith = new Error("no auth");
-    await expect(registry.create("D:/proj")).rejects.toThrow("no auth");
+    await expect(registry.create("D:/proj", {})).rejects.toThrow("no auth");
     expect(registry.isDriven("gen-1")).toBe(false);
+  });
+});
+
+describe("SessionRegistry · 属主单表（C7）", () => {
+  it("心跳投喂：markDead 后 isOwnerAlive 为假，markAlive 复活", async () => {
+    const { registry } = makeRegistry(["h-1"]);
+    const token = {};
+    await registry.attach("f1.jsonl", token);
+    expect(registry.isOwnerAlive(token)).toBe(true);
+    registry.markDead(token);
+    expect(registry.isOwnerAlive(token)).toBe(false);
+    registry.markAlive(token);
+    expect(registry.isOwnerAlive(token)).toBe(true);
+  });
+
+  it("跨连接 attach：残留登记（僵尸）释放后由新属主接管", async () => {
+    const { registry } = makeRegistry(["f-1", "f-2"]);
+    const tokenA = {};
+    const tokenB = {};
+    await registry.attach("f1.jsonl", tokenA);
+    registry.markDead(tokenA);
+    const host = await registry.attach("f1.jsonl", tokenB);
+    expect(registry.get("f-1")).toBeUndefined();
+    expect(registry.ownerOf(host.sessionId)).toBe(tokenB);
+  });
+
+  it("releaseByOwner：只释放该属主名下会话——新属主接管的登记不被迟到 close 触及", async () => {
+    const { registry } = makeRegistry(["g-1", "g-2"]);
+    const tokenA = {};
+    const tokenB = {};
+    await registry.attach("f1.jsonl", tokenA);
+    registry.markDead(tokenA);
+    await registry.attach("f1.jsonl", tokenB);
+    // a 的 close 迟到：releaseByOwner(a) 不触及 b 的登记（结构性守卫）
+    expect(registry.releaseByOwner(tokenA)).toEqual([]);
+    expect(registry.isFileDriven("f1.jsonl")).toBe(true);
+    expect(registry.releaseByOwner(tokenB)).toEqual(["g-2"]);
+    expect(registry.isFileDriven("f1.jsonl")).toBe(false);
   });
 });

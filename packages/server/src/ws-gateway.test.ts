@@ -1,4 +1,5 @@
-/** WS 网关契约：协议信封、attach/create/release 生命周期、单客户端租约与按 sessionId 多路复用（ADR-0012） */
+/** WS 网关契约：协议信封、attach/create/release 生命周期、单客户端租约与按 sessionId 多路复用（ADR-0012）；
+ *  属主单表（C7）：owner 记账在 deps 投影，gateway 只路由与投喂存活 */
 import { describe, expect, it } from "vitest";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -21,33 +22,55 @@ function fakeDeps() {
     catalog: () => ({}),
     usage: () => undefined,
   });
-  // 在册表：模拟 registry 的属主语义（attach 即登记、release 即撤销；
-  // 文件级互斥在 gateway 的租约与幂等重放，不在这一层）
-  const driven = new Map<string, OpenedSession>();
-  const files = new Map<string, string>();
+  // 属主单表的 fake（C7）：attach 即登记（owner + alive）、release 即撤销、
+  // 活属主拒绝 / 判死属主可接管——registry 的窄投影语义
+  const registrations = new Map<string, { opened: OpenedSession; file?: string; owner: object; alive: boolean }>();
+  const fileOf = (file: string) => [...registrations.entries()].find(([, reg]) => reg.file === file);
   const deps: WsGatewayDeps = {
-    attach: async (file) => {
+    attach: async (file, owner) => {
       calls.push(`attach:${file}`);
       // 打不开的会话文件：attach 期间的任一失败都应回到 error 帧并保留 file 回显
       if (file.endsWith("locked.jsonl")) throw new Error("无法打开会话文件");
+      const existing = fileOf(file);
+      if (existing) {
+        const [existingId, reg] = existing;
+        if (reg.owner === owner) throw new Error("同连接重复 attach，拒绝重开");
+        // 跨连接：租约保证旧属主已让位，残留登记视为僵尸，释放后接管
+        deps.release(existingId);
+      }
       const opened = snap(`sid-${file}`);
-      driven.set(opened.sessionId, opened);
-      files.set(file, opened.sessionId);
+      registrations.set(opened.sessionId, { opened, file, owner, alive: true });
       return opened;
     },
-    create: async (cwd) => {
+    create: async (cwd, owner) => {
       calls.push(`create:${cwd}`);
       const opened = snap("sid-created");
-      driven.set(opened.sessionId, opened);
+      registrations.set(opened.sessionId, { opened, owner, alive: true });
       return opened;
     },
-    get: (sessionId) => driven.get(sessionId),
-    sessionOf: (file) => files.get(file),
+    get: (sessionId) => registrations.get(sessionId)?.opened,
+    sessionOf: (file) => fileOf(file)?.[0],
+    ownerOf: (sessionId) => registrations.get(sessionId)?.owner,
+    isOwnerAlive: (owner) => [...registrations.values()].some((reg) => reg.owner === owner && reg.alive),
+    markAlive: (owner) => {
+      for (const reg of registrations.values()) if (reg.owner === owner) reg.alive = true;
+    },
+    markDead: (owner) => {
+      for (const reg of registrations.values()) if (reg.owner === owner) reg.alive = false;
+    },
+    releaseByOwner: (owner) => {
+      const released: string[] = [];
+      for (const [sessionId, reg] of [...registrations]) {
+        if (reg.owner !== owner) continue;
+        registrations.delete(sessionId);
+        released.push(sessionId);
+        calls.push(`release:${sessionId}`);
+      }
+      return released;
+    },
     release: (id) => {
       calls.push(`release:${id}`);
-      const file = [...files.entries()].find(([, sid]) => sid === id)?.[0];
-      if (file) files.delete(file);
-      driven.delete(id);
+      registrations.delete(id);
     },
     drive: async (command) => {
       calls.push(`drive:${command.sessionId}:${command.body.type}`);
