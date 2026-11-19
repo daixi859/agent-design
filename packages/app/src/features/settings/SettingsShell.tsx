@@ -11,7 +11,10 @@ import styles from "./settings.module.css";
 
 /** 导航条目定义：分组渲染——上部预览路由，分隔线下是偏好与关于 */
 const NAV_GROUPS: { label: MessageKey; to: string; icon: IconName; end?: boolean }[][] = [
-  [{ label: "preview", to: "preview", icon: "sparkles", end: true }],
+  [
+    { label: "preview", to: "preview", icon: "sparkles", end: true },
+    { label: "dshPreview", to: "dsh", icon: "gear" },
+  ],
   [{ label: "transcript", to: "transcript", icon: "terminal" }],
   [
     { label: "appearance", to: "appearance", icon: "sun" },
@@ -23,6 +26,7 @@ type IconName = Parameters<typeof Icon>[0]["name"];
 
 const TITLES: Record<string, MessageKey> = {
   "/settings/preview": "preview",
+  "/settings/dsh": "dshPreview",
   "/settings/transcript": "transcript",
   "/settings/appearance": "appearance",
   "/settings/about": "about",
