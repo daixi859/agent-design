@@ -1,6 +1,7 @@
 /* Brand Float（ADR-0009）：固定视口左上角的品牌位。
-   无胶囊底、无边框阴影——与所在表面（侧栏顶 / 收起后的内容区）融为一体；
-   π 与动作图标（收起侧栏 / 设置壳返回）共用同一按钮，hover 交叉淡入淡出切换。 */
+   无胶囊底、无边框阴影——与所在表面（侧栏顶 / 内容区 / 整页阻断态）融为一体。
+   主壳下 π 与侧栏开关图标共用同一按钮，hover 交叉淡入淡出切换（补记二）；
+   static 形态（Settings / 整页阻断态）只有 π，与按钮态同尺寸同位置，不引起布局跳动。 */
 
 .float {
   position: fixed;
@@ -12,7 +13,7 @@
   align-items: center;
 }
 
-/* 单按钮双面：静止显示 π（品牌位），hover 换成动作图标 */
+/* 单按钮双面：静止显示 π（品牌位），hover 换成侧栏开关 */
 .home {
   position: relative;
   display: flex;
@@ -33,6 +34,11 @@
 }
 
 .mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--brandfloat-width);
+  block-size: var(--brandfloat-height);
   font-size: var(--text-title3);
   line-height: 1;
   font-weight: var(--weight-semibold);

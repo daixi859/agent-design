@@ -4,11 +4,11 @@ import type { DriveErrorCode } from "@pi-studio/shared/protocol";
 import type { MessageKey } from "./i18n";
 
 const CODE_KEYS: Record<DriveErrorCode, MessageKey> = {
-  sessionAlreadyDriven: "errSessionAlreadyDriven",
   sessionConflict: "errSessionConflict",
   sessionNotDriven: "errSessionNotDriven",
   badFrame: "errBadFrame",
   unknownFrame: "errUnknownFrame",
+  serverBusy: "errServerBusy",
 };
 
 /** 把 (code, serverMessage) 收敛成可展示文案 */

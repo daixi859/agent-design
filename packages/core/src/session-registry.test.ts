@@ -1,4 +1,6 @@
-/** SessionRegistry 契约：多 Session 并存、按 id/文件双属主标记、释放与收尾（ADR-0012） */
+/** SessionRegistry 契约：多 Session 并存、按 id 属主标记、释放与收尾（ADR-0012）。
+ *  文件级互斥已上移到 gateway 的单客户端租约与 attach 幂等（补记十六），
+ *  本层只按 sessionId 去重。 */
 import { describe, expect, it } from "vitest";
 import { SessionRegistry } from "./session-registry.ts";
 import { FakeSession } from "./testing/fake-session.ts";
@@ -42,19 +44,25 @@ describe("SessionRegistry · 多会话属主与复用", () => {
     expect(registry.isDriven("new-1")).toBe(true);
   });
 
-  it("attach：带 file 打开并做文件级标记", async () => {
+  it("attach：带 file 打开并登记文件归属（isFileDriven 查询供 REST 用）", async () => {
     const { registry, factory } = makeRegistry(["old-1"]);
     const host = await registry.attach("D:/proj/.pi/session.jsonl");
     expect(factory.requests).toEqual([{ kind: "attach", file: "D:/proj/.pi/session.jsonl" }]);
     expect(host.sessionId).toBe("old-1");
     expect(registry.isFileDriven("D:/proj/.pi/session.jsonl")).toBe(true);
+    expect(registry.sessionOf("D:/proj/.pi/session.jsonl")).toBe("old-1");
   });
 
-  it("同一文件二次 attach 拒绝（防双写），工厂不再被调", async () => {
-    const { registry, factory } = makeRegistry(["a-1"]);
+  it("文件级幂等不在此层：重复 attach 照常开宿主，网关的租约负责挡重", async () => {
+    const { registry, factory } = makeRegistry(["a-1", "a-2"]);
     await registry.attach("f1.jsonl");
-    await expect(registry.attach("f1.jsonl")).rejects.toThrow("已被驱动");
-    expect(factory.requests).toHaveLength(1);
+    await registry.attach("f1.jsonl");
+    expect(factory.requests).toHaveLength(2);
+    // 两次都登记（按 sessionId 各一条），sessionOf 取先登记者——单租约下重复 attach
+    // 只会来自同连接重放，gateway 的幂等分支已在此之前拦下（补记十六）
+    expect(registry.isDriven("a-1")).toBe(true);
+    expect(registry.isDriven("a-2")).toBe(true);
+    expect(registry.sessionOf("f1.jsonl")).toBe("a-1");
   });
 
   it("sessionId 冲突：第二会话立即释放且不入册", async () => {

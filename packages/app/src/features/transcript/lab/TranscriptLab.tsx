@@ -9,7 +9,7 @@ import { useMemo, type ReactNode } from "react";
 import type { SessionEntry } from "@pi-studio/shared/pi-types";
 import { buildTranscriptModel } from "../../../lib/transcript-model";
 import { useLocale } from "../../../state/use-locale";
-import { Icon } from "../../../components/Icon";
+import { EmptyState } from "../../../components/EmptyState";
 import { AnnotationRow } from "../AnnotationRow";
 import { Markdown } from "../Markdown";
 import { TuiGroup } from "../TuiGroup";
@@ -22,7 +22,6 @@ import {
   type MockTurn,
 } from "./mock-transcript";
 import styles from "./lab.module.css";
-import transcriptStyles from "../transcript.module.css";
 
 function Sample({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -155,11 +154,11 @@ export function TranscriptLab() {
       </Sample>
 
       <Sample label={t("labEmpty")}>
-        <div className={transcriptStyles.emptyState}>
-          <Icon name="sparkles" size={28} />
-          <strong>{t("emptyBranchTitle")}</strong>
-          <span>{t("emptyBranchHint")}</span>
-        </div>
+        <EmptyState
+          icon="sparkles"
+          title={t("emptyBranchTitle")}
+          hint={t("emptyBranchHint")}
+        />
       </Sample>
     </div>
   );

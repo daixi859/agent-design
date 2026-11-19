@@ -1,6 +1,7 @@
 // SessionRegistry：多 Session 并存的属主表（ADR-0012）。
-// 内存属主标记是唯一互斥手段（**连接**消亡即释放，对 pi CLI 仅 best-effort）：
-// 文件级标记防同一 JSONL 被重开双写，sessionId 级标记防事件流串流。
+// 内存属主标记随**连接**消亡即释放（对 pi CLI 仅 best-effort）。互斥只按 sessionId：
+// 同一 session 重复登记是 bug，故拒绝；同一 JSONL 的重复 attach 由 gateway 的
+// 单客户端租约 + 幂等重放挡在前面（ADR-0012 补记十六），此处不再单独设文件级闸门。
 import type { DriveErrorCode, DriveEvent } from "@pi-studio/shared/protocol";
 import { SessionHost } from "./session-host.ts";
 import type { PiSessionFactory, PiSessionRequest } from "./types.ts";
@@ -44,7 +45,7 @@ export class SessionRegistry {
     return this.registrations.get(sessionId)?.host;
   }
 
-  /** 按 attach 文件查已登记的 sessionId（gateway 的重放幂等 / 僵尸接管判定用） */
+  /** 按 attach 文件查已登记的 sessionId（gateway 的重放幂等判定用） */
   sessionOf(file: string): string | undefined {
     for (const [sessionId, reg] of this.registrations) {
       if (reg.file === file) return sessionId;
@@ -78,9 +79,6 @@ export class SessionRegistry {
 
   private async open(request: PiSessionRequest): Promise<SessionHost> {
     const file = request.kind === "attach" ? request.file : undefined;
-    if (file && this.isFileDriven(file)) {
-      throw new RegistryError("sessionAlreadyDriven", `session 已被驱动，拒绝重开：${file}`);
-    }
     const session = await this.factory(request);
     if (this.registrations.has(session.sessionId)) {
       session.dispose();

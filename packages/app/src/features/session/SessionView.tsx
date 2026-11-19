@@ -18,6 +18,7 @@ import { useGlobalCatalog } from "../../state/global-catalog";
 import { driveErrorText } from "../../lib/drive-errors";
 import type { SessionDetailState } from "../../state/use-session-detail";
 import { Icon } from "../../components/Icon";
+import { EmptyState } from "../../components/EmptyState";
 import { Transcript } from "../transcript/Transcript";
 import styles from "../transcript/transcript.module.css";
 
@@ -43,22 +44,11 @@ export function SessionView() {
     : driveSession?.lastError;
 
   if (data.error) {
-    return (
-      <div className={styles.emptyState}>
-        <Icon name="warning" size={28} />
-        <strong>{t("loadFailedTitle")}</strong>
-        <span>{data.error}</span>
-      </div>
-    );
+    return <EmptyState icon="warning" title={t("loadFailedTitle")} hint={data.error} />;
   }
 
   if (data.loading && !data.header) {
-    return (
-      <div className={styles.emptyState}>
-        <Icon name="sparkles" size={28} />
-        <span>{t("loadingSession")}</span>
-      </div>
-    );
+    return <EmptyState icon="sparkles" hint={t("loadingSession")} />;
   }
 
   // 接管依据的 file：详情一次取数直带（不依赖 5s 轮询命中），轮询摘要兜底；

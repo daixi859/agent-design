@@ -1,6 +1,6 @@
 /** Session Bar（ADR-0009）：内容区标题栏——title / branched 徽标由 MainShell 派生下发；
     动作区：驱动状态徽标与解除（ADR-0012 补记十一：接管并入首条发送，仅存解除侧）、
-    浏览器全屏、渲染模式快切（ADR-0014）、主题切换。 */
+    浏览器全屏、渲染模式快切（ADR-0014）、主题切换。侧栏开关在 Brand Float（ADR-0009）。 */
 import { useEffect, useState } from "react";
 import type { DriveStatus } from "@pi-studio/shared/protocol";
 import { useTheme } from "../../state/use-theme";

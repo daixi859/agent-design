@@ -17,7 +17,7 @@ _Avoid_: 工作区、workspace、仓库
 _Avoid_: 工作区、workspace、左栏面板
 
 **Brand Float**:
-固定于视口左上角的品牌位：单枚按钮，静止显示 π，hover 淡入动作图标（主壳 = Sidebar 收起/展开，Settings = 返回），与所在表面融为一体；主壳与 Settings 常驻（ADR-0009）。
+固定于视口左上角的品牌位，与所在表面融为一体，主壳 / Settings / 整页阻断态（Server Lease 拒绝页）常驻（ADR-0009）。主壳下是双面按钮：静止显示 π，hover 换成侧栏开关图标，点击收起/展开 Sidebar；Settings 与阻断态下只呈 π（static，不可交互）。Settings 的返回动线独立在设置侧栏底部。
 _Avoid_: 顶栏、TopBar、标题栏（与 Session Bar 混淆）、悬浮胶囊
 
 **Transcript**:
@@ -29,7 +29,7 @@ _Avoid_: 聊天区、对话块、消息流
 _Avoid_: 顶栏、TopBar、工具栏
 
 **Settings**:
-独立整页双栏设置壳：自有侧栏导航（Preview、Appearance、About）与内容区，进入时替换主壳（ADR-0009）。
+独立整页双栏设置壳：自有侧栏导航（Preview、Appearance、About）与内容区，返回主壳的动线钉在导航侧栏底部；进入时替换主壳（ADR-0009）。
 _Avoid_: 设置面板、设置弹层
 
 **Live Tail**:
@@ -77,8 +77,12 @@ _Avoid_: 进度条、token 环、用量饼图
 _Avoid_: 打开、载入、恢复会话
 
 **Send-to-Attach**:
-懒接管：未被驱动的 Session 输入区常开，首条消息的发送动作即触发 Attach——乐观注册顶住空窗，attached 回包后补发 prompt；attach 被拒沿静默退避重试。他属驱动（别的连接持属主）时输入区禁用并提示（REST driven 标志前馈 + 拒绝错误条兜底）。Attach 的同意动作由此从按钮点击变为首次发送（ADR-0012 补记十一）；Session Bar 仅存解除侧。浏览态的模型/档位选择同走挂起—兑付：选择乐观显示、随首条发送先 set 后 prompt（ADR-0012 补记十二）。
+懒接管：未被驱动的 Session 输入区常开，首条消息的发送动作即触发 Attach——乐观注册顶住空窗，attached 回包后补发 prompt；attach 被拒则该 file 的待发送精确兑付失败（撤乐观会话、回显让位、错误条兜底）。他属驱动在同机只有一个客户端的前提下不再出现（见 Server Lease），REST 的 driven 标志只用于跨进程残留提示。Attach 的同意动作由此从按钮点击变为首次发送（ADR-0012 补记十一）；Session Bar 仅存解除侧。浏览态的模型/档位选择同走挂起—兑付：选择乐观显示、随首条发送先 set 后 prompt（ADR-0012 补记十二）。
 _Avoid_: 自动接管（指进页面即 attach，非本词）、发送即驱动（作为能力名时）、驱动按钮（已退役）
+
+**Server Lease**:
+单客户端租约：一个 server 进程同一时刻只服务一个控制连接（/ws），后来者在握手后立刻收到 `serverBusy` 错误帧并被关闭，整页阻断而非降级为半可用界面。持有者连接消亡即释放，故刷新可立即重连；持有者心跳超期（代理后的半开连接）判为僵尸，由新连接撤销其属主后让位。租约把「同一 Session 双写」的互斥从 Session 级上移到连接级（ADR-0012 补记十六）。
+_Avoid_: session 锁（旧称，已随租约上移）、窗口锁、单实例（说的是进程数）
 
 **Running Indicator**:
 Sidebar 条目上的运行状态点：仅运行中（`live`，即 DriveStatus 为 running / retrying）的 Session 亮起（呼吸动画），权威来源是驱动事件流；被驱动但 idle、未被驱动的 Session 均不亮。`live` 一词全应用专指运行态；旧 liveDot 的「全库最近活跃」语义作废，不与运行指示混用。

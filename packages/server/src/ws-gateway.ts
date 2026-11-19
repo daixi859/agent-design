@@ -51,7 +51,7 @@ export interface WsGateway {
   close(): Promise<void>;
 }
 
-/** 心跳参数：interval 缺省 30s；isLive 可注入（僵尸接管语义单测用——
+/** 心跳参数：interval 缺省 30s；isLive 可注入（租约僵尸让位语义单测用——
     ws 客户端自动应答 ping，真连接造不出「超期未应答」） */
 export interface WsGatewayOptions {
   heartbeatMs?: number;
@@ -74,6 +74,19 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
 
   function send(socket: WsSocket, frame: ServerFrame): void {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
+  }
+
+  // 单客户端租约：server 同一时刻只服务一个控制连接，后来者直接拒绝
+  let leaseHolder: WsSocket | undefined;
+
+  /** 撤销某连接的全部属主与订阅（租约让位时用）；其 close 迟到时属主已不是它，不会重复释放 */
+  function evict(socket: WsSocket): void {
+    for (const [sessionId, owner] of [...owners]) {
+      if (owner !== socket) continue;
+      deps.release(sessionId);
+      owners.delete(sessionId);
+    }
+    for (const sessionId of [...subscriptions.keys()]) unsubscribe(sessionId, socket);
   }
 
   function claim(sessionId: string, socket: WsSocket): void {
@@ -120,14 +133,12 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
    *  attach 失败的 error 帧携 file 回显（Send-to-Attach 按它精确兑付，ADR-0012 补记十一） */
   async function openSubscription(
     socket: WsSocket,
-    owned: Set<string>,
     open: () => Promise<OpenedSession>,
     file?: string,
   ): Promise<void> {
     try {
       const opened = await open();
       const { sessionId } = opened;
-      owned.add(sessionId);
       claim(sessionId, socket);
       sendAttached(socket, opened, file);
     } catch (err) {
@@ -142,38 +153,32 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
     }
   }
 
-  async function handleFrame(socket: WsSocket, frame: ClientFrame, owned: Set<string>): Promise<void> {
+  async function handleFrame(socket: WsSocket, frame: ClientFrame): Promise<void> {
     switch (frame?.type) {
       case "attach": {
-        // 幂等与接管（use-drive 断线重连契约「attached 幂等保留已有条目」）：
-        // 同连接重放 → 直接回 attached，不开新宿主；属主心跳超期（僵尸，close
-        // 未及触达）→ 释放后重新打开；活着的其它连接属主 → 落回 registry.attach
-        // 照常抛 sessionAlreadyDriven
+        // 幂等重放（use-drive 断线重连契约「attached 幂等保留已有条目」）：同一连接再次
+        // attach 同一文件 → 直接回 attached，不开新宿主。租约保证「本连接之外没有活着的
+        // 属主」，故此处只剩两种情形：属主正是本连接（重放），或登记表里已有宿主但无主
+        // （属主连接已消亡、close 尚未触达）——后者释放后重新打开。
         const existing = deps.sessionOf(frame.file);
         if (existing !== undefined) {
-          const owner = owners.get(existing);
-          if (owner === socket) {
+          if (owners.get(existing) === socket) {
             const opened = deps.get(existing);
             if (opened) {
               claim(existing, socket);
               sendAttached(socket, opened, frame.file);
               return;
             }
-            deps.release(existing);
-            owners.delete(existing);
-          } else if (owner === undefined || !isLive(owner)) {
-            deps.release(existing);
-            owners.delete(existing);
-            if (owner) unsubscribe(existing, owner);
           }
+          deps.release(existing);
+          owners.delete(existing);
         }
-        return openSubscription(socket, owned, () => deps.attach(frame.file), frame.file);
+        return openSubscription(socket, () => deps.attach(frame.file), frame.file);
       }
       case "create":
-        return openSubscription(socket, owned, () => deps.create(frame.cwd));
+        return openSubscription(socket, () => deps.create(frame.cwd));
       case "release":
         deps.release(frame.sessionId);
-        owned.delete(frame.sessionId);
         unclaim(frame.sessionId, socket);
         send(socket, { type: "released", sessionId: frame.sessionId });
         return;
@@ -204,8 +209,15 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
   }
 
   wss.on("connection", (socket) => {
-    // 本连接拥有的订阅（断开时逐一撤销并释放属主）
-    const owned = new Set<string>();
+    // 已有存活持有者：拒绝后来者（不进入消息处理，不登记属主）
+    if (leaseHolder && leaseHolder !== socket && isLive(leaseHolder)) {
+      send(socket, { type: "error", message: "服务已被其它窗口占用", code: "serverBusy" });
+      socket.close();
+      return;
+    }
+    // 持有者已断开或心跳超期（僵尸）：先撤其属主，再让位给本连接
+    if (leaseHolder && leaseHolder !== socket) evict(leaseHolder);
+    leaseHolder = socket;
     lastPong.set(socket, Date.now());
     socket.on("pong", () => lastPong.set(socket, Date.now()));
     socket.on("message", (data) => {
@@ -216,20 +228,14 @@ export function createWsGateway(deps: WsGatewayDeps, opts: WsGatewayOptions = {}
         send(socket, { type: "error", message: "无法解析的帧", code: "badFrame" });
         return;
       }
-      void handleFrame(socket, frame, owned);
+      void handleFrame(socket, frame);
     });
     socket.on("close", () => {
-      // 连接消亡即释放属主（ADR-0012：内存标记随生命周期消亡）；
-      // 否则浏览器刷新后旧连接的标记残留，同一 session 将无法重新接管。
-      // close 迟到的僵尸由心跳 terminate 后走到这里兜底。
-      // 守卫：会话若已被别的连接接管（僵尸 close 迟到场景），不得释放新属主的会话
-      for (const sessionId of owned) {
-        if (owners.get(sessionId) === socket) {
-          deps.release(sessionId);
-          owners.delete(sessionId);
-        }
-        unsubscribe(sessionId, socket);
-      }
+      if (leaseHolder === socket) leaseHolder = undefined;
+      // 连接消亡即释放属主（ADR-0012：内存标记随生命周期消亡），否则浏览器刷新后
+      // 旧连接的标记残留，同一 session 将无法重新接管。evict 自带属主守卫：
+      // 会话若已被别的连接接管（僵尸 close 迟到），不会误释放新属主的会话。
+      evict(socket);
     });
   });
 
