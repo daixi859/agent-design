@@ -1,8 +1,8 @@
-/** DSH 预览（Settings · 新分区）：deepseek-harness 的 --dsw-* 设计令牌摘录陈列页。
+/** DSH 令牌预览（dsh-ui · Tokens 页）：deepseek-harness 的 --dsw-* 设计令牌摘录陈列页。
     令牌快照见 styles/tokens.dsh.css（--dsh-* 命名空间，主题作用域统一挂
-    [data-theme='dark']）；本页样式一律引用该快照，与本项目语义层互不混用。
-    基础组件清单见 ui-primitives README，此处陈列其用料：色板 / 字阶 / 圆角 /
-    阴影与 elevation / 菜单材质。 */
+    [data-theme='dark']）；本页样式一律引用该快照，与壳的骨架令牌（tokens.ui.css）
+    互不混用。基础组件清单见 dsh-ui 的 Components 页，此处陈列其用料：色板 / 字阶 /
+    圆角 / 阴影与 elevation / 菜单材质。 */
 import "../styles/tokens.dsh.css";
 import { useLocale } from "../state/use-locale";
 import styles from "./dsh-preview.module.css";

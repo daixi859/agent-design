@@ -1,0 +1,97 @@
+/* dsh-ui · 骨架令牌：壳（顶栏 / 页签）与两页清单排版所用的本项目令牌子集。
+   取值与 app 的 tokens.primitives.css / tokens.semantic.css 逐项一致（值快照），
+   独立成文件使 dsh-ui 不依赖宿主包；上游改值时需人工同步。
+   组件样张一律读 tokens.dsh.css 的 --dsh- 快照（见 routes/*.module.css），
+   与本文件互不混用（ADR-0001 分层）。 */
+
+:root {
+  /* ---- 字体族 ---- */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    "Anthropic Mono Web", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
+    Consolas, -apple-system, "PingFang SC", "Microsoft YaHei", monospace;
+
+  /* ---- 字号（双基准：base 14 / code 12，其余 calc 推出）---- */
+  --text-base: 14px;
+  --text-code: 12px;
+  --text-micro: calc(var(--text-code) - 2px);
+  --text-caption2: calc(var(--text-code) - 1px);
+  --text-caption: var(--text-code);
+  --text-footnote: calc(var(--text-base) - 1px);
+
+  /* ---- 行高（字号 + 呼吸值）---- */
+  --leading-caption: calc(var(--text-caption) + 4px);
+  --leading-footnote: calc(var(--text-footnote) + 5px);
+
+  /* ---- 字重 / 字距 ---- */
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-eyebrow: 0.04em;
+
+  /* ---- 间距（4px 网格）与发丝线宽 ---- */
+  --border-hairline: 0.5px;
+  --space-05: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-9: 48px;
+
+  /* ---- 圆角 / 动效 / 滚动条 ---- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --duration-fast: 120ms;
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --scrollbar-width: 6px;
+}
+
+:root {
+  color-scheme: light;
+
+  /* ---- 表面 / 文本 / 分隔（语义层子集，值同 tokens.semantic.css 浅色段）---- */
+  --bg-canvas: #faf9f5;
+  --bg-inset: #f0eee6;
+  --bg-hover: rgba(20, 20, 19, 0.05);
+  --text-1: #141413;
+  --text-2: #6b6a63;
+  --separator: rgba(20, 20, 19, 0.09);
+
+  /* ---- 强调（赤陶）：填充用 accent，文字 / 焦点环用 accent-text，选区延续 accent ---- */
+  --accent: #d97757;
+  --accent-text: #a84e30;
+  --accent-subtle: rgba(217, 119, 87, 0.1);
+  --selection-bg: color-mix(in srgb, var(--accent) 26%, transparent);
+
+  /* ---- 代码面 chip 档 / 滚动条 / 发丝内描边 ---- */
+  --code-bg: #e7e4d6;
+  --scroll-thumb: rgba(20, 20, 19, 0.26);
+  --scroll-track: transparent;
+  --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-canvas: #262624;
+  --bg-inset: #1a1918;
+  --bg-hover: rgba(245, 244, 239, 0.06);
+  --text-1: #f5f4ef;
+  --text-2: rgba(235, 233, 224, 0.62);
+  --separator: rgba(255, 255, 255, 0.08);
+
+  --accent: #d97757;
+  --accent-text: #e0876a;
+  --accent-subtle: rgba(217, 119, 87, 0.16);
+  --selection-bg: color-mix(in srgb, var(--accent) 40%, transparent);
+
+  --code-bg: var(--bg-inset);
+  --scroll-thumb: rgba(245, 244, 239, 0.32);
+  --scroll-track: transparent;
+  --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
+}

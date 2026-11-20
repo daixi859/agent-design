@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DSH UI</title>
+    <script>
+      // 主题与语言在首帧前确定，避免闪烁（沿用 Pi Studio 的内联脚本模式，存储键独立命名）
+      (function () {
+        var stored = localStorage.getItem("dsh-ui-theme");
+        var theme =
+          stored === "light" || stored === "dark"
+            ? stored
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.dataset.theme = theme;
+        var storedLocale = localStorage.getItem("dsh-ui-locale");
+        var locale =
+          storedLocale === "zh" || storedLocale === "en"
+            ? storedLocale
+            : (navigator.language || "").toLowerCase().indexOf("zh") === 0
+              ? "zh"
+              : "en";
+        document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

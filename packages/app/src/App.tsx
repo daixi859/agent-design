@@ -14,8 +14,6 @@ import { Sidebar } from "./features/sidebar/Sidebar";
 import { SessionBar, type SessionBarDrive } from "./features/sessionbar/SessionBar";
 import { SessionView } from "./features/session/SessionView";
 import { ComponentGallery } from "./routes/ComponentGallery";
-import { DshPreview } from "./routes/DshPreview";
-import { DshComponents } from "./routes/DshComponents";
 import { TranscriptLab } from "./features/transcript/lab/TranscriptLab";
 import { SettingsShell } from "./features/settings/SettingsShell";
 import { AppearanceSection } from "./features/settings/AppearanceSection";
@@ -119,8 +117,6 @@ export default function App() {
           <Route path="/settings" element={<SettingsShell />}>
             <Route index element={<Navigate to="appearance" replace />} />
             <Route path="preview" element={<ComponentGallery />} />
-            <Route path="dsh" element={<DshPreview />} />
-            <Route path="dsh-components" element={<DshComponents />} />
             <Route path="transcript" element={<TranscriptLab />} />
             <Route path="appearance" element={<AppearanceSection />} />
             <Route path="about" element={<AboutSection />} />

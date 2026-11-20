@@ -52,6 +52,8 @@
      遮罩模糊（上游 body 值为 none）。组件 CSS 直接引用这些名字。 */
   --dsh-focus-ring-width: 2px;
   --dsh-focus-ring-color: var(--dsh-alias-state-business-primary);
+  /* 按钮描边色（上游 button.css 有此开关；快照取默认档，等于引用处 fallback） */
+  --dsh-button-outline-color: var(--dsh-alias-border-l3);
   --dsh-hairline-width: 0.5px;
   --dsh-mask-blur: none;
 

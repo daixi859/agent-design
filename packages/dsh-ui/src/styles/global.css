@@ -1,0 +1,120 @@
+/* 全局基础：reset、排版底座、滚动条（标准属性 + WebKit 回退）、焦点环
+   （自 app/src/styles/global.css 移植；令牌 import 收敛为 dsh-ui 的骨架令牌一份） */
+
+@import "./tokens.ui.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-footnote);
+  line-height: var(--leading-footnote);
+  color: var(--text-1);
+  background: var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---- 滚动条：全局细滚条 ----
+   :root 一处声明随继承生效全局（scrollbar-width/color 均为继承属性）。
+   WebKit 分支以 @supports selector() 划界：Chromium/Safari 走像素级
+   ::-webkit-scrollbar（比标准 thin 更细），Firefox 走标准 thin。 */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+/* 滚动容器工具类：滚动条样式已全局继承，这里只管滚动几何 */
+.scroller,
+.scroll-y {
+  overflow-y: auto;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  :root {
+    /* 让位像素级 WebKit 样式：标准属性非 auto 会禁用 ::-webkit-scrollbar */
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  ::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Firefox thin 滚动条无固定像素（Windows 约 8px）：覆写宽度源，近似值即可 */
+@supports not selector(::-webkit-scrollbar) {
+  :root {
+    --scrollbar-width: 8px;
+  }
+}
+
+/* ---- 焦点环：outline 承载，不与装饰性 box-shadow 互相覆盖 ---- */
+:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 1px;
+}
+
+/* ---- 选区（accent 派生） ---- */
+::selection {
+  background: var(--selection-bg);
+}
+
+/* ---- 单行截断：全文保留在 DOM ---- */
+.ellipsis {
+  min-inline-size: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -4,14 +4,18 @@
 //
 //   node scripts/check-css-tokens.mjs
 //
-// 扫描范围：packages/app/src 下全部 .css（含 CSS Modules 的自定义属性）。
+// 扫描范围：packages/*/src 下全部 .css（含 CSS Modules 的自定义属性）——
+// 令牌定义取全部包的并集（如 dsh-ui 的骨架令牌与 --dsh- 快照）。
 // 允许的未定义引用：RUNTIME_INJECTED（由第三方库在运行时注入）。
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const SRC = join(ROOT, "packages/app/src");
+const SRC_DIRS = readdirSync(join(ROOT, "packages"), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => join(ROOT, "packages", entry.name, "src"))
+  .filter((src) => existsSync(src));
 
 /** 运行时由库注入、静态扫描看不到的令牌（写清来源，避免变成杂物袋） */
 const RUNTIME_INJECTED = new Set([
@@ -28,7 +32,7 @@ function cssFiles(dir) {
   return out;
 }
 
-const files = cssFiles(SRC);
+const files = SRC_DIRS.flatMap(cssFiles);
 
 // 一遍收集定义（--x: 任意值），一遍收集引用（var(--x）
 const defined = new Set();
@@ -42,13 +46,14 @@ const problems = [];
 for (const file of files) {
   const text = readFileSync(file, "utf8");
   const lines = text.split("\n");
-  lines.forEach((line, index) => {
+  // 逐 token 检查（勿用 forEach+return：那会在一行首个已定义 var() 上跳过该行剩余引用）
+  for (const [index, line] of lines.entries()) {
     for (const match of line.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) {
       const token = match[1];
-      if (defined.has(token) || RUNTIME_INJECTED.has(token)) return;
+      if (defined.has(token) || RUNTIME_INJECTED.has(token)) continue;
       problems.push(`${relative(ROOT, file)}:${index + 1}  未定义令牌 ${token}`);
     }
-  });
+  }
 }
 
 if (problems.length > 0) {

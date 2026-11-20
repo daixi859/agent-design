@@ -1,9 +1,20 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/shared" },
-    { "path": "./packages/server" },
-    { "path": "./packages/core" },
-    { "path": "./packages/app" }
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/server"
+    },
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/app"
+    },
+    {
+      "path": "./packages/dsh-ui"
+    }
   ]
 }

@@ -1,4 +1,4 @@
-/** DSH 组件预览（Settings · DSH Components 分区）：把 deepseek-harness
+/** DSH 组件预览（dsh-ui · Components 页）：把 deepseek-harness
     ui-primitives 的基础组件按**真实结构 + 真实样式**静态移植过来——每个 .tsx 样张的
     DOM 与上游组件一致，每个 module.css 直接来自上游同名文件（--dsw- 命名空间改写为
     --dsh-），只去掉需要运行时坐标/计时的部分（浮层定位、计时淡出、键盘漫游）。

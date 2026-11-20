@@ -1,0 +1,91 @@
+/* dsh-ui 壳：顶栏（品牌 + 页签 + 主题 / 语言钮）+ 全高页面容器。
+   只引用骨架令牌（tokens.ui.css）；两页样张区各自读 --dsh- 快照（tokens.dsh.css），
+   骨架与快照互不混用（ADR-0001 分层）。 */
+.shell {
+  block-size: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+  color: var(--text-1);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding-inline: var(--space-5);
+  block-size: 48px;
+  flex: none;
+  border-block-end: var(--border-hairline) solid var(--separator);
+}
+
+.brand {
+  font-size: var(--text-caption2);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-footnote);
+  color: var(--text-2);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+
+.gap {
+  flex: 1;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  block-size: 28px;
+  min-inline-size: 28px;
+  display: grid;
+  place-items: center;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}

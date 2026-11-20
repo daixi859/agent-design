@@ -4,15 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @pi-studio/app dev",
-    "server": "node packages/server/src/main.ts",
     "build": "pnpm --filter @pi-studio/app build",
-    "preview": "pnpm --filter @pi-studio/app preview",
     "build:preview": "pnpm build && pnpm preview",
-    "typecheck": "node node_modules/typescript/bin/tsc -b",
-    "test": "node node_modules/vitest/vitest.mjs run",
     "check:css": "node scripts/check-css-tokens.mjs",
-    "check:naming": "node scripts/check-file-naming.mjs"
+    "check:naming": "node scripts/check-file-naming.mjs",
+    "dev": "pnpm --filter @pi-studio/app dev",
+    "dsh-ui": "pnpm --filter @pi-studio/dsh-ui dev",
+    "preview": "pnpm --filter @pi-studio/app preview",
+    "server": "node packages/server/src/main.ts",
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "typecheck": "node node_modules/typescript/bin/tsc -b"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
