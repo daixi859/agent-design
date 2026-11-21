@@ -157,3 +157,7 @@ _Avoid_: 组件库、Gallery（作为页面名时）
 **Base Component**:
 `components/` 目录下的可复用件，判据是无业务语义（Icon、Button、Input、DisclosureRow 及其样式原语）；与 features/ 下的业务复合件相对。专用形态用组合表达（icon 槽位、leading 槽位），不为单一消费点造特化组件。
 _Avoid_: UI 库、通用组件、IconButton / SearchField（已被 Button / Input 吸收）、ui/ 目录（旧称）
+
+**Desktop Shell**:
+桌面壳：本客户端的桌面形态（ADR-0019）——Electron main 进程直装内核（Session Registry），驱动协议经进程内桥承载、与 WS 同一套协议语义（控制层单源）；页面与静态资源走自定义协议，浏览取数经 IPC 直问同一份端点路由，壳内无任何数据服务端口。租约持有面随之平移：渲染进程存活期即租约持有期，窗口关闭即释放名下被驱动的 Session，窗口重载按重连重放恢复。与 web 形态并存，渲染层复用同一份 app。
+_Avoid_: Electron 版（说的是打包技术不是形态）、桌面版（泛称）、客户端（本词早已指整个 app）

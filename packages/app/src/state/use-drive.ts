@@ -22,6 +22,9 @@ import {
 import { InflightBook } from "../lib/inflight";
 import { loadCachedCatalogs, persistCatalogs } from "../lib/catalog-cache";
 import type { ClientFrame, DriveCommandBody, DriveErrorCode, DriveStatus, ServerFrame } from "@pi-studio/shared/protocol";
+// 只有单例用它：桌面壳内不自动建连（见文件末尾的 drive）。desktop-bridge 仅以 type-only
+// 回引本模块，运行时无环
+import { isDesktopShell } from "../lib/desktop-bridge";
 
 /** 租约被占时的自动重连次数上限：只为覆盖「刷新时旧连接尚未关净」的窗口，
     超过即停在阻断页交还给人（点「重试」重置） */
@@ -36,10 +39,13 @@ export interface DriveSocketHandlers {
   onClose(): void;
 }
 
-/** 连接适配器接口：ready = 帧可发（真 WS 即 readyState === OPEN） */
+/** 连接适配器接口：ready = 帧可发（真 WS 即 readyState === OPEN）。close 可选：
+    真 WS 适配器与桌面桥适配器都实现它（configure 换传输时据此收编旧连接），
+    测试假 socket 可以不给 */
 export interface DriveSocket {
   send(data: string): void;
   readonly ready: boolean;
+  close?(): void;
 }
 
 export type SocketFactory = (handlers: DriveSocketHandlers) => DriveSocket;
@@ -52,7 +58,15 @@ export interface DriveClientDeps {
   /** 缺省用全局 setTimeout（退避重连共用） */
   schedule?: Schedule;
   cancel?: CancelTimer;
+  /** 构造即建连（缺省 true）。桌面壳的模块级单例传 false：
+   *  连接要等引导处 configure() 换成 IPC 桥之后才该建——否则会先用真 WebSocket 连一次
+   *  （dev 下打到 vite 的 /ws 代理、生产下打到不存在的宿主），白开一条注定被弃的连接。 */
+  autoConnect?: boolean;
 }
+
+/** 单例的再配置缝（ADR-0019 ③）：只覆盖显式传入的字段，未传入时仍走缺省真 WebSocket。
+    目前只有 socketFactory；留成子集型以便后续字段扩界而不破调用方 */
+export type DriveClientSetup = Pick<DriveClientDeps, "socketFactory">;
 
 const browserSocketFactory: SocketFactory = (handlers) => {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -62,6 +76,7 @@ const browserSocketFactory: SocketFactory = (handlers) => {
   ws.onclose = () => handlers.onClose();
   return {
     send: (data) => ws.send(data),
+    close: () => ws.close(),
     get ready() {
       return ws.readyState === WebSocket.OPEN;
     },
@@ -103,9 +118,17 @@ export class DriveClient {
   /** 租约被占的自动重连计数：只为覆盖「刷新时旧连接尚未关闭」的窗口，用尽后交还给人。
       次数上限与退避都复用上面那套重连参数——不为它另开第二套定时器 */
   private busyRetries = 0;
-  private readonly socketFactory: SocketFactory | undefined;
+  /** 传输世代：只有 configure() 换传输时递增。上一代连接（换传输前的 WS）的迟到回调
+      据此静默忽略——否则换传输后两条连接各自重连，单客户端租约会被自己撞死。
+      常规重连不递增：web 形态从不 configure，故本字段恒为 0、回调行为与改动前逐条相同 */
+  private generation = 0;
+  /** 注入缝的当前值：socketFactory 可被 configure() 覆盖（桌面壳换传输）；
+      定时器对（schedule / cancel）仍只在构造时定 */
+  private socketFactory: SocketFactory | undefined;
   private readonly schedule: Schedule;
   private readonly cancel: CancelTimer;
+  /** 构造即建连与否（只有单例在桌面壳里传 false，其余一律缺省） */
+  private readonly autoConnect: boolean;
 
   constructor(deps: DriveClientDeps = {}) {
     // 缺省用真 WebSocket；无浏览器全局且未注入（node 导入单例）时不连接——导入安全
@@ -113,6 +136,30 @@ export class DriveClient {
     this.socketFactory = deps.socketFactory ?? (browser ? browserSocketFactory : undefined);
     this.schedule = deps.schedule ?? ((fn, ms) => globalThis.setTimeout(fn, ms));
     this.cancel = deps.cancel ?? ((handle) => globalThis.clearTimeout(handle as number));
+    this.autoConnect = deps.autoConnect ?? true;
+    if (this.autoConnect) this.connect();
+  }
+
+  /**
+   * 构造后的再配置缝（ADR-0019 ③，只为模块级单例而设）：只覆盖显式传入的字段，
+   * 未传入即什么都不做——浏览器形态从不调它，调用也不过是空操作。
+   * 真换传输时先弃用旧连接再重连（同时重置 busyRetries / reconnectDelay：
+   * 换传输算新连接的第一轮），让壳内赶在首帧前接通 IPC 桥。
+   */
+  configure(deps: DriveClientSetup): void {
+    if (!deps.socketFactory) return;
+    this.socketFactory = deps.socketFactory;
+    this.busyRetries = 0;
+    this.reconnectDelay = 500;
+    if (this.reconnectTimer !== null) {
+      this.cancel(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    // 旧连接先弃用：世代递增使其迟到回调（尤其 onClose 的重连）失效，再按能力断开
+    this.generation += 1;
+    const previous = this.ws;
+    this.ws = null;
+    previous?.close?.();
     this.connect();
   }
 
@@ -123,8 +170,12 @@ export class DriveClient {
       this.cancel(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    // 本连接所属传输世代：只在 configure() 换传输后作废（常规重连不变，回调行为照旧）
+    const generation = this.generation;
+    const superseded = (): boolean => generation !== this.generation;
     this.ws = this.socketFactory({
       onOpen: () => {
+        if (superseded()) return;
         this.reconnectDelay = 500;
         // 重连后按 known file 集重放 attach（attached 幂等保留已有条目）。
         // 懒发送的待接管 file 一并重放（attached 后按序补发，消息不丢）
@@ -133,9 +184,11 @@ export class DriveClient {
         }
       },
       onMessage: (data) => {
+        if (superseded()) return;
         this.handleFrame(JSON.parse(data) as ServerFrame);
       },
       onClose: () => {
+        if (superseded()) return;
         // 断线：待定的 create 立即失败，避免调用方永久悬挂。
         // 懒发送不失败：乐观回显顶住断线窗口，重连重放后补发（消息不丢）
         this.inflight.failAllCreates("驱动连接已断开");
@@ -466,9 +519,12 @@ export interface QueuedItem {
   channel: "steer" | "followUp";
 }
 
-/** 模块级单例：驱动状态跨组件共享，一个页一条 WS 连接。
- *  node / 无浏览器全局时 connect() 自动跳过（导入安全），测试经 new DriveClient(deps) 注入假件 */
-export const drive = new DriveClient();
+/** 模块级单例：驱动状态跨组件共享，一个页一条连接。
+ *  node / 无浏览器全局时 connect() 自动跳过（导入安全），测试经 new DriveClient(deps) 注入假件；
+ *  桌面壳内**不自动建连**（autoConnect: false），由引导处 configure() 改走 IPC 桥后再连
+ *  （ADR-0019 ③）——否则会先开一条真 WebSocket，注定在 configure 时被弃。
+ *  依赖方向仍是单向的：desktop-bridge 只以 type-only 引用本模块的类型，运行时无环。 */
+export const drive = new DriveClient({ autoConnect: !isDesktopShell() });
 
 // —— 浏览态目录缓存的持久化（补记十二/十三）：读写纯逻辑在 lib/catalog-cache（已测），
 //    这里只挂模块导入期的副作用；node 测试环境无 localStorage，守卫静默跳过 ——

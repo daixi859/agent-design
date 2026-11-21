@@ -30,13 +30,16 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 ## 环境与验收
 
 ```
-node node_modules/typescript/bin/tsc -b   # 类型检查（根 tsconfig 引用四个包）
+node node_modules/typescript/bin/tsc -b   # 类型检查（根 tsconfig 引用全部包）
 node node_modules/vitest/vitest.mjs run   # 测试（从根扫描全部包）
 node scripts/check-css-tokens.mjs         # 样式令牌：var(--x) 必须有定义
 node scripts/check-file-naming.mjs        # 文件命名：组件 PascalCase，其余 kebab-case
 node packages/server/src/main.ts          # 独立 server（REST /api · WS /ws，裸 node 直跑）
 node node_modules/vite/bin/vite.js packages/app   # dev server，/api 与 /ws 代理到 server 进程
+pnpm dev:desktop                          # 桌面壳 dev（ADR-0019）：vite HMR + main/preload 监听 + electron，无数据服务端口
 ```
+
+两套形态并存：web（`server` + `vite`，数据走 HTTP/WS）与 desktop（`dev:desktop`，数据走 IPC 与 `app://`）。桌面壳 dev 的端口只有 vite 自己的开发服务器（`PI_STUDIO_DEV_PORT`，缺省 5173），改 main/preload 会重启 electron，改 app 源码走 HMR。
 
 依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 跑同样的四道：typecheck、test、check:css、check:naming）。
 

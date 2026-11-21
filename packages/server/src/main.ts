@@ -1,16 +1,16 @@
 // 独立进程入口（ADR-0012 阶段三）：裸 node 直跑——
 //   node packages/server/src/main.ts
-// 职责：REST 只读浏览（/api，pi-data 原样）+ WS 驱动协议（/ws）+ 生产静态托管。
+// 职责：REST 只读浏览（/api，端点分布在 api-routes，http 壳在 pi-data）+ WS 驱动协议（/ws）+ 生产静态托管。
 // 信任边界与 pi CLI 相同：本机单用户、无鉴权；驱动在真实 cwd 执行工具。
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { join, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SessionRegistry, globalCatalog, openPiSession } from "@pi-studio/core";
-import type { DriveCommand, DriveOutcome } from "@pi-studio/shared/protocol";
-import { errorMessage } from "@pi-studio/shared/errors";
-import { createPiDataApi, json } from "./pi-data.ts";
+import { SessionRegistry, openPiSession } from "@pi-studio/core";
+import { createPiDataApi } from "./pi-data.ts";
+import { browseApiDeps } from "./drive-assembly.ts";
 import { staticRelPath, stripApiPrefix } from "./http-routing.ts";
+import { registryDriveDeps } from "./drive-assembly.ts";
 import { createWsGateway } from "./ws-gateway.ts";
 
 // 默认 3141（π）：3001 与本机常用代理/工具端口相撞（EADDRINUSE）；
@@ -30,39 +30,16 @@ const MIME: Record<string, string> = {
 };
 
 // ===== 组装：registry（core）↔ gateway（WS）双向引用以闭包延迟求值 =====
+// 窄投影的逐条内容在 drive-assembly（与桌面壳的 IPC 适配器共用一份，ADR-0019）
 
 let registry!: SessionRegistry;
-const gateway = createWsGateway({
-  attach: (file, owner) => registry.attach(file, owner),
-  create: (cwd, owner) => registry.create(cwd, owner),
-  get: (sessionId) => registry.get(sessionId),
-  sessionOf: (file) => registry.sessionOf(file),
-  // 属主单表的窄投影（C7）：registry 记账，gateway 只读判定与投喂存活
-  ownerOf: (sessionId) => registry.ownerOf(sessionId),
-  isOwnerAlive: (owner) => registry.isOwnerAlive(owner),
-  markAlive: (owner) => registry.markAlive(owner),
-  markDead: (owner) => registry.markDead(owner),
-  releaseByOwner: (owner) => registry.releaseByOwner(owner),
-  release: (sessionId) => registry.release(sessionId),
-  drive: (command) => driveCommand(command),
-});
+const gateway = createWsGateway(registryDriveDeps(() => registry));
 registry = new SessionRegistry(openPiSession, (event) => gateway.emit(event));
 
-/** drive 帧到 SessionHost 的分发：等/不等与错误落点都在 dispatch 一处定
- *  （ADR-0012 补记十七），组装层只留「未驱动会话」的守卫 */
-function driveCommand(command: DriveCommand): Promise<DriveOutcome> {
-  const host = registry.get(command.sessionId);
-  if (!host) {
-    return Promise.resolve({ ok: false, code: "sessionNotDriven", message: `session 未驱动：${command.sessionId}` });
-  }
-  return host.dispatch(command.body);
-}
-// ===== HTTP：/api（剥前缀转 pi-data）→ 静态托管 → 404 =====
+// ===== HTTP：/api（剥前缀转端点层）→ 静态托管 → 404 =====
 
-const piDataApi = createPiDataApi({
-  // Send-to-Attach：会话列表标 driven，客户端据此禁用他属驱动的输入区（ADR-0012 补记十一）
-  isFileDriven: (file) => registry.isFileDriven(file),
-});
+// deps 组装单源在 drive-assembly（与 desktop 壳共用；driven 标记 / 全局目录的语义注释见彼处）
+const piDataApi = createPiDataApi(browseApiDeps(registry));
 
 function serveStatic(res: ServerResponse, pathname: string): void {
   const rel = staticRelPath(pathname);
@@ -98,16 +75,8 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
   const apiUrl = stripApiPrefix(raw);
   if (apiUrl !== undefined) {
     req.url = apiUrl;
-    // 全局目录（补记十四/十五）：浏览态 Model Seat 与 Trigger Menu 的兜底菜单源。
-    // 目录是内核全局态，不属 pi-data 的文件访问层，在 fallthrough 前直连 core 的只读投影
-    if (req.method === "GET" && pathname === "/api/catalog") {
-      globalCatalog().then(
-        (catalog) => json(res, 200, catalog),
-        (error) => json(res, 500, { error: errorMessage(error) }),
-      );
-      return;
-    }
-    // pi-data 的 fallthrough 仍按原 pathname 走静态：别拿已重写的 req.url 再算一次
+    // 端点分发（含 /catalog）在 api-routes.ts；未认领的路径 fallthrough 到静态层，
+    // 仍按原 pathname 走静态：别拿已重写的 req.url 再算一次
     void piDataApi(req, res, () => serveStatic(res, pathname));
     return;
   }

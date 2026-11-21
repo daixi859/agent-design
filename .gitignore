@@ -2,8 +2,12 @@
 node_modules/
 dist/
 package-lock.json
-# electron-builder 打包输出（运行中的打包应用会锁住 app.asar，导致 git 清理失败）
+# 桌面壳（ADR-0019）构建产物与 electron-builder 打包输出
+# （release/ 另加忽略：运行中的打包应用会锁住 app.asar，导致 git 清理失败）
+packages/desktop/dist/
 packages/desktop/release/
+# 打包图标由 scripts/make-icon.mjs 从品牌图生成，产物不入库
+packages/desktop/build/icons/
 
 # TypeScript 增量构建缓存
 *.tsbuildinfo

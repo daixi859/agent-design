@@ -1,6 +1,8 @@
 /** Send-to-Attach 的 REST 半边（ADR-0012 补记十一）：/sessions 列表按注入的属主谓词
-    标 driven——他属驱动的会话客户端据此禁用输入区。SESSIONS_ROOT 在模块顶层读 env，
-    须先 stub 再动态加载（type-only 导入运行时擦除，不触发加载）。 */
+    标 driven——他属驱动的会话客户端据此禁用输入区。本用例走 http 适配壳（createPiDataApi）
+    的完整注入路径，锁定「组装层 → 壳 → 端点层」的 deps 透传；谓词语义的纯函数用例
+    在 api-routes.test.ts。SESSIONS_ROOT 在模块顶层读 env，须先 stub 再动态加载
+    （type-only 导入运行时擦除，不触发加载）。 */
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +23,9 @@ const headerLine = JSON.stringify({
   cwd: "D:/proj",
 });
 
+/** 目录端点与本用例无关：给最小只读投影 */
+const catalogStub = () => Promise.resolve({ model: { models: [] } });
+
 let root: string;
 let create: Factory;
 let api: PiDataApi;
@@ -30,8 +35,8 @@ beforeAll(async () => {
   await mkdir(join(root, "proj"));
   await writeFile(join(root, "proj", "proj_s1.jsonl"), `${headerLine}\n`, "utf8");
   vi.stubEnv("PI_STUDIO_SESSIONS_DIR", root);
-  ({ createPiDataApi: create } = await import("./pi-data"));
-  api = create({ isFileDriven: (file) => file.endsWith("s1.jsonl") });
+  ({ createPiDataApi: create } = await import("./pi-data.ts"));
+  api = create({ isFileDriven: (file) => file.endsWith("s1.jsonl"), catalog: catalogStub });
 });
 
 afterAll(async () => {
@@ -70,7 +75,9 @@ describe("createPiDataApi · driven 标志（Send-to-Attach）", () => {
   });
 
   it("谓词未命中或未注入：无 driven 字段（缺省即未驱动，不占载荷）", async () => {
-    expect("driven" in summaryOf(await fetchSessions(create({ isFileDriven: () => false })))).toBe(false);
-    expect("driven" in summaryOf(await fetchSessions(create()))).toBe(false);
+    const miss = create({ isFileDriven: () => false, catalog: catalogStub });
+    const bare = create({ catalog: catalogStub });
+    expect("driven" in summaryOf(await fetchSessions(miss))).toBe(false);
+    expect("driven" in summaryOf(await fetchSessions(bare))).toBe(false);
   });
 });

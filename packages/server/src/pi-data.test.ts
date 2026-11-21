@@ -1,66 +1,100 @@
-/** Live Tail 契约的 server 半边：完整行裁切的锁定测试（纯函数，无 fs 夹具）。 */
-import { describe, expect, it } from "vitest";
-import { consumeCompleteLines } from "./pi-data";
+/** http 适配壳的契约（端点语义本身在 api-routes.test.ts，此处只锁“解请求 + 写应答”这层）：
+    GET 命中 → JSON 状态码与 Content-Type；非 GET 与未认领路径一律 fallthrough。 */
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { createPiDataApi } from "./pi-data.ts";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+type Factory = typeof createPiDataApi;
 
 const TS = "2026-01-01T00:00:00.000Z";
-
-const modelChangeLine = JSON.stringify({
-  type: "model_change",
-  id: "mc1",
+const headerLine = JSON.stringify({
+  type: "session",
+  version: 3,
+  id: "s1",
   parentId: null,
   timestamp: TS,
-  provider: "anthropic",
-  modelId: "claude",
+  cwd: "D:/proj",
 });
 
-const userLine = JSON.stringify({
-  type: "message",
-  id: "u1",
-  parentId: "mc1",
-  timestamp: TS,
-  message: { role: "user", content: "你好，世界" },
+let root: string;
+let create: Factory;
+
+beforeAll(async () => {
+  root = await mkdtemp(join(tmpdir(), "pi-data-shell-"));
+  await mkdir(join(root, "proj"));
+  await writeFile(join(root, "proj", "proj_s1.jsonl"), `${headerLine}\n`, "utf8");
+  vi.stubEnv("PI_STUDIO_SESSIONS_DIR", root);
+  ({ createPiDataApi: create } = await import("./pi-data.ts"));
 });
 
-describe("consumeCompleteLines · 完整行裁切契约", () => {
-  it("只消费完整行，末尾半行留给下轮", () => {
-    const halfLine = userLine.slice(0, userLine.length - 8); // 人为截断
-    const consumed = consumeCompleteLines(`${modelChangeLine}\n${halfLine}`);
-    expect(consumed).toBeDefined();
-    expect(consumed!.entries).toHaveLength(1);
-    expect(consumed!.entries[0].type).toBe("model_change");
-    expect(consumed!.consumedBytes).toBe(Buffer.byteLength(`${modelChangeLine}\n`));
-    expect(consumed!.text.endsWith("\n")).toBe(true);
+afterAll(async () => {
+  vi.unstubAllEnvs();
+  await rm(root, { recursive: true, force: true });
+});
+
+/** collect 型假 res：json() 只走 statusCode / setHeader / end */
+function mockRes() {
+  let body = "";
+  const headers: Record<string, string> = {};
+  const res = {
+    statusCode: 0,
+    setHeader(name: string, value: string) {
+      headers[name] = value;
+    },
+    end(data?: string) {
+      body = data ?? "";
+    },
+    body: () => body,
+    headers: () => headers,
+  };
+  return res as unknown as ServerResponse & { body(): string; headers(): Record<string, string> };
+}
+
+/** 注入最小 deps：目录端点本文件不测，给个空投影即可 */
+const deps = () => ({ catalog: async () => ({ model: { models: [] } }) });
+
+async function call(api: ReturnType<Factory>, method: string, url: string) {
+  const res = mockRes();
+  let fellThrough = false;
+  await api({ method, url } as IncomingMessage, res, () => {
+    fellThrough = true;
+  });
+  return { status: res.statusCode, body: res.body(), headers: res.headers(), fellThrough };
+}
+
+describe("createPiDataApi · http 适配壳", () => {
+  it("命中端点：JSON 应答带状态码与 charset", async () => {
+    const res = await call(create(deps()), "GET", "/sessions");
+    expect(res.fellThrough).toBe(false);
+    expect(res.status).toBe(200);
+    expect(res.headers["Content-Type"]).toBe("application/json; charset=utf-8");
+    expect(JSON.parse(res.body).sessions.map((s: { id: string }) => s.id)).toEqual(["s1"]);
   });
 
-  it("块内无换行返回 undefined（半行不产出条目）", () => {
-    expect(consumeCompleteLines(userLine.slice(0, 20))).toBeUndefined();
-    expect(consumeCompleteLines("")).toBeUndefined();
+  it("query 原样透传给端点层（Live Tail 的 ?offset=）", async () => {
+    const res = await call(create(deps()), "GET", "/session/s1/tail?offset=0");
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).offset).toBe(Buffer.byteLength(`${headerLine}\n`));
   });
 
-  it("多行全消费：条目按行序、consumedBytes 覆盖全部完整行", () => {
-    const consumed = consumeCompleteLines(`${modelChangeLine}\n${userLine}\n`);
-    expect(consumed!.entries).toHaveLength(2);
-    expect(consumed!.entries[1].type).toBe("message");
-    expect(consumed!.consumedBytes).toBe(Buffer.byteLength(`${modelChangeLine}\n${userLine}\n`));
+  it("端点层报错照原状写成 JSON（404 带 error 载荷）", async () => {
+    const res = await call(create(deps()), "GET", "/session/missing");
+    expect(res.status).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: "session not found: missing" });
   });
 
-  it("多字节 UTF-8：consumedBytes 按字节数而非字符数（偏移可续读）", () => {
-    const line = JSON.stringify({
-      type: "message",
-      id: "u1",
-      parentId: null,
-      timestamp: TS,
-      message: { role: "user", content: "你好，世界" },
-    });
-    const consumed = consumeCompleteLines(`${line}\n`);
-    // 中文内容 → 字节数大于字符数
-    expect(consumed!.consumedBytes).toBeGreaterThan(`${line}\n`.length);
-    expect(consumed!.consumedBytes).toBe(Buffer.byteLength(`${line}\n`));
-  });
-
-  it("坏行跳过不中断（parseEntries 容错）", () => {
-    const consumed = consumeCompleteLines(`not-json\n${modelChangeLine}\n`);
-    expect(consumed!.entries).toHaveLength(1);
-    expect(consumed!.entries[0].type).toBe("model_change");
+  it("非 GET 与未认领路径一律 fallthrough（交给静态托管）", async () => {
+    for (const [method, url] of [
+      ["POST", "/sessions"],
+      ["GET", "/unknown"],
+      ["GET", "/session"],
+      ["GET", "/catalog/extra"],
+    ]) {
+      const res = await call(create(deps()), method, url);
+      expect(res.fellThrough, `${method} ${url}`).toBe(true);
+    }
   });
 });

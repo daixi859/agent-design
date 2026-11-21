@@ -1,0 +1,28 @@
+{
+  "name": "@pi-studio/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pi Studio 桌面壳（Desktop Shell，ADR-0019）：main 直装内核，IPC 承载驱动协议，无数据服务端口",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:watch": "node scripts/build.mjs --watch",
+    "dev": "node scripts/dev.mjs",
+    "start": "electron .",
+    "pack": "node scripts/make-icon.mjs && node scripts/build.mjs && electron-builder --win",
+    "pack:dir": "node scripts/make-icon.mjs && node scripts/build.mjs && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^1.5.2"
+  },
+  "devDependencies": {
+    "@pi-studio/core": "workspace:*",
+    "@pi-studio/server": "workspace:*",
+    "@pi-studio/shared": "workspace:*",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2"
+  },
+  "author": "Pi Studio"
+}

@@ -1,0 +1,68 @@
+# 桌面壳打包（ADR-0019）：esbuild 产物 + pi SDK 的 node_modules 一起装进 asar。
+#
+# 产物策略与 scripts/build.mjs 同源：workspace 包（core / server / shared）源码已内联进
+# dist/main.js，故它们只在 devDependencies 里（编进产物，不进安装包）；唯一需要随包发布的
+# 运行时依赖是 pi SDK——它必须留在 node_modules 里按原样加载（quickjs.wasm / photon 的 wasm
+# 走运行时路径解析，塞进 bundle 会踩动态路径与资源定位），因此 asarUnpack 放开 wasm / node。
+#
+# 只在 Windows 交付（ADR-0019：mac / linux、签名公证、自动更新均在范围外）。
+appId: com.pi-studio.desktop
+productName: Pi Studio
+copyright: Copyright © 2026 Pi Studio
+
+directories:
+  output: release
+  buildResources: build
+
+# 渲染层产物不在本包目录内：把 packages/app/dist 映射成 asar 里的 app-dist，
+# main 的 resolveAppDist() 首选 app.getAppPath()/app-dist（见 src/main.ts）。
+# 最后的排除项实打实换体积：依赖树的 sourcemap 约 30 MB（占 asar 三成），运行时零引用；
+# pi SDK 的 docs / examples 同属发布附带品，不被 import。
+files:
+  - dist/**/*
+  - package.json
+  - "!dist/**/*.map"
+  - from: ../app/dist
+    to: app-dist
+    filter:
+      - "**/*"
+      - "!**/*.map"
+  - "!**/*.map"
+  - "!**/node_modules/@earendil-works/pi-coding-agent/{docs,examples}/**"
+
+asar: true
+# pi SDK 的运行时资源：wasm 由 fs 读盘（asar 内的虚拟 fs 不支持 wasm 实例化），
+# native 模块（若有）同理必须解包
+asarUnpack:
+  - "**/*.wasm"
+  - "**/*.node"
+
+# 源码已由 esbuild 处理，pi SDK 无原生编译需求：跳过 rebuild，免得要求本机有 node-gyp 工具链
+npmRebuild: false
+# 只保留两套 Electron 语言包（默认带全部 locale，白白多出几 MB）
+electronLanguages:
+  - en-US
+  - zh-CN
+
+win:
+  icon: build/icons/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  # 文件名带版本与架构，便于同时保留多个构建
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  # 走「辅助安装」而不是一键装：允许改安装目录、可选是否开机自启
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Pi Studio
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
