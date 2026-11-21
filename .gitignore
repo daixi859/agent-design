@@ -2,6 +2,8 @@
 node_modules/
 dist/
 package-lock.json
+# electron-builder 打包输出（运行中的打包应用会锁住 app.asar，导致 git 清理失败）
+packages/desktop/release/
 
 # TypeScript 增量构建缓存
 *.tsbuildinfo
