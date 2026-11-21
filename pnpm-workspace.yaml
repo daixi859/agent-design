@@ -1,2 +1,8 @@
 packages:
   - "packages/*"
+# 构建脚本白名单（pnpm 11）：electron 的 postinstall 负责下载 Electron 二进制
+allowBuilds:
+  electron: true
+  # electron-builder 的传递依赖，只有 Squirrel.Windows 目标才用得到它的 postinstall 工具链。
+  # 本仓库只出 NSIS + portable（ADR-0019），故显式关掉，不拉无关工具链。
+  electron-winstaller: false
