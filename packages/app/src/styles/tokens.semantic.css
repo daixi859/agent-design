@@ -88,31 +88,27 @@
   /* ---- 阴影与焦点 ----
      焦点指示用 outline 承载（global.css），颜色用 --accent-text（赤陶文字档），
      不再单设 --focus-color（ADR-0018 合并近邻档）。
-     outline 与装饰 box-shadow 天然可叠加，不再互相覆盖。 */
-  --shadow-card: 0 1px 2px rgba(20, 20, 19, 0.05), 0 0 0 0.5px rgba(20, 20, 19, 0.05);
-  --shadow-popover: 0 12px 40px rgba(20, 20, 19, 0.16), 0 0 0 0.5px rgba(20, 20, 19, 0.08);
+     outline 与装饰 box-shadow 天然可叠加，不再互相覆盖。
+     投影与发丝环拆开（ADR-0020）：card/popover 只留投影几何，发丝环由
+     --shadow-hairline 独立承载、消费处逗号组合；环档统一走 --separator
+     （原内嵌的 0.05/0.08 环与 0.09 同带挤档，统一后浮层环略变实）。 */
+  --shadow-card: 0 1px 2px rgba(20, 20, 19, 0.05);
+  --shadow-popover: 0 12px 40px rgba(20, 20, 19, 0.16);
   /* 发丝内描边：浅浮面的标准内框（ Thinking 卡、工具卡、分段控件等共用） */
   --shadow-hairline: inset 0 0 0 var(--border-hairline) var(--separator);
 
   /* ---- 布局常量（ADR-0009：顶栏移除，头部职责由 Brand Float + Session Bar 分担） ---- */
   --sessionbar-height: 44px;
-  /* Brand Float：单枚 32px 按钮（静止 π，hover 换动作图标），供各头部计算让位空间 */
-  --brandfloat-height: 32px;
-  --brandfloat-width: 32px;
+  /* Brand Float：单枚 32px 方形按钮（静止 π，hover 换动作图标），供各头部计算让位空间 */
+  --brandfloat-size: 32px;
   --sidebar-width: 280px;
   /* 单一列宽轴（ADR-0013）：DSH 式 clamp(680, 列宽 × 0.64, 920)。
      宿主在 Transcript 根上发布 --pane-width（ResizeObserver）；
      未发布时兜底 1188px（= 760 / 0.64），行为与旧常数一致。 */
   --pane-width: 1188px;
   --content-measure: clamp(680px, calc(var(--pane-width) * 0.64), 920px);
-  /* 用户气泡宽度上限：内容列宽 × 0.702（DSH 原始几何），再夹到 82% */
-  --bubble-measure: min(calc(var(--content-measure) * 0.702), 82%);
   /* 控件击打区（Button / Input / 发送钮共用） */
   --control-size: 28px;
-  /* TUI 活跃思考尾部滚动的视觉行数（ADR-0014，设置项 1/3/5）：
-     TuiGroup 在活跃思考块上发布 --think-tail-lines（行数上限，贴底裁切）；
-     未发布时兜底 3 行 */
-  --think-tail-lines: 3;
 }
 
 [data-theme="dark"] {
@@ -166,8 +162,8 @@
   --scroll-thumb: rgba(245, 244, 239, 0.32);
   --scroll-track: transparent;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.07);
-  --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.55);
 
   /* 主按钮反转墨色：暗画布上 #141413 仅 1.2:1，形同隐形 */
   --primary-btn-bg: #f5f4ef;

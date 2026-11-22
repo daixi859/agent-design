@@ -1,0 +1,19 @@
+/* 表面配方（样式原语，随 Base Component 交付）：两类高频复用的表面配方单一来源。
+   消费方经 composes 引用（保持 CSS Modules 作用域，TSX 不感知配方细节），
+   自带差异只写与配方的差；配方整体 :where() 零特异性（同 button.module.css 的
+   既定模式），消费方类确定性覆写。视觉配方引用语义层令牌（ADR-0001）。 */
+
+/* 浮层卡面：elevated 底 + radius-lg + 阴影 + 发丝环——hover-card / menu-surface /
+   Composer 卡 / 队列行共用的浮层标准面（阴影几何与发丝环按 ADR-0020 拆分组合，
+   环档统一走 --separator）。定位、内边距等浮层个性留给消费方。 */
+:where(.elevated) {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover), var(--shadow-hairline);
+}
+
+/* 发丝面板：底色与圆角随消费方（canvas/inset × md/lg 各有场景），配方只收
+   「发丝内描边」这一个不变量——环是共享件，底色圆角留给场景 */
+:where(.panel) {
+  box-shadow: var(--shadow-hairline);
+}

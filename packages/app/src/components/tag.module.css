@@ -1,6 +1,13 @@
-/* Tag：弱化行内徽标（GLOSSARY「Base Component」）——短文本标记（能力/状态词），
-   无业务语义，文案与提示由消费方给；配方引用语义层令牌（ADR-0001） */
-.tag {
+/* Tag：行内徽标（GLOSSARY「Base Component」）——短文本标记（能力/状态词），
+   无业务语义，文案与提示由消费方给；配方引用语义层令牌（ADR-0001）。
+   两档形态：.tag 弱化小徽标（radius-sm）与 .pill 胶囊（Session Bar 徽标 /
+   Command Chip / Seat 按钮一族的几何，caption2 密集内边距，ADR-0020 收编）。
+   配方整体 :where() 零特异性（同 button.module.css 的既定模式）：消费方类确定性
+   覆写，自带差异的胶囊只写与配方的差；span 徽标经 <Tag pill tone> 使用，
+   可交互胶囊（Seat 按钮、加号、队列头）经 composes 引用——hover / disabled /
+   aria 的语义留在消费方的原生 button 上。 */
+
+:where(.tag) {
   display: inline-flex;
   align-items: center;
   padding: 0 var(--space-1);
@@ -10,4 +17,40 @@
   font-size: var(--text-micro);
   line-height: 1.6;
   white-space: nowrap;
+}
+
+:where(.pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-05) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption2);
+}
+
+/* 可交互胶囊的按钮底（border/pointer）；hover 反馈各消费方有别，留在消费方 */
+:where(.pillBtn) {
+  border: none;
+  cursor: pointer;
+}
+
+/* 色调变体：底色与字色成对走语义档（ADR-0018 一类一档） */
+:where(.toneNeutral) {
+  background: var(--bg-inset);
+  color: var(--text-2);
+}
+
+:where(.toneAccent) {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+
+:where(.toneSuccess) {
+  background: var(--success-subtle);
+  color: var(--text-1);
+}
+
+:where(.toneElevated) {
+  background: var(--bg-elevated);
+  color: var(--text-2);
 }

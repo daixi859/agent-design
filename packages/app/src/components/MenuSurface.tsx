@@ -19,6 +19,7 @@ import {
 import { createPortal } from "react-dom";
 import { Icon, type IconName } from "./Icon";
 import { EDGE_GAP, placeFixed } from "./anchored";
+import { cx } from "../lib/cx";
 import styles from "./menu-surface.module.css";
 
 export function MenuSurface<E extends HTMLElement = HTMLElement>({
@@ -131,7 +132,7 @@ export function hasOpenMenuSurface(): boolean {
 export function MenuSurfaceGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div role="group" aria-label={label}>
-      <div className={styles.groupLabel}>{label}</div>
+      <div className={cx("eyebrow", styles.groupLabel)}>{label}</div>
       {children}
     </div>
   );

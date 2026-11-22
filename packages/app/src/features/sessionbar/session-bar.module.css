@@ -16,7 +16,7 @@
 
 /* 侧栏收起时 Brand Float 落在本栏左端，让出按钮宽度（ADR-0009 让位约定） */
 .clearFloat {
-  padding-inline-start: calc(var(--space-1) + var(--brandfloat-width) + var(--space-2));
+  padding-inline-start: calc(var(--space-1) + var(--brandfloat-size) + var(--space-2));
 }
 
 .titleGroup {
@@ -29,40 +29,15 @@
 
 /* 栏标题定义在 ui/nav 原语（与设置页内容栏共用） */
 
-.branchedBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-05) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  font-size: var(--text-caption2);
-}
-
 .actions {
   display: flex;
   align-items: center;
   gap: var(--space-1);
 }
 
-/* ---- 驱动状态（ADR-0012 阶段四）---- */
-
-.drivePill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-05) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--bg-inset);
-  color: var(--text-2);
-  font-size: var(--text-caption2);
-}
-
-.drivePillRunning {
-  background: var(--success-subtle);
-  color: var(--text-1);
-}
+/* ---- 驱动状态（ADR-0012 阶段四）----
+   徽标本体走 Tag pill（tone neutral / success）；此处只留状态点钩子：
+   running 时点色换 success 档 */
 
 .driveDot {
   inline-size: var(--size-dot);
@@ -71,7 +46,7 @@
   background: var(--text-2);
 }
 
-.drivePillRunning .driveDot {
+.driveRunning .driveDot {
   background: var(--success);
 }
 

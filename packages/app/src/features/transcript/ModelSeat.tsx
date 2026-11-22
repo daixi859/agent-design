@@ -128,7 +128,7 @@ export function ModelSeat({
           renderSeatTrigger(
             <>
               <Icon name="sparkles" size={11} />
-              <span className={barStyles.seatLabel}>{current?.modelId ?? t("model")}</span>
+              <span className="ellipsis">{current?.modelId ?? t("model")}</span>
             </>,
             "model",
             anchorRef,
@@ -149,7 +149,7 @@ export function ModelSeat({
         ariaLabel={t("thinkingLevel")}
         trigger={(anchorRef, open, toggle) =>
           renderSeatTrigger(
-            <span className={barStyles.seatLabel}>{currentLevel ?? t("thinkingLevel")}</span>,
+            <span className="ellipsis">{currentLevel ?? t("thinkingLevel")}</span>,
             "thinkingLevel",
             anchorRef,
             open,

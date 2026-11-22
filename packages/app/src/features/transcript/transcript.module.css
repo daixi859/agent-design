@@ -16,6 +16,9 @@
   --jump-rest-height: 92px;
   --code-collapse-height: 210px;
   --code-fade-height: 56px;
+  /* 用户气泡宽度上限：内容列宽 × 0.702（DSH 原始几何），再夹到 82%。
+     组件层变量（ADR-0001）：单文件消费的布局派生值随组件定义（ADR-0020 出语义层） */
+  --bubble-measure: min(calc(var(--content-measure) * 0.702), 82%);
 }
 
 .scroll {
@@ -32,8 +35,7 @@
   margin-bottom: var(--space-5);
   font-size: var(--text-caption2);
   line-height: var(--leading-caption2);
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
+  /* 字距与大写走全局 .eyebrow 工具类（TSX 挂类） */
   color: var(--text-2);
   user-select: all;
 }
@@ -260,12 +262,9 @@
 
 .rowSummary {
   flex: 1;
-  min-inline-size: 0;
   color: var(--text-2);
   font-size: var(--content-font-size-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 截断三件套走全局 .ellipsis 工具类（TSX 挂类） */
 }
 
 /* 状态只走文字色，没有彩色徽标（ADR-0013）：运行中 / 取消与摘要同档 tertiary，
@@ -614,7 +613,7 @@
   color: var(--accent-text);
   font-size: var(--text-caption);
   font-weight: var(--weight-medium);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--shadow-popover), var(--shadow-hairline);
   cursor: pointer;
   z-index: var(--z-composer);
 
@@ -644,12 +643,10 @@
 }
 
 .composerCard {
+  composes: elevated from "../../components/surface.module.css";
   pointer-events: auto;
   max-inline-size: var(--content-measure);
   margin-inline: auto;
-  background: var(--bg-elevated);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-popover);
   padding: var(--space-1h);
 }
 
@@ -691,16 +688,9 @@
 }
 
 .seatButton {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-05) var(--space-2);
-  border: none;
-  border-radius: var(--radius-pill);
-  background: var(--bg-inset);
-  color: var(--text-2);
-  font-size: var(--text-caption2);
-  cursor: pointer;
+  /* 胶囊配方与中性色调来自 tag 原语（composes），这里只留 Seat 的差：
+     最大宽度、禁用态与 hover 反馈（带 :not(:disabled) 的防御式写法） */
+  composes: pill toneNeutral pillBtn from "../../components/tag.module.css";
   max-inline-size: 220px;
 
   &:disabled {
@@ -713,27 +703,18 @@
   }
 }
 
-.seatLabel {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .seatMuted {
   color: var(--text-2);
 }
 
-/* 命令插入 +（Model Seat addon）：seat 同族的弱化小圆钮 */
+/* 命令插入 +（Model Seat addon）：Button ghost 基座 + 胶囊配方（composes）。
+   基座同为零特异性，radius/background 与胶囊配方打平，这里确定性落值 */
 .plusButton {
-  display: inline-flex;
-  align-items: center;
+  composes: pill toneNeutral pillBtn from "../../components/tag.module.css";
   justify-content: center;
   padding: var(--space-05) var(--space-1h);
-  border: none;
-  border-radius: var(--radius-pill);
   background: var(--bg-inset);
-  color: var(--text-2);
-  cursor: pointer;
+  border-radius: var(--radius-pill);
 
   &:hover {
     background: var(--bg-hover);
@@ -827,19 +808,11 @@
 }
 
 .queueHead {
+  composes: pill toneElevated pillBtn from "../../components/tag.module.css";
   justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
   margin-inline-start: var(--space-2);
-  padding: var(--space-05) var(--space-2);
-  border: none;
-  border-radius: var(--radius-pill);
-  background: var(--bg-elevated);
-  color: var(--text-2);
-  font-size: var(--text-caption2);
-  box-shadow: var(--shadow-popover);
-  cursor: pointer;
+  /* 浮头自带阴影 + 发丝环；hover 只提字色不加底（与 Seat 按钮的 ghost 反馈不同档） */
+  box-shadow: var(--shadow-popover), var(--shadow-hairline);
 
   &:hover {
     color: var(--text-1);
@@ -847,13 +820,11 @@
 }
 
 .queueRow {
+  composes: elevated from "../../components/surface.module.css";
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-1h) var(--space-2);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-popover);
   font-size: var(--text-caption);
 }
 
@@ -933,15 +904,9 @@
   padding: var(--space-1) var(--space-2) 0;
 }
 
+/* Tag pill accent 的紧凑差：chip 在输入行内比 Session Bar 徽标收半档、字重压一档 */
 .commandChip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
   padding: var(--space-05) var(--space-1h);
-  border-radius: var(--radius-pill);
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  font-size: var(--text-caption2);
   font-weight: var(--weight-medium);
 }
 
@@ -1093,10 +1058,7 @@
 }
 
 .codeLang {
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 截断三件套走全局 .ellipsis 工具类（TSX 挂类） */
   font-family: var(--font-mono);
   font-size: var(--text-caption2);
   line-height: 18px;

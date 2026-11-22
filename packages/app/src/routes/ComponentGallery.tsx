@@ -6,9 +6,9 @@ import { Button } from "../components/Button";
 import { DisclosureRow } from "../components/DisclosureRow";
 import { Icon, ICON_NAMES } from "../components/Icon";
 import { Input } from "../components/Input";
+import { Tag } from "../components/Tag";
 import { cx } from "../lib/cx";
 import { useLocale } from "../state/use-locale";
-import sessionBar from "../features/sessionbar/session-bar.module.css";
 import settings from "../features/settings/settings.module.css";
 import styles from "./gallery.module.css";
 
@@ -49,7 +49,7 @@ export function ComponentGallery() {
     <div className={`scroll-y ${styles.gallery}`}>
       <div className={styles.inner}>
         <section>
-          <h2 className={styles.sectionTitle}>{t("iconography")}</h2>
+          <h2 className={cx("eyebrow", styles.sectionTitle)}>{t("iconography")}</h2>
           <p className={styles.sectionNote}>{t("iconographyNote")}</p>
           <div className={styles.iconGrid}>
             {ICON_NAMES.map((name) => (
@@ -62,7 +62,7 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>{t("controlsBadge")}</h2>
+          <h2 className={cx("eyebrow", styles.sectionTitle)}>{t("controlsBadge")}</h2>
           <p className={styles.sectionNote}>{t("controlsNote")}</p>
           <div className={styles.row}>
             {/* Button icon-only 形态：icon 槽位 + 无 children 自动方形（原 IconButton） */}
@@ -80,13 +80,12 @@ export function ComponentGallery() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("search")}
             />
-            <span
-              className={sessionBar.branchedBadge}
-              title={t("branchedTitle")}
-            >
+            {/* Tag 胶囊变体（accent 徽标 = Session Bar branched 同款）与弱化小徽标 */}
+            <Tag pill tone="accent" title={t("branchedTitle")}>
               <Icon name="branch" size={11} />
               {t("branched")}
-            </span>
+            </Tag>
+            <Tag title={t("modelImageInput")}>{t("visualTag")}</Tag>
           </div>
           <div className={styles.row} role="group" aria-label="Segmented sample">
             <div className={settings.segmented}>
@@ -106,7 +105,7 @@ export function ComponentGallery() {
         {/* 基础件样张：DisclosureRow 只管行头交互（role=button · Enter/Space · aria-expanded），
             行头视觉由本页样张提供；chevron 旋转沿用 TuiGroup 的 data-open 惯用法 */}
         <section>
-          <h2 className={styles.sectionTitle}>{t("disclosureRow")}</h2>
+          <h2 className={cx("eyebrow", styles.sectionTitle)}>{t("disclosureRow")}</h2>
           <p className={styles.sectionNote}>{t("disclosureRowNote")}</p>
           <div className={styles.disclosureDemo}>
             <DisclosureRow
@@ -126,7 +125,7 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>{t("surfaces")}</h2>
+          <h2 className={cx("eyebrow", styles.sectionTitle)}>{t("surfaces")}</h2>
           <p className={styles.sectionNote}>{t("surfacesNote")}</p>
           <div className={styles.swatches}>
             {SURFACES.map(([name, variable]) => (
@@ -139,7 +138,7 @@ export function ComponentGallery() {
         </section>
 
         <section>
-          <h2 className={styles.sectionTitle}>{t("typeRamp")}</h2>
+          <h2 className={cx("eyebrow", styles.sectionTitle)}>{t("typeRamp")}</h2>
           <p className={styles.sectionNote}>{t("typeRampNote")}</p>
           <div className={styles.typeRamp}>
             {TYPE_SAMPLES.map(([token, size, text]) => (

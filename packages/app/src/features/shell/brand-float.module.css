@@ -6,7 +6,7 @@
 .float {
   position: fixed;
   /* 垂直居中于两壳共用的头部栏（--sessionbar-height），与标题同轴 */
-  inset-block-start: calc((var(--sessionbar-height) - var(--brandfloat-height)) / 2);
+  inset-block-start: calc((var(--sessionbar-height) - var(--brandfloat-size)) / 2);
   inset-inline-start: var(--space-1);
   z-index: var(--z-float);
   display: flex;
@@ -19,8 +19,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  inline-size: var(--brandfloat-width);
-  block-size: var(--brandfloat-height);
+  inline-size: var(--brandfloat-size);
+  block-size: var(--brandfloat-size);
   padding: 0;
   border: none;
   border-radius: var(--radius-md);
@@ -37,8 +37,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  inline-size: var(--brandfloat-width);
-  block-size: var(--brandfloat-height);
+  inline-size: var(--brandfloat-size);
+  block-size: var(--brandfloat-size);
   font-size: var(--text-title3);
   line-height: 1;
   font-weight: var(--weight-semibold);

@@ -3,6 +3,7 @@
    前置图标经 leading 槽位进入 flex 行。 */
 
 .input {
+  composes: panel from "./surface.module.css";
   display: flex;
   align-items: center;
   gap: var(--space-1h);
@@ -12,7 +13,6 @@
   padding-inline: var(--space-2) var(--space-2);
   border-radius: var(--radius-md);
   background: var(--bg-inset);
-  box-shadow: var(--shadow-hairline);
   color: var(--text-2);
   transition: box-shadow var(--duration-fast) var(--ease-standard);
 

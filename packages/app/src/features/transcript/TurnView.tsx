@@ -48,7 +48,7 @@ function ThinkingRow({ item, defaultOpen = false }: { item: Extract<GroupItem, {
           {item.redacted ? t("encryptedReasoning") : t("thinking")}
         </span>
         <span className={styles.dot} aria-hidden="true" />
-        <span className={styles.rowSummary}>{item.thinking.split("\n")[0]}</span>
+        <span className={cx("ellipsis", styles.rowSummary)}>{item.thinking.split("\n")[0]}</span>
       </DisclosureRow>
       {open && <div className={cx(styles.rowBody, styles.thinkingBody)}>{item.thinking}</div>}
     </div>

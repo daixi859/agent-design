@@ -8,6 +8,7 @@
     "build:preview": "pnpm build && pnpm preview",
     "check:css": "node scripts/check-css-tokens.mjs",
     "check:naming": "node scripts/check-file-naming.mjs",
+    "check:sync": "node scripts/check-token-sync.mjs",
     "dev": "pnpm --filter @pi-studio/app dev",
     "dev:desktop": "pnpm --filter @pi-studio/desktop dev",
     "desktop:build": "pnpm --filter @pi-studio/app build && pnpm --filter @pi-studio/desktop run pack",

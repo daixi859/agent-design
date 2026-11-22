@@ -114,6 +114,13 @@ select {
   text-overflow: ellipsis;
 }
 
+/* ---- eyebrow 大写小标签：字距与大写归一处（menu-surface 组头 / transcript 项目行 /
+   gallery 分区题 / lab 样张题共用口径）；字号、行高与颜色随场景 ---- */
+.eyebrow {
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

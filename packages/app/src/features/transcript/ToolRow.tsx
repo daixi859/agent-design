@@ -73,7 +73,7 @@ function SubCallRow({ call }: { call: SubCallItem }) {
         </span>
         <span className={styles.rowTitle}>{call.name}</span>
         <span className={styles.dot} aria-hidden="true" />
-        <span className={styles.rowSummary}>{call.summary}</span>
+        <span className={cx("ellipsis", styles.rowSummary)}>{call.summary}</span>
         {state && state !== "ok" && (
           <span className={cx(styles.rowState, view?.className)}>{view?.glyph}</span>
         )}
@@ -142,7 +142,7 @@ export function ToolRow({ item }: { item: ToolCallItem }) {
         </span>
         <span className={styles.rowTitle}>{item.name}</span>
         <span className={styles.dot} aria-hidden="true" />
-        <span className={styles.rowSummary}>{item.summary}</span>
+        <span className={cx("ellipsis", styles.rowSummary)}>{item.summary}</span>
         {item.state !== "ok" && (
           <span className={cx(styles.rowState, STATE_PRESENTATION[item.state].className)}>
             {STATE_PRESENTATION[item.state].glyph}

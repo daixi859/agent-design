@@ -62,7 +62,7 @@ function InjectionRow({ display }: { display: Extract<AnnotationDisplay, { kind:
       </span>
       <span className={styles.rowTitle}>{t("contextInjection")}</span>
       <span className={styles.dot} aria-hidden="true" />
-      <span className={styles.rowSummary}>{display.customType}</span>
+      <span className={cx("ellipsis", styles.rowSummary)}>{display.customType}</span>
     </>
   );
 
@@ -122,7 +122,7 @@ function SystemPromptRow({ sections }: { sections: Record<string, string> }) {
         </span>
         <span className={styles.rowTitle}>{t("systemPromptEntry")}</span>
         <span className={styles.dot} aria-hidden="true" />
-        <span className={styles.rowSummary}>{summary}</span>
+        <span className={cx("ellipsis", styles.rowSummary)}>{summary}</span>
       </DisclosureRow>
       {open && (
         <div className={styles.rowBody}>

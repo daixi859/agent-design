@@ -6,6 +6,7 @@ import type { SessionCatalog } from "@pi-studio/shared/protocol";
 import type { ComposerActions, LazyComposer } from "./Composer";
 import { Icon } from "../../components/Icon";
 import { EmptyState } from "../../components/EmptyState";
+import { cx } from "../../lib/cx";
 import { AnnotationRow } from "./AnnotationRow";
 import { Composer } from "./Composer";
 import { TuiGroup } from "./TuiGroup";
@@ -111,7 +112,7 @@ export function Transcript({
       {/* 底部 Composer 与滚动区共用一个列宽轴 */}
       <div className={`scroll-y ${styles.scroll}`} ref={scrollRef} onScroll={handleScroll}>
         <div className={styles.inner}>
-          {projectPath && <p className={styles.projectEyebrow}>{projectPath}</p>}
+          {projectPath && <p className={cx("eyebrow", styles.projectEyebrow)}>{projectPath}</p>}
           {orphanAnnotations.map((carrier) => (
             <AnnotationRow key={carrier.id} display={carrier.display} />
           ))}

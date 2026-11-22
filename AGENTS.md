@@ -13,6 +13,7 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 ## 样式与渲染
 
 - 组件样式一律引用语义层变量（`--bg-*`、`--text-*`、`--code-*`…），颜色与间距不硬编码；令牌分三层、主题只在语义层切换（ADR-0001）。`var(--x)` 引用未定义令牌时浏览器静默失败，故由 `scripts/check-css-tokens.mjs` 兜底（已接钩子与 CI）。
+- 共享配方单一来源（ADR-0020）：表面配方（elevated 面 / 发丝面）在 `components/surface.module.css`，胶囊配方与色调变体在 `components/tag.module.css`，消费方 composes 引用、只写与配方的差；文本微件走 `global.css` 工具类（`.ellipsis` / `.eyebrow`）。语义层准入标准：随主题变化 + 一类信息一档，引用数不是标准。dsh-ui 的手工令牌快照由 `scripts/check-token-sync.mjs` 守门（已接钩子）。
 - 动代码面（markdown 代码块 / toolArgs / toolOutput / diff，统一表面语言与头部栏）前读 ADR-0007；改渲染层级或新增 Entry 类型前读 ADR-0004 与 ADR-0006。
 
 ## 数据与 API
@@ -33,6 +34,7 @@ pi 内核本机 session 数据的只读查看器（React + Vite + CSS Modules）
 node node_modules/typescript/bin/tsc -b   # 类型检查（根 tsconfig 引用全部包）
 node node_modules/vitest/vitest.mjs run   # 测试（从根扫描全部包）
 node scripts/check-css-tokens.mjs         # 样式令牌：var(--x) 必须有定义
+node scripts/check-token-sync.mjs         # dsh-ui 快照：与 app 令牌层逐项一致
 node scripts/check-file-naming.mjs        # 文件命名：组件 PascalCase，其余 kebab-case
 node packages/server/src/main.ts          # 独立 server（REST /api · WS /ws，裸 node 直跑）
 node node_modules/vite/bin/vite.js packages/app   # dev server，/api 与 /ws 代理到 server 进程
@@ -41,6 +43,6 @@ pnpm dev:desktop                          # 桌面壳 dev（ADR-0019）：vite H
 
 两套形态并存：web（`server` + `vite`，数据走 HTTP/WS）与 desktop（`dev:desktop`，数据走 IPC 与 `app://`）。桌面壳 dev 的端口只有 vite 自己的开发服务器（`PI_STUDIO_DEV_PORT`，缺省 5173），改 main/preload 会重启 electron，改 app 源码走 HMR。
 
-依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 跑同样的四道：typecheck、test、check:css、check:naming）。
+依赖管理用 pnpm（lockfile 以 `pnpm-lock.yaml` 为准，勿引 npm）；提交守门钩子需每 clone 配置一次：`git config core.hooksPath githooks`（CI 在 GitHub Actions 跑同样的五道：typecheck、test、check:css、check:sync、check:naming）。
 
-完成判据：任何改动交付前上面前四道检查全绿；视觉改动用户进行验证即可。
+完成判据：任何改动交付前上面前五道检查全绿；视觉改动用户进行验证即可。

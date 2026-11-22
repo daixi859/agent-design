@@ -1,11 +1,9 @@
 /* MenuSurface：锚定浮层表面 + 通用菜单行（Trigger Menu / Model Seat 共用） */
 
 .surface {
+  composes: elevated from "./surface.module.css";
   position: fixed;
   z-index: var(--z-popover);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-popover);
   padding: var(--space-1);
 }
 
@@ -46,8 +44,7 @@
   padding: var(--space-1h) var(--space-2) var(--space-1);
   font-size: var(--text-micro);
   font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
+  /* 字距与大写走全局 .eyebrow 工具类（TSX 挂类） */
   color: var(--text-2);
 
   &::before,
@@ -99,11 +96,9 @@
 
 .itemTitle {
   /* shrink 近零：收缩由描述全额吸收（高权重），名称不因 1px 级分配差误触省略号；
-     名称自身超长时仍可省略（真溢出经整数舍入后 scrollWidth 必大于 clientWidth） */
+     名称自身超长时仍可省略（真溢出经整数舍入后 scrollWidth 必大于 clientWidth）。
+     截断三件套走全局 .ellipsis 工具类（TSX 挂类） */
   flex: 0 0.01 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: var(--weight-regular);
 }
 
@@ -117,10 +112,6 @@
    收缩省略，名称尽量完整 */
 .itemDesc {
   flex: 0 100 auto;
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-4);
   font-size: var(--text-caption);
 }

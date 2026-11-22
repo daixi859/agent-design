@@ -196,7 +196,7 @@ function TuiSlot({ item, now, locale }: { item: ToolCallItem; now: number | unde
         <span className={styles.lead} />
         <StatusGlyph state={item.state} />
         <span className={styles.name}>{item.name}</span>
-        {item.summary && <span className={styles.summary}>{item.summary}</span>}
+        {item.summary && <span className={cx("ellipsis", styles.summary)}>{item.summary}</span>}
         {elapsed && (
           <span className={styles.elapsed}>
             · {elapsed}
@@ -239,7 +239,7 @@ function TuiThinking({
           <span className={styles.icon}>
             <span className={styles.dotGlyph} />
           </span>
-          <span className={styles.thinkSummary}>{item.thinking.split("\n")[0]}</span>
+          <span className={cx("ellipsis", styles.thinkSummary)}>{item.thinking.split("\n")[0]}</span>
           {item.durationMs !== undefined && (
             <span className={styles.elapsed}>· {formatDuration(item.durationMs, locale)}</span>
           )}

@@ -10,6 +10,7 @@ import { cx } from "../../lib/cx";
 import { driveBadgeKey } from "../../lib/drive-labels";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
+import { Tag } from "../../components/Tag";
 import nav from "../../components/nav.module.css";
 import styles from "./session-bar.module.css";
 
@@ -58,29 +59,32 @@ export function SessionBar({
 
   // 驱动徽标文案只算一次（title 与正文同源；idle 时悬停提示解除动作）
   const badgeText = drive?.status ? t(driveBadgeKey(drive.status)) : undefined;
+  const driveRunning = drive?.status === "running";
 
   return (
     <header className={cx(styles.bar, collapsed && styles.clearFloat)}>
       <div className={styles.titleGroup}>
         <span className={`ellipsis ${nav.barTitle}`}>{title}</span>
         {branched && (
-          <span className={styles.branchedBadge} title={t("branchedTitle")}>
+          <Tag pill tone="accent" title={t("branchedTitle")}>
             <Icon name="branch" size={11} />
             {t("branched")}
-          </span>
+          </Tag>
         )}
       </div>
 
       <div className={styles.actions}>
         {drive && (
           <>
-            <span
-              className={cx(styles.drivePill, drive.status === "running" && styles.drivePillRunning)}
+            <Tag
+              pill
+              tone={driveRunning ? "success" : "neutral"}
+              className={driveRunning ? styles.driveRunning : undefined}
               title={drive.status === "idle" ? t("detach") : badgeText}
             >
               <span className={styles.driveDot} />
               {badgeText}
-            </span>
+            </Tag>
             <Button icon="xmark" title={t("detach")} onClick={drive.onRelease} />
           </>
         )}

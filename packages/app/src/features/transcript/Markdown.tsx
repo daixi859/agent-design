@@ -79,7 +79,7 @@ function CodeBlock({
     <div ref={wrapRef} className={cx(styles.codeShell, expanded && styles.codeExpanded)}>
       <div className={styles.codeBannerWrap}>
         <div className={styles.codeBanner}>
-          <span className={styles.codeLang}>{lang || "code"}</span>
+          <span className={cx("ellipsis", styles.codeLang)}>{lang || "code"}</span>
           <button type="button" className={styles.codeAction} onClick={copy}>
             {copied ? copyCopiedText : copyLabelText}
           </button>

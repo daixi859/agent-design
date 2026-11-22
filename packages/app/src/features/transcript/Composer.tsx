@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import type { SessionCatalog } from "@pi-studio/shared/protocol";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
+import { Tag } from "../../components/Tag";
 import { MenuSurface, MenuSurfaceGroup, MenuSurfaceItem, hasOpenMenuSurface } from "../../components/MenuSurface";
 import { Tooltip } from "../../components/Tooltip";
 import { clearDraft, loadDraft, saveDraft, type PersistedChip } from "../../lib/draft-store";
@@ -451,7 +452,7 @@ export function Composer({
           >
             {chip && (
               <div className={styles.chipRow}>
-                <span className={styles.commandChip}>
+                <Tag pill tone="accent" className={styles.commandChip}>
                   {chip.name}
                   <button
                     type="button"
@@ -462,7 +463,7 @@ export function Composer({
                   >
                     <Icon name="xmark" size={9} />
                   </button>
-                </span>
+                </Tag>
                 {chip.argumentHint && !text && (
                   <span className={styles.chipGhost}>{chip.argumentHint}</span>
                 )}
@@ -513,11 +514,13 @@ export function Composer({
                       pick(index);
                     }}
                   >
-                    <span className={menuStyles.itemTitle}>
+                    <span className={cx("ellipsis", menuStyles.itemTitle)}>
                       {item.name}
                       {item.argumentHint && <span className={menuStyles.itemHint}>{item.argumentHint}</span>}
                     </span>
-                    {item.description && <span className={menuStyles.itemDesc}>{item.description}</span>}
+                    {item.description && (
+                      <span className={cx("ellipsis", menuStyles.itemDesc)}>{item.description}</span>
+                    )}
                   </MenuSurfaceItem>
                 );
               })}
