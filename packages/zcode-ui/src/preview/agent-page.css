@@ -1,0 +1,165 @@
+/*
+ * Agent 高保真页：只放 Tailwind 表达不了的骨架结构（轨迹脊柱、节点、信号动效）。
+ * 所有颜色都从 zcode-ui 语义令牌派生，四套主题下自动跟随；不写任何十六进制。
+ */
+
+.agent-page {
+  --agent-user: var(--color-trajectory-user);
+  --agent-reasoning: var(--color-trajectory-reasoning);
+  --agent-assistant: var(--color-trajectory-assistant);
+  --agent-tool: var(--color-trajectory-tool-call);
+  --agent-result: var(--color-trajectory-tool-result);
+}
+
+/* 连续脊柱：这是一条真实的时间序列，节点间距就是事件间距。 */
+.agent-trace {
+  position: relative;
+}
+
+.agent-entry {
+  position: relative;
+  display: flex;
+  gap: 18px;
+}
+
+.agent-gutter {
+  position: relative;
+  flex: 0 0 52px;
+  width: 52px;
+}
+
+.agent-gutter::before {
+  content: "";
+  position: absolute;
+  top: -22px;
+  bottom: -26px;
+  right: 6px;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.agent-entry:first-child .agent-gutter::before {
+  top: 9px;
+}
+
+.agent-entry:last-child .agent-gutter::before {
+  bottom: 55%;
+}
+
+.agent-node {
+  /* 默认值也是回退：具体信号色由 TraceEntry 的内联样式覆盖。 */
+  --node-color: var(--color-border);
+  position: absolute;
+  top: 6px;
+  right: 0;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--node-color, var(--color-border));
+  border-radius: 9999px;
+  background: var(--color-background);
+  box-shadow: 0 0 0 4px var(--color-background);
+}
+
+/* 刻度只出现在脊柱左侧，像仪表的标尺，不参与信息表达。 */
+.agent-tick {
+  position: absolute;
+  top: 12px;
+  right: 17px;
+  width: 7px;
+  height: 1px;
+  background: var(--color-border-hover);
+}
+
+.agent-time {
+  position: absolute;
+  top: 1px;
+  right: 28px;
+  font-family: var(--font-mono);
+  font-size: var(--text-ui-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-foreground-subtlest);
+}
+
+.agent-entry-body {
+  min-width: 0;
+  flex: 1;
+  padding-bottom: 28px;
+}
+
+/* 事件表面：用户发言是一块带信号边的淡面，工具是一块可展开的实体面。 */
+.agent-user-surface {
+  border-left: 2px solid var(--agent-user);
+  background: var(--color-user-message-bubble);
+}
+
+.agent-tool-surface {
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+}
+
+.agent-live-surface {
+  border-color: var(--agent-tool);
+  background:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--agent-tool) 5%, var(--color-card)),
+      var(--color-card) 38%
+    );
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.82); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+.agent-live-dot {
+  background: var(--agent-tool);
+  animation: agent-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes agent-caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.agent-caret {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  vertical-align: -2px;
+  background: var(--agent-tool);
+  animation: agent-caret 1.1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-live-dot,
+  .agent-caret {
+    animation: none;
+  }
+}
+
+/* 信号色工具类：颜色即语义，节点 / 图标 / 正文内联代码共用同一档。 */
+.agent-signal-user { color: var(--agent-user); }
+.agent-signal-reasoning { color: var(--agent-reasoning); }
+.agent-signal-assistant { color: var(--agent-assistant); }
+.agent-signal-tool { color: var(--agent-tool); }
+.agent-signal-result { color: var(--agent-result); }
+
+.agent-bg-running { background: var(--color-success); }
+.agent-bg-done { background: var(--color-foreground-subtlest); }
+.agent-bg-paused { background: var(--color-warning); }
+.agent-bg-failed { background: var(--color-destructive); }
+
+.agent-progress-fill { background: var(--agent-tool); }
+/*  inspector 里的上下文分段条：宽度由数据给出，颜色取上下文语义阶。 */
+.agent-context-bar {
+  height: 4px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.agent-context-segment {
+  display: block;
+  height: 100%;
+}

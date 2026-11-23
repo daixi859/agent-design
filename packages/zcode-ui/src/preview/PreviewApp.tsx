@@ -5,10 +5,11 @@ import { ThemeProvider } from "../components/ThemeProvider";
 import { useTheme } from "../lib/theme-context";
 import { THEMES } from "../lib/theme";
 import { cn } from "../lib/cn";
+import { AgentPage } from "./AgentPage";
 import { ComponentGallery } from "./ComponentGallery";
 import { TokenPage } from "./TokenPage";
 
-type Route = "components" | "tokens";
+type Route = "agent" | "components" | "tokens";
 
 /** 预览站页头：路由切换 + 主题快切（主题状态来自 ThemeProvider）。 */
 function PreviewHeader({
@@ -29,6 +30,7 @@ function PreviewHeader({
       <nav className="flex items-center gap-1">
         {(
           [
+            ["agent", "Agent 运行台"],
             ["components", "组件"],
             ["tokens", "令牌"],
           ] as const
@@ -68,14 +70,25 @@ function PreviewHeader({
 
 /** 预览站外壳：ThemeProvider + 页头 + 内容区（组件 / 令牌两页）。 */
 export function PreviewApp() {
-  const [route, setRoute] = useState<Route>("components");
+  const [route, setRoute] = useState<Route>("agent");
 
   return (
     <ThemeProvider>
       <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
         <PreviewHeader route={route} onRouteChange={setRoute} />
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          {route === "components" ? <ComponentGallery /> : <TokenPage />}
+        <main
+          className={cn(
+            "min-h-0 flex-1",
+            route === "agent" ? "overflow-hidden" : "overflow-y-auto",
+          )}
+        >
+          {route === "agent" ? (
+            <AgentPage />
+          ) : route === "components" ? (
+            <ComponentGallery />
+          ) : (
+            <TokenPage />
+          )}
         </main>
       </div>
     </ThemeProvider>
