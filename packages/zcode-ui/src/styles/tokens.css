@@ -1,0 +1,12 @@
+/*
+ * 令牌层（不含 Tailwind 预检）：给已经在跑 Tailwind v4 的消费方用。
+ * 只引这一份，组件类名仍由消费方自己的 Tailwind 编译；
+ * 变体注册与主题令牌都在这里，不依赖任何 devDependency。
+ */
+@import "tw-animate-css";
+@import "./custom-variants.css";
+@import "./tw-palette.css";
+@import "./theme-bridge.css";
+@import "./upstream-compat.css";
+@import "./zcode-theme.css";
+@import "./base.css";

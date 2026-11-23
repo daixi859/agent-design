@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>zcode-ui · ZCode 基础组件预览</title>
+    <script>
+      // 主题在首帧前确定（沿用 ZCode useTheme 的类名协议：.dark + .theme-zai-*），避免闪烁。
+      // 与 ZCode 一致，默认主题收敛到 zai-dark（src/lib/theme.ts 的 DEFAULT_THEME 同值）。
+      (function () {
+        var stored = localStorage.getItem("zcode-ui-theme");
+        var theme =
+          stored === "light" || stored === "dark" || stored === "zai-light" || stored === "zai-dark"
+            ? stored
+            : "zai-dark";
+        var root = document.documentElement;
+        root.classList.toggle("dark", theme === "dark" || theme === "zai-dark");
+        root.classList.toggle("theme-zai-light", theme === "zai-light");
+        root.classList.toggle("theme-zai-dark", theme === "zai-dark");
+        root.style.colorScheme = theme === "dark" || theme === "zai-dark" ? "dark" : "light";
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

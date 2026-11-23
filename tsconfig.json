@@ -17,6 +17,9 @@
       "path": "./packages/dsh-ui"
     },
     {
+      "path": "./packages/zcode-ui"
+    },
+    {
       "path": "./packages/desktop"
     }
   ]

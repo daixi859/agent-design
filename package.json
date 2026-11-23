@@ -16,6 +16,7 @@
     "dsh-ui": "pnpm --filter @pi-studio/dsh-ui dev",
     "preview": "pnpm --filter @pi-studio/app preview",
     "server": "node packages/server/src/main.ts",
+    "zcode-ui": "pnpm --filter @pi-studio/zcode-ui dev",
     "test": "node node_modules/vitest/vitest.mjs run",
     "typecheck": "node node_modules/typescript/bin/tsc -b"
   },

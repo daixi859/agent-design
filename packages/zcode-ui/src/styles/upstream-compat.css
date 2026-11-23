@@ -1,0 +1,20 @@
+/*
+ * 上游兼容层：shadcn/radix-mira 语义色的回退定义。
+ * ZCode 组件源码（badge / tabs / avatar / textarea / input-group 等）里仍引用 shadcn 经典
+ * 语义名（muted / muted-foreground / secondary-foreground / ring / accent-foreground），
+ * 但其 styles.css 只定义了自家语义层（foreground-subtle / surface 等），这些名字没有定义，
+ * 在 ZCode 运行时对应工具类塌成透明（上游已知状态）。预览站为了让组件按「设计意图」显示，
+ * 把这几个经典名映射到 ZCode 语义层：muted→surface、muted-foreground→foreground-subtle、
+ * ring→input-border-focused。若后续对齐 ZCode 真实观感需要移除，改这一处即可。
+ */
+
+@theme inline {
+  /* 浮层遮罩：ZCode 里是 bg-black/60 直引色板，本包抽成令牌，四套主题共用同一档。
+     遮罩不随主题明暗翻转（浅色下压暗、深色下同样压暗），所以不放进 zcode-theme.css。 */
+  --color-overlay: color-mix(in oklab, var(--color-neutral-950) 60%, transparent);
+  --color-muted: var(--color-surface);
+  --color-muted-foreground: var(--color-foreground-subtle);
+  --color-secondary-foreground: var(--color-foreground);
+  --color-accent-foreground: var(--color-foreground);
+  --color-ring: var(--color-input-border-focused);
+}

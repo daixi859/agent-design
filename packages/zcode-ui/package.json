@@ -1,0 +1,172 @@
+{
+  "name": "@pi-studio/zcode-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ZCode 设计体系的基础组件库（React 19 + Tailwind v4 + radix-ui）",
+  "license": "UNLICENSED",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./ui": {
+      "types": "./src/components/ui/index.ts",
+      "default": "./src/components/ui/index.ts"
+    },
+    "./patterns": {
+      "types": "./src/components/patterns/index.ts",
+      "default": "./src/components/patterns/index.ts"
+    },
+    "./button": {
+      "types": "./src/components/ui/Button.tsx",
+      "default": "./src/components/ui/Button.tsx"
+    },
+    "./input": {
+      "types": "./src/components/ui/Input.tsx",
+      "default": "./src/components/ui/Input.tsx"
+    },
+    "./textarea": {
+      "types": "./src/components/ui/Textarea.tsx",
+      "default": "./src/components/ui/Textarea.tsx"
+    },
+    "./label": {
+      "types": "./src/components/ui/Label.tsx",
+      "default": "./src/components/ui/Label.tsx"
+    },
+    "./card": {
+      "types": "./src/components/ui/Card.tsx",
+      "default": "./src/components/ui/Card.tsx"
+    },
+    "./badge": {
+      "types": "./src/components/ui/Badge.tsx",
+      "default": "./src/components/ui/Badge.tsx"
+    },
+    "./alert": {
+      "types": "./src/components/ui/Alert.tsx",
+      "default": "./src/components/ui/Alert.tsx"
+    },
+    "./switch": {
+      "types": "./src/components/ui/Switch.tsx",
+      "default": "./src/components/ui/Switch.tsx"
+    },
+    "./checkbox": {
+      "types": "./src/components/ui/Checkbox.tsx",
+      "default": "./src/components/ui/Checkbox.tsx"
+    },
+    "./radio-group": {
+      "types": "./src/components/ui/RadioGroup.tsx",
+      "default": "./src/components/ui/RadioGroup.tsx"
+    },
+    "./tabs": {
+      "types": "./src/components/ui/Tabs.tsx",
+      "default": "./src/components/ui/Tabs.tsx"
+    },
+    "./separator": {
+      "types": "./src/components/ui/Separator.tsx",
+      "default": "./src/components/ui/Separator.tsx"
+    },
+    "./progress": {
+      "types": "./src/components/ui/Progress.tsx",
+      "default": "./src/components/ui/Progress.tsx"
+    },
+    "./spinner": {
+      "types": "./src/components/ui/Spinner.tsx",
+      "default": "./src/components/ui/Spinner.tsx"
+    },
+    "./avatar": {
+      "types": "./src/components/ui/Avatar.tsx",
+      "default": "./src/components/ui/Avatar.tsx"
+    },
+    "./kbd": {
+      "types": "./src/components/ui/Kbd.tsx",
+      "default": "./src/components/ui/Kbd.tsx"
+    },
+    "./scroll-area": {
+      "types": "./src/components/ui/ScrollArea.tsx",
+      "default": "./src/components/ui/ScrollArea.tsx"
+    },
+    "./dialog": {
+      "types": "./src/components/ui/Dialog.tsx",
+      "default": "./src/components/ui/Dialog.tsx"
+    },
+    "./alert-dialog": {
+      "types": "./src/components/ui/AlertDialog.tsx",
+      "default": "./src/components/ui/AlertDialog.tsx"
+    },
+    "./select": {
+      "types": "./src/components/ui/Select.tsx",
+      "default": "./src/components/ui/Select.tsx"
+    },
+    "./dropdown-menu": {
+      "types": "./src/components/ui/DropdownMenu.tsx",
+      "default": "./src/components/ui/DropdownMenu.tsx"
+    },
+    "./popover": {
+      "types": "./src/components/ui/Popover.tsx",
+      "default": "./src/components/ui/Popover.tsx"
+    },
+    "./tooltip": {
+      "types": "./src/components/ui/Tooltip.tsx",
+      "default": "./src/components/ui/Tooltip.tsx"
+    },
+    "./collapsible": {
+      "types": "./src/components/ui/Collapsible.tsx",
+      "default": "./src/components/ui/Collapsible.tsx"
+    },
+    "./input-group": {
+      "types": "./src/components/ui/InputGroup.tsx",
+      "default": "./src/components/ui/InputGroup.tsx"
+    },
+    "./button-group": {
+      "types": "./src/components/ui/ButtonGroup.tsx",
+      "default": "./src/components/ui/ButtonGroup.tsx"
+    },
+    "./theme-provider": {
+      "types": "./src/components/ThemeProvider.tsx",
+      "default": "./src/components/ThemeProvider.tsx"
+    },
+    "./styles.css": "./src/styles/styles.css",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "dev": "vite --port 3143",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.545.0",
+    "radix-ui": "^1.4.3",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/jest-dom": "^8.0.0",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.13",
+    "jsdom": "^31.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.2.2",
+    "tw-animate-css": "^1.4.0",
+    "ws": "^8.23.0"
+  },
+  "keywords": [
+    "react",
+    "tailwindcss",
+    "radix-ui",
+    "design-system"
+  ]
+}

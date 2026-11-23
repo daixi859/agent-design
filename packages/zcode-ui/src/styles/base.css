@@ -1,0 +1,101 @@
+/*
+ * 全局基础层（拷贝自 ZCode packages/ui/src/styles.css 的非主题部分，仅保留本预览站用到的规则）。
+ * 滚动条、focus reset、动效时长令牌与文本微工具类。
+ */
+
+:root {
+  /* 流式动效统一口径：fast / low-drama（DESIGN.md Motion），逐词浮现与整块入场的时长与曲线。 */
+  --zcode-reveal-duration: 300ms;
+  --zcode-reveal-ease: ease-out;
+  --zcode-enter-duration: 260ms;
+  --zcode-enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+#root {
+  height: 100dvh;
+}
+
+/*
+ * 部分浏览器 / Electron 环境会在 focus-visible 时叠加系统级高亮边框（与产品主题无关的黄色描边）。
+ * ZCode 在全局层同时清掉 outline 与 focus ring 对应的 box-shadow，焦点样式完全交给组件。
+ */
+*:focus,
+*:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+}
+
+/*
+ * 全局原生滚动条：透明轨道 + 圆角 thumb（ZCode 把 task 列表的定制提升为全局样式，
+ * 让 desktop/web、明暗主题下的滚动条粗细、圆角、轨道一致）。
+ */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/*
+ * v4 preflight 把裸边框宽度类（border / border-t 等）的颜色落到 currentColor（前景 37%），
+ * 比 --color-border（10%）深一档；ZCode 实际页面里 border-t / border-b 一律显式配 border-border
+ * （如 SourceServerManagementPanel 的 device-card-footer、webRemoteControlConnectionSheet）。
+ * 预览站复刻页面用法，对五个纯宽度类兒底显式色。放进 @layer base：
+ * 同元素上再有任何带色边框类（border-border / border-input / border-transparent…，
+ * 均在 @layer utilities）都按层序赢过这条兒底，只有裸宽度类才落到 --color-border。
+ */
+@layer base {
+  [class~="border"],
+  [class~="border-t"],
+  [class~="border-b"],
+  [class~="border-x"],
+  [class~="border-y"] {
+    border-color: var(--color-border);
+  }
+}
+
+*::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  min-width: 32px;
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background: var(--color-border);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@layer utilities {
+  /* 文本截断与微标签（ZCode 的 global.css 工具类等价物）。 */
+  .ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .eyebrow {
+    font-size: var(--text-ui-xs);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}

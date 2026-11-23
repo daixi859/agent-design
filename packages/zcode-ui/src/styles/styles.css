@@ -1,0 +1,12 @@
+/*
+ * 库样式入口（`import "@pi-studio/zcode-ui/styles.css"`）。
+ * 自带 Tailwind v4 预检与层序，并把本包源码纳入类名扫描——消费方不必改自己的 Tailwind 配置。
+ * 已经自带 Tailwind 的项目改用 `tokens.css`，避免预检重复导入。
+ */
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* node_modules 里的包默认不被扫描，这里显式把组件源码纳入。 */
+@source "../components";
+
+@plugin "./dark-class-variant.mjs";

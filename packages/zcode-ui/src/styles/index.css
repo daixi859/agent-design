@@ -1,0 +1,5 @@
+/*
+ * 预览站样式入口：与库的对外入口同一份定义（styles.css），避免两套层序。
+ * 预览站整体被 Tailwind 扫描（含 src/preview 的演示代码）。
+ */
+@import "./styles.css";
